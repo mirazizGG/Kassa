@@ -48,3 +48,4 @@ async def test_shift_open():
 
 if __name__ == "__main__":
     asyncio.run(test_shift_open())
+print("✅ Smena muvaffaqiyatli ochildi!")
