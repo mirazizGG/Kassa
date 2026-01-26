@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 from database import get_db, Expense, Payment, Employee, Client, Product, Sale, SaleItem
 from schemas import ExpenseCreate, ExpenseOut, PaymentCreate
@@ -14,7 +14,7 @@ router = APIRouter(prefix="/finance", tags=["finance"])
 @router.get("/stats")
 async def get_stats(db: AsyncSession = Depends(get_db)):
     # 1. Daily Sales
-    today = datetime.utcnow().date()
+    today = datetime.now(timezone.utc).date()
     # Note: SQLite stores dates as strings or separate logic might be needed, but assume standard alchemy behavior for now.
     # We might need to filter by range for today.
     # For now, let's just get total sales as 'dailySales' mock-up or implement properly if possible.
@@ -62,7 +62,7 @@ async def create_expense(
     db_expense = Expense(
         **expense.model_dump(),
         created_by=current_user.id,
-        created_at=datetime.utcnow()
+        created_at=datetime.now(timezone.utc)
     )
     db.add(db_expense)
     await db.commit()
@@ -79,7 +79,7 @@ async def create_payment(
     db_payment = Payment(
         **payment.model_dump(),
         created_by=current_user.id,
-        created_at=datetime.utcnow()
+        created_at=datetime.now(timezone.utc)
     )
     db.add(db_payment)
     

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { ModeToggle } from '../components/mode-toggle';
 
 const Login = () => {
     const [username, setUsername] = useState('');
@@ -47,12 +48,15 @@ const Login = () => {
     };
 
     return (
-        <div className="flex min-h-screen w-full items-center justify-center bg-slate-50 px-4">
-            <div className="absolute inset-0 bg-grid-slate-200 [mask-image:linear-gradient(0deg,white,rgba(255,255,255,0.6))] -z-10"></div>
+        <div className="flex min-h-screen w-full items-center justify-center bg-background px-4">
+            <div className="absolute inset-0 bg-grid-slate-200 dark:bg-grid-slate-800 [mask-image:linear-gradient(0deg,white,rgba(255,255,255,0.6))] dark:[mask-image:linear-gradient(0deg,hsl(var(--background)),rgba(0,0,0,0.6))] -z-10"></div>
+            <div className="absolute top-4 right-4">
+                <ModeToggle />
+            </div>
 
-            <Card className="w-full max-w-[400px] shadow-2xl border-none bg-white/80 backdrop-blur-xl">
+            <Card className="w-full max-w-[400px] shadow-2xl border bg-card/80 backdrop-blur-xl">
                 <CardHeader className="space-y-1 text-center pb-8">
-                    <div className="mx-auto bg-primary w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-2xl mb-4 shadow-lg shadow-primary/30">
+                    <div className="mx-auto bg-primary w-12 h-12 rounded-xl flex items-center justify-center text-primary-foreground font-bold text-2xl mb-4 shadow-lg shadow-primary/30">
                         K
                     </div>
                     <CardTitle className="text-2xl font-bold tracking-tight">Xush Kelibsiz</CardTitle>

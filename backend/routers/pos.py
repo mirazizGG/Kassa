@@ -2,13 +2,26 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 from database import get_db, Sale, SaleItem, Product, Shift, Employee, Client
 from schemas import SaleCreate, SaleOut, ShiftOpen, ShiftClose, ShiftOut
 from core import get_current_user
 
 router = APIRouter(prefix="/pos", tags=["pos"])
+
+@router.get("/sales", response_model=List[SaleOut])
+async def get_sales(
+    limit: int = 50,
+    offset: int = 0,
+    current_user: Employee = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get sales history with pagination"""
+    result = await db.execute(
+        select(Sale).order_by(Sale.created_at.desc()).limit(limit).offset(offset)
+    )
+    return result.scalars().all()
 
 @router.post("/sales", response_model=SaleOut)
 async def create_sale(
@@ -30,7 +43,7 @@ async def create_sale(
         payment_method=sale_data.payment_method,
         cashier_id=current_user.id,
         client_id=sale_data.client_id,
-        created_at=datetime.utcnow()
+        created_at=datetime.now(timezone.utc)
     )
     db.add(db_sale)
     await db.flush() # Get sale ID
@@ -83,12 +96,23 @@ async def open_shift(
         opening_balance=data.opening_balance,
         note=data.note,
         status="open",
-        opened_at=datetime.utcnow()
+        opened_at=datetime.now(timezone.utc)
     )
     db.add(db_shift)
     await db.commit()
     await db.refresh(db_shift)
     return db_shift
+
+@router.get("/shifts/current", response_model=Optional[ShiftOut])
+async def get_current_shift(
+    current_user: Employee = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get the current open shift for the authenticated user"""
+    result = await db.execute(
+        select(Shift).where(Shift.cashier_id == current_user.id, Shift.status == "open")
+    )
+    return result.scalars().first()
 
 @router.post("/shifts/close", response_model=ShiftOut)
 async def close_shift(
@@ -104,10 +128,10 @@ async def close_shift(
         raise HTTPException(status_code=400, detail="Ochiq smena topilmadi.")
 
     db_shift.closing_balance = data.closing_balance
-    db_shift.closed_at = datetime.utcnow()
+    db_shift.closed_at = datetime.now(timezone.utc)
     db_shift.status = "closed"
     db_shift.note = (db_shift.note or "") + (f"\nClosing Note: {data.note}" if data.note else "")
-    
+
     await db.commit()
     await db.refresh(db_shift)
     return db_shift

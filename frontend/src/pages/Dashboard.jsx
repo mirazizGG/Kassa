@@ -53,7 +53,7 @@ const Dashboard = () => {
         <div className="space-y-8 animate-in fade-in duration-500">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight text-slate-900">Asosiy Ko'rsatkichlar</h1>
+                    <h1 className="text-3xl font-bold tracking-tight text-foreground">Asosiy Ko'rsatkichlar</h1>
                     <p className="text-muted-foreground">Bugungi holat va do'kon statistikasi</p>
                 </div>
                 <div className="flex gap-3">
@@ -105,7 +105,7 @@ const Dashboard = () => {
             </div>
 
             <div className="grid gap-6 md:grid-cols-7">
-                <Card className="col-span-4 border-none shadow-md overflow-hidden bg-white">
+                <Card className="col-span-4 border-none shadow-md overflow-hidden bg-card">
                     <CardHeader className="flex flex-row items-center justify-between">
                         <div>
                             <CardTitle>Oxirgi Savdolar</CardTitle>
@@ -117,7 +117,7 @@ const Dashboard = () => {
                     </CardHeader>
                     <CardContent className="p-0">
                         <Table>
-                            <TableHeader className="bg-slate-50/50">
+                            <TableHeader className="bg-muted/50">
                                 <TableRow>
                                     <TableHead className="pl-6">Vaqt</TableHead>
                                     <TableHead>Mijoz</TableHead>
@@ -126,22 +126,22 @@ const Dashboard = () => {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                <TableRow className="hover:bg-slate-50 transition-colors">
-                                    <TableCell className="pl-6 font-medium text-slate-500">14:32</TableCell>
+                                <TableRow className="hover:bg-muted/50 transition-colors">
+                                    <TableCell className="pl-6 font-medium text-muted-foreground">14:32</TableCell>
                                     <TableCell className="font-semibold">Alijon Toshmatov</TableCell>
                                     <TableCell className="font-bold">450,000 so'm</TableCell>
                                     <TableCell className="pr-6">
-                                        <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-none px-3">
+                                        <Badge variant="secondary" className="bg-emerald-500/20 dark:bg-emerald-500/30 text-emerald-700 dark:text-emerald-400 border-none px-3">
                                             Yakunlandi
                                         </Badge>
                                     </TableCell>
                                 </TableRow>
-                                <TableRow className="border-none hover:bg-slate-50 transition-colors">
-                                    <TableCell className="pl-6 font-medium text-slate-500">14:15</TableCell>
+                                <TableRow className="border-none hover:bg-muted/50 transition-colors">
+                                    <TableCell className="pl-6 font-medium text-muted-foreground">14:15</TableCell>
                                     <TableCell className="font-semibold">Umumiy xarid</TableCell>
                                     <TableCell className="font-bold">120,000 so'm</TableCell>
                                     <TableCell className="pr-6">
-                                        <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-none px-3">
+                                        <Badge variant="secondary" className="bg-emerald-500/20 dark:bg-emerald-500/30 text-emerald-700 dark:text-emerald-400 border-none px-3">
                                             Yakunlandi
                                         </Badge>
                                     </TableCell>
@@ -151,7 +151,7 @@ const Dashboard = () => {
                     </CardContent>
                 </Card>
 
-                <Card className="col-span-3 border-none shadow-md bg-white/80 backdrop-blur-xl">
+                <Card className="col-span-3 border-none shadow-md bg-card/80 backdrop-blur-xl">
                     <CardHeader>
                         <CardTitle>Tezkor Amallar</CardTitle>
                         <CardDescription>Tez-tez ishlatiladigan funksiyalar</CardDescription>

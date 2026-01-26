@@ -2,7 +2,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker, declarative_base, relationship
 from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, Boolean
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Baza fayli nomi (sqlite)
 DATABASE_URL = "sqlite+aiosqlite:///./market.db"
@@ -66,13 +66,13 @@ class Client(Base):
     telegram_id = Column(Integer, unique=True, nullable=True, index=True)
     balance = Column(Float, default=0) # Nasiya yoki oldindan to'lov
     debt_due_date = Column(DateTime, nullable=True) # Qarz qaytarish muddati
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 # 3. Savdo Cheklari (Tarix)
 class Sale(Base):
     __tablename__ = "sales"
     id = Column(Integer, primary_key=True, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     total_amount = Column(Float) # Chek summasi
     payment_method = Column(String) # cash, plastic, card
     cashier_id = Column(Integer, ForeignKey("employees.id")) # Fix: Point to employees
@@ -103,7 +103,7 @@ class Expense(Base):
     reason = Column(String) # Nomi
     category = Column(String, default="Boshqa") # Kategoriya: Ovqat, Firma...
     amount = Column(Float) # Summa
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     created_by = Column(Integer, ForeignKey("employees.id"), nullable=True)
     creator = relationship("Employee")
 
@@ -113,7 +113,7 @@ class AuditLog(Base):
     user_id = Column(Integer, ForeignKey("employees.id")) # Fix: Point to employees, not users (bot users)
     action = Column(String) # e.g., "Deleted Product", "Refunded Sale"
     details = Column(String) # JSON or description
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 class ExpenseCategory(Base):
     __tablename__ = "expense_categories"
@@ -127,7 +127,7 @@ class Supply(Base):
     product_id = Column(Integer, ForeignKey("products.id"))
     quantity = Column(Integer)
     buy_price = Column(Float) # O'sha paytdagi kirim narxi
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 # 7. Qarz To'lovlari (Payment History)
 class Payment(Base):
@@ -137,7 +137,7 @@ class Payment(Base):
     amount = Column(Float) # To'langan summa
     payment_method = Column(String, default="cash") # cash, terminal, transfer
     note = Column(String, nullable=True) # Izoh
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     created_by = Column(Integer, ForeignKey("employees.id"), nullable=True)
     shift_id = Column(Integer, ForeignKey("shifts.id"), nullable=True) # Qaysi smenada qabul qilingan
 
@@ -152,7 +152,7 @@ class Shift(Base):
     cashier_id = Column(Integer, ForeignKey("employees.id"))
     opening_balance = Column(Float, default=0) # Boshlanish kassadagi pul
     closing_balance = Column(Float, nullable=True) # Yopilgandagi kassadagi pul
-    opened_at = Column(DateTime, default=datetime.utcnow)
+    opened_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     closed_at = Column(DateTime, nullable=True)
     status = Column(String, default="open") # open, closed
     note = Column(String, nullable=True) # Izoh
@@ -169,7 +169,7 @@ class Task(Base):
     status = Column(String, default="pending") # pending, in_progress, completed
     assigned_to = Column(Integer, ForeignKey("employees.id"))
     created_by = Column(Integer, ForeignKey("employees.id"))
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     due_date = Column(DateTime, nullable=True)
 
     # Relationships
