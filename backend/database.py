@@ -1,0 +1,170 @@
+# database.py
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.orm import sessionmaker, declarative_base, relationship
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, Boolean
+from datetime import datetime
+
+# Baza fayli nomi (sqlite)
+DATABASE_URL = "sqlite+aiosqlite:///./market.db"
+
+engine = create_async_engine(DATABASE_URL, echo=False)
+SessionLocal = sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
+Base = declarative_base()
+
+# --- JADVALLAR (MODELS) ---
+
+# 0. Xodimlar (Admin, Manager, Kassir)
+class Employee(Base):
+    __tablename__ = "employees"
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String, unique=True, index=True)
+    hashed_password = Column(String)
+    role = Column(String) # admin, manager, cashier
+    permissions = Column(String) # "pos,stock,dashboard"
+    is_active = Column(Boolean, default=True)
+    # Qo'shimcha ma'lumotlar
+    full_name = Column(String, nullable=True) # To'liq ism
+    phone = Column(String, nullable=True) # Telefon raqami
+    address = Column(String, nullable=True) # Manzil
+    passport = Column(String, nullable=True) # Pasport seriyasi
+    notes = Column(String, nullable=True) # Qo'shimcha izohlar
+    telegram_id = Column(Integer, unique=True, nullable=True, index=True) # Telegram bot uchun
+
+class Category(Base):
+    __tablename__ = "categories"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, index=True)
+
+# 1. Mahsulotlar (Sklad)
+class Product(Base):
+    __tablename__ = "products"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True) # Nomi
+    barcode = Column(String, unique=True, index=True) # Shtrix kod
+    buy_price = Column(Float) # Kelish narxi
+    sell_price = Column(Float) # Sotish narxi
+    stock = Column(Integer, default=0) # Qoldiq
+    unit = Column(String, default="dona") # dona, kg, litr
+    category_id = Column(Integer, ForeignKey("categories.id"), nullable=True)
+    is_favorite = Column(Boolean, default=False) # Sevimli mahsulot (kassada yuqorida)
+
+# 2. Mijozlar (Bot uchun)
+class User(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True, index=True)
+    telegram_id = Column(Integer, unique=True, index=True)
+    full_name = Column(String)
+    phone = Column(String)
+    bonus_balance = Column(Float, default=0) # Keshbek
+
+# 7. Mijozlar (CRM) - Moved up for FK reference
+class Client(Base):
+    __tablename__ = "clients"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True)
+    phone = Column(String, nullable=True)
+    telegram_id = Column(Integer, unique=True, nullable=True, index=True)
+    balance = Column(Float, default=0) # Nasiya yoki oldindan to'lov
+    debt_due_date = Column(DateTime, nullable=True) # Qarz qaytarish muddati
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+# 3. Savdo Cheklari (Tarix)
+class Sale(Base):
+    __tablename__ = "sales"
+    id = Column(Integer, primary_key=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    total_amount = Column(Float) # Chek summasi
+    payment_method = Column(String) # cash, plastic, card
+    cashier_id = Column(Integer, ForeignKey("employees.id")) # Fix: Point to employees
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=True) # Mijoz (optional)
+    status = Column(String, default="completed") # completed, refunded
+    
+    # Relationships
+    items = relationship("SaleItem", back_populates="sale")
+    cashier = relationship("Employee")
+    client = relationship("Client")
+
+class SaleItem(Base):
+    __tablename__ = "sale_items"
+    id = Column(Integer, primary_key=True, index=True)
+    sale_id = Column(Integer, ForeignKey("sales.id"))
+    product_id = Column(Integer, ForeignKey("products.id"))
+    quantity = Column(Integer) # Nechta?
+    price = Column(Float) # Qanchadan sotildi?
+    
+    # Relationships
+    sale = relationship("Sale", back_populates="items")
+    product = relationship("Product")
+
+# 5. Xarajatlar (Expenses)
+class Expense(Base):
+    __tablename__ = "expenses"
+    id = Column(Integer, primary_key=True, index=True)
+    reason = Column(String) # Nomi
+    category = Column(String, default="Boshqa") # Kategoriya: Ovqat, Firma...
+    amount = Column(Float) # Summa
+    created_at = Column(DateTime, default=datetime.utcnow)
+    created_by = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    creator = relationship("Employee")
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("employees.id")) # Fix: Point to employees, not users (bot users)
+    action = Column(String) # e.g., "Deleted Product", "Refunded Sale"
+    details = Column(String) # JSON or description
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class ExpenseCategory(Base):
+    __tablename__ = "expense_categories"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, index=True)
+
+# 6. Kirim (Supply History)
+class Supply(Base):
+    __tablename__ = "supplies"
+    id = Column(Integer, primary_key=True, index=True)
+    product_id = Column(Integer, ForeignKey("products.id"))
+    quantity = Column(Integer)
+    buy_price = Column(Float) # O'sha paytdagi kirim narxi
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+# 7. Qarz To'lovlari (Payment History)
+class Payment(Base):
+    __tablename__ = "payments"
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, ForeignKey("clients.id"))
+    amount = Column(Float) # To'langan summa
+    payment_method = Column(String, default="cash") # cash, terminal, transfer
+    note = Column(String, nullable=True) # Izoh
+    created_at = Column(DateTime, default=datetime.utcnow)
+    created_by = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    shift_id = Column(Integer, ForeignKey("shifts.id"), nullable=True) # Qaysi smenada qabul qilingan
+
+    # Relationships
+    client = relationship("Client")
+    employee = relationship("Employee")
+
+# 8. Kassir Smenasi (Cashier Shifts)
+class Shift(Base):
+    __tablename__ = "shifts"
+    id = Column(Integer, primary_key=True, index=True)
+    cashier_id = Column(Integer, ForeignKey("employees.id"))
+    opening_balance = Column(Float, default=0) # Boshlanish kassadagi pul
+    closing_balance = Column(Float, nullable=True) # Yopilgandagi kassadagi pul
+    opened_at = Column(DateTime, default=datetime.utcnow)
+    closed_at = Column(DateTime, nullable=True)
+    status = Column(String, default="open") # open, closed
+    note = Column(String, nullable=True) # Izoh
+
+    # Relationships
+    cashier = relationship("Employee")
+
+# Bazani yaratish funksiyasi
+async def init_db():
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+async def get_db():
+    async with SessionLocal() as db:
+        yield db
