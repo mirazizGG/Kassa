@@ -124,7 +124,7 @@ const POS = () => {
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
             <Input
               placeholder="Qidiruv..."
-              className="pl-12 h-12 text-lg bg-white border-none ring-1 ring-slate-200"
+              className="pl-12 h-12 text-lg bg-background border-none ring-1 ring-border"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -134,7 +134,7 @@ const POS = () => {
         <div className="flex-1 overflow-y-auto pr-2">
           {productsLoading ? (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 animate-pulse">
-              {[1, 2, 3, 4, 5, 6, 7, 8].map(i => <div key={i} className="h-40 bg-slate-100 rounded-xl" />)}
+              {[1, 2, 3, 4, 5, 6, 7, 8].map(i => <div key={i} className="h-40 bg-muted/30 rounded-xl" />)}
             </div>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -151,7 +151,7 @@ const POS = () => {
                     {product.name}
                   </CardHeader>
                   <CardContent className="p-4 pt-0">
-                    <div className="text-lg font-bold text-slate-900 mb-2">
+                    <div className="text-lg font-bold text-foreground mb-2">
                       {product.sell_price.toLocaleString()} so'm
                     </div>
                     <div className="flex items-center justify-between">
@@ -171,13 +171,13 @@ const POS = () => {
       </div>
 
       <div className="w-[400px] flex flex-col shrink-0">
-        <Card className="flex-1 flex flex-col border-none shadow-xl bg-white overflow-hidden">
-          <CardHeader className="bg-slate-900 text-white p-6 rounded-none">
+        <Card className="flex-1 flex flex-col border-none shadow-xl bg-card overflow-hidden">
+          <CardHeader className="bg-primary text-primary-foreground p-6 rounded-none">
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-3 text-lg font-bold">
                 <ShoppingCart className="w-5 h-5" /> Savatcha
               </CardTitle>
-              <Badge variant="outline" className="text-white border-white/20">
+              <Badge variant="outline" className="text-primary-foreground border-primary-foreground/20">
                 {cart.length} ta xarid
               </Badge>
             </div>
@@ -192,21 +192,21 @@ const POS = () => {
             ) : (
               <div className="divide-y">
                 {cart.map(item => (
-                  <div key={item.product_id} className="p-4 hover:bg-slate-50 transition-colors">
+                  <div key={item.product_id} className="p-4 hover:bg-muted/50 transition-colors">
                     <div className="flex justify-between items-start mb-3">
                       <div>
-                        <h4 className="font-semibold text-slate-900 text-sm">{item.name}</h4>
+                        <h4 className="font-semibold text-foreground text-sm">{item.name}</h4>
                         <p className="text-xs text-muted-foreground">{item.price.toLocaleString()} so'm</p>
                       </div>
                       <button
                         onClick={() => removeFromCart(item.product_id)}
-                        className="text-slate-300 hover:text-destructive transition-colors px-2"
+                        className="text-muted-foreground hover:text-destructive transition-colors px-2"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1">
+                      <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
                         <Button
                           variant="ghost"
                           size="icon"
@@ -225,7 +225,7 @@ const POS = () => {
                           <Plus className="w-3 h-3" />
                         </Button>
                       </div>
-                      <div className="font-bold text-slate-900">
+                      <div className="font-bold text-foreground">
                         {(item.price * item.quantity).toLocaleString()} so'm
                       </div>
                     </div>
@@ -235,14 +235,14 @@ const POS = () => {
             )}
           </CardContent>
 
-          <CardFooter className="flex flex-col p-6 bg-slate-50 border-t gap-6">
+          <CardFooter className="flex flex-col p-6 bg-muted/30 border-t gap-6">
             <div className="w-full space-y-4">
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
                   <User className="w-3 h-3" /> Mijoz
                 </label>
                 <Select value={clientId || "default"} onValueChange={(v) => setClientId(v === "default" ? null : v)}>
-                  <SelectTrigger className="bg-white border-slate-200 h-10">
+                  <SelectTrigger className="bg-background h-10">
                     <SelectValue placeholder="Umumiy xaridor" />
                   </SelectTrigger>
                   <SelectContent>
@@ -271,7 +271,7 @@ const POS = () => {
                         variant={paymentMethod === method.id ? "default" : "outline"}
                         className={cn(
                           "h-10 px-0 flex flex-col gap-0 items-center justify-center text-[10px] font-bold uppercase",
-                          paymentMethod === method.id ? "bg-primary shadow-md" : "bg-white border-slate-200"
+                          paymentMethod === method.id ? "bg-primary shadow-md" : "bg-background"
                         )}
                         onClick={() => setPaymentMethod(method.id)}
                       >
@@ -284,10 +284,10 @@ const POS = () => {
               </div>
             </div>
 
-            <div className="w-full space-y-4 pt-2 border-t border-slate-200">
+            <div className="w-full space-y-4 pt-2 border-t">
               <div className="flex items-baseline justify-between">
                 <span className="text-sm font-semibold text-muted-foreground">Jami:</span>
-                <span className="text-3xl font-black tracking-tight text-slate-900">
+                <span className="text-3xl font-black tracking-tight text-foreground">
                   {total.toLocaleString()} <span className="text-xs font-bold uppercase text-muted-foreground">so'm</span>
                 </span>
               </div>

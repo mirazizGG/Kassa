@@ -11,6 +11,7 @@ import Inventory from './pages/Inventory';
 import CRM from './pages/CRM';
 import Finance from './pages/Finance';
 import Employees from './pages/Employees';
+import ErrorBoundary from './components/ErrorBoundary';
 
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider"
@@ -22,24 +23,26 @@ const ProtectedRoute = ({ children }) => {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
-        <Router>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-              <Route index element={<Dashboard />} />
-              <Route path="pos" element={<POS />} />
-              <Route path="inventory" element={<Inventory />} />
-              <Route path="crm" element={<CRM />} />
-              <Route path="finance" element={<Finance />} />
-              <Route path="employees" element={<Employees />} />
-            </Route>
-          </Routes>
-        </Router>
-        <Toaster />
-      </ThemeProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
+          <Router>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+                <Route index element={<Dashboard />} />
+                <Route path="pos" element={<POS />} />
+                <Route path="inventory" element={<Inventory />} />
+                <Route path="crm" element={<CRM />} />
+                <Route path="finance" element={<Finance />} />
+                <Route path="employees" element={<Employees />} />
+              </Route>
+            </Routes>
+          </Router>
+          <Toaster />
+        </ThemeProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
 

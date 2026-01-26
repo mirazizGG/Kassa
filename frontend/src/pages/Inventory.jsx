@@ -203,26 +203,26 @@ const Inventory = () => {
                 </Dialog>
             </div>
 
-            <Card className="border-none shadow-md overflow-hidden bg-white/80 backdrop-blur-xl">
+            <Card className="border-none shadow-md overflow-hidden bg-card/80 backdrop-blur-xl">
                 <CardHeader className="p-6 pb-0">
                     <div className="flex gap-4 items-center">
                         <div className="relative flex-1 max-w-sm">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                             <Input
                                 placeholder="Nomi yoki shtrix kodi bo'yicha qidiruv..."
-                                className="pl-10 bg-slate-50 border-none ring-1 ring-slate-200"
+                                className="pl-10 bg-muted border-none ring-1 ring-border"
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                             />
                         </div>
-                        <Button variant="outline" className="gap-2 border-slate-200">
+                        <Button variant="outline" className="gap-2">
                             <Filter className="w-4 h-4" /> Saralash
                         </Button>
                     </div>
                 </CardHeader>
                 <CardContent className="p-0 mt-6">
                     <Table>
-                        <TableHeader className="bg-slate-50/50">
+                        <TableHeader className="bg-muted/50">
                             <TableRow>
                                 <TableHead className="pl-8">Mahsulot Nomi</TableHead>
                                 <TableHead>Shtrix Kod</TableHead>
@@ -237,7 +237,7 @@ const Inventory = () => {
                             {isLoading ? (
                                 [1, 2, 3, 4, 5].map(i => (
                                     <TableRow key={i}>
-                                        <TableCell colSpan={7} className="h-12 animate-pulse bg-slate-50/30" />
+                                        <TableCell colSpan={7} className="h-12 animate-pulse bg-muted/30" />
                                     </TableRow>
                                 ))
                             ) : filteredProducts.length === 0 ? (
@@ -247,15 +247,15 @@ const Inventory = () => {
                                     </TableCell>
                                 </TableRow>
                             ) : filteredProducts.map((product) => (
-                                <TableRow key={product.id} className="group hover:bg-slate-50/50 transition-colors">
-                                    <TableCell className="pl-8 font-semibold text-slate-900">{product.name}</TableCell>
-                                    <TableCell className="text-slate-500 font-mono text-xs">{product.barcode || '-'}</TableCell>
+                                <TableRow key={product.id} className="group hover:bg-muted/50 transition-colors">
+                                    <TableCell className="pl-8 font-semibold text-foreground">{product.name}</TableCell>
+                                    <TableCell className="text-muted-foreground font-mono text-xs">{product.barcode || '-'}</TableCell>
                                     <TableCell>
-                                        <Badge variant="outline" className="font-medium text-slate-600 bg-slate-50 border-slate-200">
+                                        <Badge variant="outline" className="font-medium">
                                             {categories.find(c => c.id === product.category_id)?.name || 'Boshqa'}
                                         </Badge>
                                     </TableCell>
-                                    <TableCell className="font-bold text-slate-900">
+                                    <TableCell className="font-bold text-foreground">
                                         {product.sell_price.toLocaleString()} <span className="text-[10px] text-muted-foreground font-medium uppercase">so'm</span>
                                     </TableCell>
                                     <TableCell>
@@ -263,7 +263,7 @@ const Inventory = () => {
                                             variant={product.stock < 5 ? "destructive" : "secondary"}
                                             className={cn(
                                                 "font-bold px-2 py-0.5",
-                                                product.stock >= 5 && "bg-emerald-100 text-emerald-700 hover:bg-emerald-100"
+                                                product.stock >= 5 && "bg-emerald-500/20 dark:bg-emerald-500/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20"
                                             )}
                                         >
                                             {product.stock}
@@ -281,7 +281,7 @@ const Inventory = () => {
                                                 <DropdownMenuLabel>Amallar</DropdownMenuLabel>
                                                 <DropdownMenuSeparator />
                                                 <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => handleEdit(product)}>
-                                                    <Edit className="w-4 h-4 text-slate-500" /> Tahrirlash
+                                                    <Edit className="w-4 h-4" /> Tahrirlash
                                                 </DropdownMenuItem>
                                                 <DropdownMenuItem
                                                     className="gap-2 cursor-pointer text-destructive focus:bg-destructive/10 focus:text-destructive"
@@ -304,11 +304,11 @@ const Inventory = () => {
             </Card>
 
             {filteredProducts.some(p => p.stock < 5) && (
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3 shadow-sm">
-                    <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5" />
+                <div className="bg-amber-500/10 dark:bg-amber-500/20 border border-amber-500/30 rounded-xl p-4 flex items-start gap-3 shadow-sm">
+                    <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-500 mt-0.5" />
                     <div>
-                        <h4 className="font-bold text-amber-900">Past Qoldiq Ogohlantirishi</h4>
-                        <p className="text-sm text-amber-700">Ba'zi mahsulotlar qoldig'i 5 tadan kam qolgan. Omboringizni to'ldirishingizni tavsiya qilamiz.</p>
+                        <h4 className="font-bold text-amber-900 dark:text-amber-300">Past Qoldiq Ogohlantirishi</h4>
+                        <p className="text-sm text-amber-700 dark:text-amber-400">Ba'zi mahsulotlar qoldig'i 5 tadan kam qolgan. Omboringizni to'ldirishingizni tavsiya qilamiz.</p>
                     </div>
                 </div>
             )}
