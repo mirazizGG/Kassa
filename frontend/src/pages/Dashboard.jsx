@@ -39,12 +39,8 @@ const Dashboard = () => {
     const { data: stats = { dailySales: "4,520,000 so'm", clientCount: "124", lowStock: "12", totalProducts: "1,240" } } = useQuery({
         queryKey: ['dashboard-stats'],
         queryFn: async () => {
-            return {
-                dailySales: "4,520,000 so'm",
-                clientCount: "124",
-                lowStock: "12",
-                totalProducts: "1,240"
-            };
+            const res = await api.get('/finance/stats');
+            return res.data;
         }
     });
 

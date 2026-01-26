@@ -42,8 +42,8 @@ async def create_employee(
     current_user: Employee = Depends(get_current_user), 
     db: AsyncSession = Depends(get_db)
 ):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Only admins can create employees")
+    if current_user.role not in ["admin", "manager"]:
+        raise HTTPException(status_code=403, detail="Only admins and managers can create employees")
     
     hashed_password = get_password_hash(user.password)
     db_user = Employee(
@@ -67,8 +67,8 @@ async def get_employees(
     current_user: Employee = Depends(get_current_user), 
     db: AsyncSession = Depends(get_db)
 ):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Only admins can view employee list")
+    if current_user.role not in ["admin", "manager"]:
+        raise HTTPException(status_code=403, detail="Only admins and managers can view employee list")
     
     from sqlalchemy import select
     result = await db.execute(select(Employee))

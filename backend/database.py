@@ -160,6 +160,22 @@ class Shift(Base):
     # Relationships
     cashier = relationship("Employee")
 
+# 9. Vazifalar (Tasks for Employees)
+class Task(Base):
+    __tablename__ = "tasks"
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String)
+    description = Column(String, nullable=True)
+    status = Column(String, default="pending") # pending, in_progress, completed
+    assigned_to = Column(Integer, ForeignKey("employees.id"))
+    created_by = Column(Integer, ForeignKey("employees.id"))
+    created_at = Column(DateTime, default=datetime.utcnow)
+    due_date = Column(DateTime, nullable=True)
+
+    # Relationships
+    assignee = relationship("Employee", foreign_keys=[assigned_to])
+    creator = relationship("Employee", foreign_keys=[created_by])
+
 # Bazani yaratish funksiyasi
 async def init_db():
     async with engine.begin() as conn:

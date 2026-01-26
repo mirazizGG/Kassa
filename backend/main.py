@@ -7,7 +7,7 @@ from typing import Optional
 from database import init_db, engine, Base, SessionLocal, Employee
 from core import get_password_hash
 from bot import bot, dp, check_debts
-from routers import auth, inventory, pos, crm, finance
+from routers import auth, inventory, pos, crm, finance, tasks
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -54,6 +54,7 @@ app.include_router(inventory.router)
 app.include_router(pos.router)
 app.include_router(crm.router)
 app.include_router(finance.router)
+app.include_router(tasks.router)
 
 @app.get('/favicon.ico', include_in_schema=False)
 async def favicon():

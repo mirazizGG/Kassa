@@ -148,3 +148,27 @@ class PaymentCreate(BaseModel):
     payment_method: str = "cash"
     note: Optional[str] = None
     client_id: int
+
+# --- TASK SCHEMAS ---
+class TaskBase(BaseModel):
+    title: str
+    description: Optional[str] = None
+    status: str = "pending"
+    assigned_to: int
+    due_date: Optional[datetime] = None
+
+class TaskCreate(TaskBase):
+    pass
+
+class TaskUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    status: Optional[str] = None
+    assigned_to: Optional[int] = None
+    due_date: Optional[datetime] = None
+
+class TaskOut(TaskBase):
+    id: int
+    created_at: datetime
+    created_by: int
+    model_config = ConfigDict(from_attributes=True)
