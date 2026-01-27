@@ -27,8 +27,8 @@ const CRM = () => {
     });
 
     const filteredClients = clients.filter(client =>
-        client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        client.phone?.includes(searchTerm)
+        client.name.toLowerCase().startsWith(searchTerm.toLowerCase()) ||
+        client.phone?.startsWith(searchTerm)
     );
 
     return (

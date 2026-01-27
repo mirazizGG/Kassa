@@ -27,7 +27,7 @@ async def lifespan(app: FastAPI):
         result = await db.execute(select(Employee).where(Employee.username == "admin"))
         admin = result.scalars().first()
         if not admin:
-            print("Admin yaratilmoqda: admin / admin123")
+            print("Admin yaratilmoqda: admin / 123")
             new_admin = Employee(
                 username="admin",
                 hashed_password=get_password_hash("123"),

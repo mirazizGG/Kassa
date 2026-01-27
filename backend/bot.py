@@ -13,8 +13,12 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from sqlalchemy import select
 from database import SessionLocal as AsyncSessionLocal, Client
 from datetime import datetime
+import os
+from dotenv import load_dotenv
 
-TOKEN = "8301998756:AAEBjeXT-eURJ4olXG2jvhlhI-s8MyMeYug"
+load_dotenv()
+
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
 # --- STATES ---
 class Registration(StatesGroup):

@@ -208,8 +208,8 @@ const Inventory = () => {
     };
 
     const filteredProducts = products.filter(p => {
-        const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            p.barcode?.includes(searchTerm);
+        const matchesSearch = p.name.toLowerCase().startsWith(searchTerm.toLowerCase()) ||
+            p.barcode?.startsWith(searchTerm);
         const matchesCategory = selectedCategory === 'all' || p.category_id?.toString() === selectedCategory;
         return matchesSearch && matchesCategory;
     }).sort((a, b) => {
@@ -243,9 +243,9 @@ const Inventory = () => {
                             <Plus className="w-4 h-4" /> Yangi Mahsulot
                         </Button>
                     </DialogTrigger>
-                    
 
-                    
+
+
                     <Dialog open={isCategoryModalOpen} onOpenChange={setIsCategoryModalOpen}>
                         <DialogTrigger asChild>
                             <Button variant="outline" className="gap-2 ml-2">
@@ -263,12 +263,12 @@ const Inventory = () => {
                                 <div className="grid gap-4 py-4">
                                     <div className="grid gap-2">
                                         <Label htmlFor="cat-name">Nomi</Label>
-                                        <Input 
-                                            id="cat-name" 
-                                            value={newCategoryName} 
-                                            onChange={(e) => setNewCategoryName(e.target.value)} 
+                                        <Input
+                                            id="cat-name"
+                                            value={newCategoryName}
+                                            onChange={(e) => setNewCategoryName(e.target.value)}
                                             placeholder="Masalan: Ichimliklar"
-                                            required 
+                                            required
                                         />
                                     </div>
                                 </div>
@@ -301,12 +301,12 @@ const Inventory = () => {
                                 <div className="grid gap-4 py-4">
                                     <div className="grid gap-2">
                                         <Label htmlFor="supply-product">Mahsulot</Label>
-                                        <Select 
-                                            value={supplyData.product_id?.toString()} 
+                                        <Select
+                                            value={supplyData.product_id?.toString()}
                                             onValueChange={(val) => {
                                                 const prod = products.find(p => p.id.toString() === val);
-                                                setSupplyData(prev => ({ 
-                                                    ...prev, 
+                                                setSupplyData(prev => ({
+                                                    ...prev,
                                                     product_id: val,
                                                     buy_price: prod ? prod.buy_price : 0
                                                 }));
@@ -326,22 +326,22 @@ const Inventory = () => {
                                     </div>
                                     <div className="grid gap-2">
                                         <Label htmlFor="supply-qty">Soni</Label>
-                                        <Input 
-                                            id="supply-qty" 
-                                            type="number" 
-                                            value={supplyData.quantity} 
-                                            onChange={(e) => setSupplyData({...supplyData, quantity: e.target.value})} 
-                                            required 
+                                        <Input
+                                            id="supply-qty"
+                                            type="number"
+                                            value={supplyData.quantity}
+                                            onChange={(e) => setSupplyData({ ...supplyData, quantity: e.target.value })}
+                                            required
                                         />
                                     </div>
                                     <div className="grid gap-2">
                                         <Label htmlFor="supply-price">Kelish Narxi (dona)</Label>
-                                        <Input 
-                                            id="supply-price" 
-                                            type="number" 
-                                            value={supplyData.buy_price} 
-                                            onChange={(e) => setSupplyData({...supplyData, buy_price: e.target.value})} 
-                                            required 
+                                        <Input
+                                            id="supply-price"
+                                            type="number"
+                                            value={supplyData.buy_price}
+                                            onChange={(e) => setSupplyData({ ...supplyData, buy_price: e.target.value })}
+                                            required
                                         />
                                     </div>
                                 </div>
@@ -381,7 +381,7 @@ const Inventory = () => {
                                     </TableHeader>
                                     <TableBody>
                                         {historyLoading ? (
-                                            [1,2,3].map(i => (
+                                            [1, 2, 3].map(i => (
                                                 <TableRow key={i}>
                                                     <TableCell colSpan={5} className="h-12 animate-pulse bg-muted/30" />
                                                 </TableRow>
@@ -430,8 +430,8 @@ const Inventory = () => {
                                 </div>
                                 <div className="grid grid-cols-4 items-center gap-4">
                                     <Label htmlFor="category" className="text-right">Kategoriya</Label>
-                                    <Select 
-                                        value={formData.category_id?.toString()} 
+                                    <Select
+                                        value={formData.category_id?.toString()}
                                         onValueChange={(val) => setFormData({ ...formData, category_id: parseInt(val) })}
                                     >
                                         <SelectTrigger className="col-span-3">
@@ -479,58 +479,60 @@ const Inventory = () => {
                 </Dialog>
             </div>
 
-            <Card className="border-none shadow-md overflow-hidden bg-card/80 backdrop-blur-xl">
+            <Card className="border shadow-sm overflow-hidden bg-card/50 backdrop-blur-xl hover:bg-card/80 transition-colors">
                 <CardHeader className="p-6 pb-0">
-                    <div className="flex gap-4 items-center">
-                        <div className="relative flex-1 max-w-sm">
+                    <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
+                        <div className="relative flex-1 max-w-sm w-full">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                             <Input
                                 placeholder="Nomi yoki shtrix kodi bo'yicha qidiruv..."
-                                className="pl-10 bg-muted border-none ring-1 ring-border"
+                                className="pl-10 bg-background/50 border-input ring-offset-background focus-visible:ring-primary"
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                             />
                         </div>
-                        
-                        <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                            <SelectTrigger className="w-[180px]">
-                                <SelectValue placeholder="Kategoriya" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">Barchasi</SelectItem>
-                                {categories.map(c => (
-                                    <SelectItem key={c.id} value={c.id.toString()}>
-                                        {c.name}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
 
-                        <Select value={sortBy} onValueChange={setSortBy}>
-                            <SelectTrigger className="w-[180px]">
-                                <SelectValue placeholder="Saralash" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="name-asc">Nomi (A-Z)</SelectItem>
-                                <SelectItem value="price-asc">Arzonlari oldin</SelectItem>
-                                <SelectItem value="price-desc">Qimmatlari oldin</SelectItem>
-                                <SelectItem value="stock-asc">Kam qolganlari</SelectItem>
-                                <SelectItem value="stock-desc">Ko'p qolganlari</SelectItem>
-                            </SelectContent>
-                        </Select>
+                        <div className="flex gap-2 w-full sm:w-auto">
+                            <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                                <SelectTrigger className="w-full sm:w-[180px] bg-background/50">
+                                    <SelectValue placeholder="Kategoriya" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">Barchasi</SelectItem>
+                                    {categories.map(c => (
+                                        <SelectItem key={c.id} value={c.id.toString()}>
+                                            {c.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+
+                            <Select value={sortBy} onValueChange={setSortBy}>
+                                <SelectTrigger className="w-full sm:w-[180px] bg-background/50">
+                                    <SelectValue placeholder="Saralash" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="name-asc">Nomi (A-Z)</SelectItem>
+                                    <SelectItem value="price-asc">Arzonlari oldin</SelectItem>
+                                    <SelectItem value="price-desc">Qimmatlari oldin</SelectItem>
+                                    <SelectItem value="stock-asc">Kam qolganlari</SelectItem>
+                                    <SelectItem value="stock-desc">Ko'p qolganlari</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
                     </div>
                 </CardHeader>
                 <CardContent className="p-0 mt-6">
                     <Table>
-                        <TableHeader className="bg-muted/50">
-                            <TableRow>
-                                <TableHead className="pl-8">Mahsulot Nomi</TableHead>
-                                <TableHead>Shtrix Kod</TableHead>
-                                <TableHead>Kategoriya</TableHead>
-                                <TableHead>Sotish Narxi</TableHead>
-                                <TableHead>Qoldiq</TableHead>
-                                <TableHead>Birlik</TableHead>
-                                <TableHead className="pr-8 text-right">Amallar</TableHead>
+                        <TableHeader className="bg-muted/30">
+                            <TableRow className="hover:bg-transparent">
+                                <TableHead className="pl-8 h-12">Mahsulot Nomi</TableHead>
+                                <TableHead className="h-12">Shtrix Kod</TableHead>
+                                <TableHead className="h-12">Kategoriya</TableHead>
+                                <TableHead className="h-12">Sotish Narxi</TableHead>
+                                <TableHead className="h-12">Qoldiq</TableHead>
+                                <TableHead className="h-12">Birlik</TableHead>
+                                <TableHead className="pr-8 text-right h-12">Amallar</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -547,23 +549,23 @@ const Inventory = () => {
                                     </TableCell>
                                 </TableRow>
                             ) : filteredProducts.map((product) => (
-                                <TableRow key={product.id} className="group hover:bg-muted/50 transition-colors">
-                                    <TableCell className="pl-8 font-semibold text-foreground">{product.name}</TableCell>
+                                <TableRow key={product.id} className="group hover:bg-muted/30 transition-colors border-b-border/50">
+                                    <TableCell className="pl-8 font-medium text-foreground">{product.name}</TableCell>
                                     <TableCell className="text-muted-foreground font-mono text-xs">{product.barcode || '-'}</TableCell>
                                     <TableCell>
-                                        <Badge variant="outline" className="font-medium">
+                                        <Badge variant="outline" className="font-normal bg-background/50">
                                             {categories.find(c => c.id === product.category_id)?.name || 'Boshqa'}
                                         </Badge>
                                     </TableCell>
-                                    <TableCell className="font-bold text-foreground">
+                                    <TableCell className="font-semibold text-foreground">
                                         {product.sell_price.toLocaleString()} <span className="text-[10px] text-muted-foreground font-medium uppercase">so'm</span>
                                     </TableCell>
                                     <TableCell>
                                         <Badge
                                             variant={product.stock < 5 ? "destructive" : "secondary"}
                                             className={cn(
-                                                "font-bold px-2 py-0.5",
-                                                product.stock >= 5 && "bg-emerald-500/20 dark:bg-emerald-500/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20"
+                                                "font-semibold px-2 py-0.5",
+                                                product.stock >= 5 && "bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border-emerald-500/20"
                                             )}
                                         >
                                             {product.stock}
@@ -573,11 +575,11 @@ const Inventory = () => {
                                     <TableCell className="pr-8 text-right">
                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
-                                                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary">
+                                                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary active:scale-95 transition-transform">
                                                     <MoreHorizontal className="w-4 h-4" />
                                                 </Button>
                                             </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end" className="w-40">
+                                            <DropdownMenuContent align="end" className="w-40 backdrop-blur-lg bg-popover/90">
                                                 <DropdownMenuLabel>Amallar</DropdownMenuLabel>
                                                 <DropdownMenuSeparator />
                                                 <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => handleEdit(product)}>

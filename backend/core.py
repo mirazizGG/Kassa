@@ -9,8 +9,13 @@ from sqlalchemy import select
 
 from database import get_db, Employee
 
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
 # Security configurations
-SECRET_KEY = "your-secret-key-here" # In production, use environment variables
+SECRET_KEY = os.getenv("SECRET_KEY", "dev_secret_key_change_in_production_12345") # In production, use environment variables
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 600
 

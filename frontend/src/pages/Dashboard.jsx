@@ -35,13 +35,32 @@ const StatCard = ({ title, value, icon: Icon, color, trend, description }) => {
 
 const Dashboard = () => {
     const navigate = useNavigate();
-    const { data: stats = { dailySales: "0 so'm", clientCount: "0", lowStock: "0", totalProducts: "0" } } = useQuery({
+    const { data: stats, isLoading, isError } = useQuery({
         queryKey: ['dashboard-stats'],
         queryFn: async () => {
             const res = await api.get('/finance/stats');
             return res.data;
-        }
+        },
+        retry: 1
     });
+
+    if (isLoading) {
+        return <div className="flex justify-center items-center h-screen">Yuklanmoqda...</div>;
+    }
+
+    if (isError) {
+        return (
+            <div className="flex flex-col justify-center items-center h-screen text-red-500 gap-4">
+                <AlertTriangle className="w-16 h-16" />
+                <h2 className="text-2xl font-bold">Server bilan aloqa yo'q!</h2>
+                <p>Iltimos, internetni tekshiring yoki administratorga murojaat qiling.</p>
+                <Button onClick={() => window.location.reload()}>Qayta urinish</Button>
+            </div>
+        );
+    }
+
+    // Default values if stats is undefined but no error (edge case)
+    const displayStats = stats || { dailySales: "0 so'm", clientCount: "0", lowStock: "0", totalProducts: "0" };
 
     const goToPOS = () => navigate('/pos');
     const goToInventory = () => navigate('/inventory');
@@ -69,7 +88,7 @@ const Dashboard = () => {
                 <div className="cursor-pointer" onClick={goToFinance}>
                     <StatCard
                         title="Bugungi Savdo"
-                        value={stats.dailySales}
+                        value={displayStats.dailySales}
                         icon={TrendingUp}
                         color={{ bg: "bg-indigo-500", text: "text-indigo-600" }}
                     />
@@ -77,7 +96,7 @@ const Dashboard = () => {
                 <div className="cursor-pointer" onClick={goToCRM}>
                     <StatCard
                         title="Mijozlar"
-                        value={stats.clientCount}
+                        value={displayStats.clientCount}
                         icon={Users}
                         color={{ bg: "bg-emerald-500", text: "text-emerald-600" }}
                     />
@@ -85,7 +104,7 @@ const Dashboard = () => {
                 <div className="cursor-pointer" onClick={goToInventory}>
                     <StatCard
                         title="Kam Qolgan Mahsulotlar"
-                        value={stats.lowStock}
+                        value={displayStats.lowStock}
                         icon={AlertTriangle}
                         color={{ bg: "bg-amber-500", text: "text-amber-600" }}
                         description="Tezda to'ldiring"
@@ -94,68 +113,16 @@ const Dashboard = () => {
                 <div className="cursor-pointer" onClick={goToInventory}>
                     <StatCard
                         title="Jami Mahsulotlar"
-                        value={stats.totalProducts}
+                        value={displayStats.totalProducts}
                         icon={Package}
                         color={{ bg: "bg-slate-500", text: "text-slate-600" }}
                     />
                 </div>
             </div>
 
-            <div className="grid gap-6 md:grid-cols-7">
-                <Card className="col-span-4 border-none shadow-md overflow-hidden bg-card">
-                    <CardHeader className="flex flex-row items-center justify-between">
-                        <div>
-                            <CardTitle>Oxirgi Savdolar</CardTitle>
-                            <CardDescription>Do'kondagi so'nggi tranzaksiyalar ro'yxati</CardDescription>
-                        </div>
-                        <Button variant="ghost" size="sm" className="text-primary font-semibold" onClick={goToPOS}>
-                            Barchasi
-                        </Button>
-                    </CardHeader>
-                    <CardContent className="p-0">
-                        <Table>
-                            <TableHeader className="bg-muted/50">
-                                <TableRow>
-                                    <TableHead className="pl-6">Vaqt</TableHead>
-                                    <TableHead>Mijoz</TableHead>
-                                    <TableHead>Summa</TableHead>
-                                    <TableHead className="pr-6">Status</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                <TableRow>
-                                    <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
-                                        Hozircha savdolar yo'q. POS sahifasidan yangi savdo qo'shing.
-                                    </TableCell>
-                                </TableRow>
-                            </TableBody>
-                        </Table>
-                    </CardContent>
-                </Card>
-
-                <Card className="col-span-3 border-none shadow-md bg-card/80 backdrop-blur-xl">
-                    <CardHeader>
-                        <CardTitle>Tezkor Amallar</CardTitle>
-                        <CardDescription>Tez-tez ishlatiladigan funksiyalar</CardDescription>
-                    </CardHeader>
-                    <CardContent className="grid gap-4">
-                        <Button className="w-full justify-start h-12 text-base gap-3" size="lg" onClick={goToPOS}>
-                            <ShoppingCart className="w-5 h-5" /> Yangi Savdo Boshlash
-                        </Button>
-                        <Button variant="outline" className="w-full justify-start h-12 text-base gap-3" size="lg" onClick={goToCRM}>
-                            <Users className="w-5 h-5" /> Mijoz Qo'shish
-                        </Button>
-                        <Button variant="outline" className="w-full justify-start h-12 text-base gap-3 border-dashed" size="lg" onClick={goToInventory}>
-                            <Package className="w-5 h-5" /> Omborni Ko'zdan Kechirish
-                        </Button>
-                    </CardContent>
-                    <CardFooter className="pt-2 border-t mt-4">
-                        <p className="text-xs text-center w-full text-muted-foreground">
-                            Tezkor amallar uchun
-                        </p>
-                    </CardFooter>
-                </Card>
-            </div>
+            {/* <div className="grid gap-6 md:grid-cols-7">
+                ... removed extras ...
+            </div> */}
         </div>
     );
 };

@@ -109,16 +109,16 @@ const POS = () => {
                     toast.warning("Boshqa qoldiq yo'q");
                     return prev;
                 }
-                return prev.map(item => 
-                    item.product_id === product.id 
+                return prev.map(item =>
+                    item.product_id === product.id
                         ? { ...item, quantity: item.quantity + 1 }
                         : item
                 );
             }
-            return [...prev, { 
-                product_id: product.id, 
-                name: product.name, 
-                price: product.sell_price, 
+            return [...prev, {
+                product_id: product.id,
+                name: product.name,
+                price: product.sell_price,
                 quantity: 1,
                 max_stock: product.stock
             }];
@@ -173,8 +173,8 @@ const POS = () => {
 
     // Filtered Products
     const filteredProducts = products.filter(p => {
-        const matchesSearch = p.name.toLowerCase().startsWith(searchTerm.toLowerCase()) || 
-                              p.barcode?.startsWith(searchTerm);
+        const matchesSearch = p.name.toLowerCase().startsWith(searchTerm.toLowerCase()) ||
+            p.barcode?.startsWith(searchTerm);
         const matchesCategory = selectedCategory ? p.category_id === selectedCategory : true;
         return matchesSearch && matchesCategory;
     });
@@ -193,7 +193,7 @@ const POS = () => {
         };
         // Ideally checking for fast input sequence ending with Enter
     }, []);
-    
+
     // Auto-search logic for barcode (if exact match found, add to cart immediately)
     useEffect(() => {
         if (!searchTerm) return;
@@ -222,11 +222,11 @@ const POS = () => {
                             />
                         </div>
                     </div>
-                    
+
                     {/* Categories Bar */}
                     <ScrollArea className="w-full whitespace-nowrap border-b bg-muted/30">
                         <div className="flex p-2 gap-2">
-                            <Button 
+                            <Button
                                 variant={selectedCategory === null ? "default" : "outline"}
                                 onClick={() => setSelectedCategory(null)}
                                 className="rounded-full"
@@ -251,8 +251,8 @@ const POS = () => {
                     <ScrollArea className="flex-1 p-4 bg-muted/10">
                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 pb-20">
                             {filteredProducts.map(product => (
-                                <Card 
-                                    key={product.id} 
+                                <Card
+                                    key={product.id}
                                     className={cn(
                                         "cursor-pointer hover:shadow-lg transition-all active:scale-95 flex flex-col justify-between overflow-hidden border-0 bg-card",
                                         product.stock <= 0 && "opacity-50 grayscale pointer-events-none"
@@ -260,9 +260,9 @@ const POS = () => {
                                     onClick={() => addToCart(product)}
                                 >
                                     <div className="h-24 bg-gradient-to-br from-primary/10 to-primary/5 p-4 flex items-center justify-center">
-                                       <div className="text-4xl font-bold text-primary/20">
+                                        <div className="text-4xl font-bold text-primary/20">
                                             {product.name.charAt(0).toUpperCase()}
-                                       </div>
+                                        </div>
                                     </div>
                                     <div className="p-3">
                                         <h3 className="font-bold truncate" title={product.name}>{product.name}</h3>
@@ -308,18 +308,18 @@ const POS = () => {
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-1 bg-background rounded-md border shadow-sm">
-                                        <Button 
-                                            variant="ghost" 
-                                            size="icon" 
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
                                             className="h-8 w-8 rounded-none rounded-l-md hover:bg-destructive/10 hover:text-destructive"
                                             onClick={() => item.quantity > 1 ? updateQuantity(item.product_id, -1) : removeFromCart(item.product_id)}
                                         >
                                             {item.quantity === 1 ? <Trash2 className="w-4 h-4" /> : <Minus className="w-3 h-3" />}
                                         </Button>
                                         <div className="w-8 text-center font-bold text-sm select-none">{item.quantity}</div>
-                                        <Button 
-                                            variant="ghost" 
-                                            size="icon" 
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
                                             className="h-8 w-8 rounded-none rounded-r-md"
                                             onClick={() => updateQuantity(item.product_id, 1)}
                                         >
@@ -349,10 +349,10 @@ const POS = () => {
                                 <span className="text-primary">{cartTotal.toLocaleString()} so'm</span>
                             </div>
                         </div>
-                        
-                        <Button 
-                            size="lg" 
-                            className="w-full text-lg shadow-lg shadow-primary/20" 
+
+                        <Button
+                            size="lg"
+                            className="w-full text-lg shadow-lg shadow-primary/20"
                             disabled={cart.length === 0 || saleMutation.isPending}
                             onClick={handlePayment}
                         >
@@ -374,9 +374,9 @@ const POS = () => {
                             <div className="text-sm text-muted-foreground">To'lanadigan summa</div>
                             <div className="text-3xl font-bold text-primary">{cartTotal.toLocaleString()} so'm</div>
                         </div>
-                        
+
                         <div className="grid grid-cols-2 gap-2">
-                            <Button 
+                            <Button
                                 variant={paymentMethod === 'cash' ? 'default' : 'outline'}
                                 onClick={() => setPaymentMethod('cash')}
                                 className="h-20 flex flex-col gap-1"
@@ -384,7 +384,7 @@ const POS = () => {
                                 <Banknote className="w-6 h-6" />
                                 Naqd Pul
                             </Button>
-                            <Button 
+                            <Button
                                 variant={paymentMethod === 'card' ? 'default' : 'outline'}
                                 onClick={() => setPaymentMethod('card')}
                                 className="h-20 flex flex-col gap-1"
@@ -392,7 +392,7 @@ const POS = () => {
                                 <CreditCard className="w-6 h-6" />
                                 Karta
                             </Button>
-                            <Button 
+                            <Button
                                 variant={paymentMethod === 'perevod' ? 'default' : 'outline'}
                                 onClick={() => setPaymentMethod('perevod')}
                                 className="h-20 flex flex-col gap-1"
@@ -400,7 +400,7 @@ const POS = () => {
                                 <Smartphone className="w-6 h-6" />
                                 Perevod
                             </Button>
-                            <Button 
+                            <Button
                                 variant={paymentMethod === 'qarz' ? 'default' : 'outline'}
                                 onClick={() => setPaymentMethod('qarz')}
                                 className="h-20 flex flex-col gap-1"
@@ -409,14 +409,14 @@ const POS = () => {
                                 Qarz (Nasiya)
                             </Button>
                         </div>
-                        
-                        {(paymentMethod === 'qarz' || paymentMethod === 'perevod') && (
+
+                        {paymentMethod === 'qarz' && (
                             <div className="grid gap-2 animate-in fade-in slide-in-from-top-2 duration-300">
                                 <Label htmlFor="client-select" className="flex items-center gap-2">
                                     <Users className="w-4 h-4" /> Mijozni tanlang
                                 </Label>
-                                <Select 
-                                    value={selectedClient?.toString()} 
+                                <Select
+                                    value={selectedClient?.toString()}
                                     onValueChange={(val) => setSelectedClient(parseInt(val))}
                                 >
                                     <SelectTrigger id="client-select">
@@ -432,8 +432,29 @@ const POS = () => {
                                 </Select>
                             </div>
                         )}
-                        
-                        {/* Change Calculator Logic could go here */}
+
+                        {paymentMethod === 'cash' && (
+                            <div className="space-y-4 bg-muted/50 p-4 rounded-lg animate-in fade-in slide-in-from-top-2">
+                                <div className="space-y-2">
+                                    <Label>Mijoz bergan summa</Label>
+                                    <Input
+                                        type="number"
+                                        placeholder="0"
+                                        className="text-xl font-bold h-12"
+                                        value={amountPaid}
+                                        onChange={(e) => setAmountPaid(e.target.value)}
+                                        autoFocus
+                                    />
+                                </div>
+                                <div className="flex justify-between items-center pt-2 border-t">
+                                    <span className="font-medium text-muted-foreground">Qaytim:</span>
+                                    <span className={`text-2xl font-bold ${(amountPaid - cartTotal) < 0 ? 'text-destructive' : 'text-emerald-600'
+                                        }`}>
+                                        {amountPaid ? (amountPaid - cartTotal).toLocaleString() : '0'} so'm
+                                    </span>
+                                </div>
+                            </div>
+                        )}
                     </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setIsPaymentModalOpen(false)}>Bekor qilish</Button>
