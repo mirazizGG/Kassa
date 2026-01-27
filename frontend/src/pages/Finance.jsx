@@ -38,25 +38,25 @@ const Finance = () => {
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <StatCard
                     title="Jami Savdo (Oy)"
-                    value="124,500,000"
+                    value="0 so'm"
                     icon={DollarSign}
                     type="positive"
                 />
                 <StatCard
                     title="Sof Foyda"
-                    value="32,400,000"
+                    value="0 so'm"
                     icon={TrendingUp}
                     type="positive"
                 />
                 <StatCard
                     title="Xarajatlar"
-                    value="12,100,000"
+                    value="0 so'm"
                     icon={TrendingDown}
                     type="negative"
                 />
                 <StatCard
                     title="O'rtacha Chek"
-                    value="45,000"
+                    value="0 so'm"
                     icon={PieChart}
                 />
             </div>

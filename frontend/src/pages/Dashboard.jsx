@@ -6,7 +6,6 @@ import { TrendingUp, Users, Package, AlertTriangle, ArrowRight, ShoppingCart, Pl
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 
 const StatCard = ({ title, value, icon: Icon, color, trend, description }) => {
     // Helper for dynamic class name merging
@@ -36,7 +35,7 @@ const StatCard = ({ title, value, icon: Icon, color, trend, description }) => {
 
 const Dashboard = () => {
     const navigate = useNavigate();
-    const { data: stats = { dailySales: "4,520,000 so'm", clientCount: "124", lowStock: "12", totalProducts: "1,240" } } = useQuery({
+    const { data: stats = { dailySales: "0 so'm", clientCount: "0", lowStock: "0", totalProducts: "0" } } = useQuery({
         queryKey: ['dashboard-stats'],
         queryFn: async () => {
             const res = await api.get('/finance/stats');
@@ -73,7 +72,6 @@ const Dashboard = () => {
                         value={stats.dailySales}
                         icon={TrendingUp}
                         color={{ bg: "bg-indigo-500", text: "text-indigo-600" }}
-                        trend="+12%"
                     />
                 </div>
                 <div className="cursor-pointer" onClick={goToCRM}>
@@ -82,7 +80,6 @@ const Dashboard = () => {
                         value={stats.clientCount}
                         icon={Users}
                         color={{ bg: "bg-emerald-500", text: "text-emerald-600" }}
-                        trend="+5"
                     />
                 </div>
                 <div className="cursor-pointer" onClick={goToInventory}>
@@ -126,24 +123,9 @@ const Dashboard = () => {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                <TableRow className="hover:bg-muted/50 transition-colors">
-                                    <TableCell className="pl-6 font-medium text-muted-foreground">14:32</TableCell>
-                                    <TableCell className="font-semibold">Alijon Toshmatov</TableCell>
-                                    <TableCell className="font-bold">450,000 so'm</TableCell>
-                                    <TableCell className="pr-6">
-                                        <Badge variant="secondary" className="bg-emerald-500/20 dark:bg-emerald-500/30 text-emerald-700 dark:text-emerald-400 border-none px-3">
-                                            Yakunlandi
-                                        </Badge>
-                                    </TableCell>
-                                </TableRow>
-                                <TableRow className="border-none hover:bg-muted/50 transition-colors">
-                                    <TableCell className="pl-6 font-medium text-muted-foreground">14:15</TableCell>
-                                    <TableCell className="font-semibold">Umumiy xarid</TableCell>
-                                    <TableCell className="font-bold">120,000 so'm</TableCell>
-                                    <TableCell className="pr-6">
-                                        <Badge variant="secondary" className="bg-emerald-500/20 dark:bg-emerald-500/30 text-emerald-700 dark:text-emerald-400 border-none px-3">
-                                            Yakunlandi
-                                        </Badge>
+                                <TableRow>
+                                    <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
+                                        Hozircha savdolar yo'q. POS sahifasidan yangi savdo qo'shing.
                                     </TableCell>
                                 </TableRow>
                             </TableBody>
@@ -169,7 +151,7 @@ const Dashboard = () => {
                     </CardContent>
                     <CardFooter className="pt-2 border-t mt-4">
                         <p className="text-xs text-center w-full text-muted-foreground">
-                            Smena ochilgan vaqt: 08:30
+                            Tezkor amallar uchun
                         </p>
                     </CardFooter>
                 </Card>

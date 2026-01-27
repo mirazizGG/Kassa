@@ -1,58 +1,29 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import api from '../api/axios';
-import {
-  Search,
-  Plus,
-  Minus,
-  Trash2,
-  CheckCircle,
-  ShoppingCart,
-  User,
-  CreditCard,
-  Coins,
-  History
-} from 'lucide-react';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Search, Plus, Minus, X, Loader2 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
 
 const POS = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [cart, setCart] = useState([]);
   const [paymentMethod, setPaymentMethod] = useState('cash');
-  const [clientId, setClientId] = useState(null);
 
   const { data: products = [], isLoading: productsLoading } = useQuery({
     queryKey: ['products', searchTerm],
     queryFn: async () => {
-      const res = await api.get('/inventory/products', { params: { query: searchTerm } });
-      return res.data;
-    },
-    enabled: searchTerm.length > 0
-  });
-
-  const { data: clients = [] } = useQuery({
-    queryKey: ['clients'],
-    queryFn: async () => {
-      const res = await api.get('/crm/clients');
+      const res = await api.get('/inventory/products', {
+        params: searchTerm ? { query: searchTerm } : {}
+      });
       return res.data;
     }
   });
 
   const addToCart = (product) => {
     if (product.stock <= 0) {
-      toast.error("Xatolik!", { description: "Mahsulot qolmagan." });
+      toast.error("Mahsulot qolmagan!");
       return;
     }
     const existing = cart.find(item => item.product_id === product.id);
@@ -84,16 +55,19 @@ const POS = () => {
     setCart(cart.filter(item => item.product_id !== id));
   };
 
+  const clearCart = () => {
+    setCart([]);
+  };
+
   const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
   const saleMutation = useMutation({
     mutationFn: (saleData) => api.post('/pos/sales', saleData),
     onSuccess: () => {
       toast.success("Sotuv yakunlandi!", {
-        description: `${total.toLocaleString()} so'm miqdorida xarid amalga oshirildi.`
+        description: `${total.toLocaleString()} so'm`
       });
       setCart([]);
-      setClientId(null);
     },
     onError: (error) => {
       toast.error("Xatolik!", {
@@ -107,7 +81,7 @@ const POS = () => {
     saleMutation.mutate({
       total_amount: total,
       payment_method: paymentMethod,
-      client_id: clientId ? parseInt(clientId) : null,
+      client_id: null,
       items: cart.map(item => ({
         product_id: item.product_id,
         quantity: item.quantity,
@@ -116,192 +90,210 @@ const POS = () => {
     });
   };
 
+  const filteredProducts = searchTerm
+    ? products.filter(p =>
+        p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.barcode?.includes(searchTerm)
+      )
+    : products;
+
   return (
-    <div className="flex gap-8 h-full min-h-[500px] overflow-hidden">
-      <div className="flex-1 flex flex-col min-w-0">
-        <div className="mb-6">
+    <div className="flex h-[calc(100vh-5rem)] gap-4">
+      {/* Products Section - Left Side */}
+      <div className="flex-1 flex flex-col">
+        {/* Search Bar */}
+        <div className="mb-4">
           <div className="relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
             <Input
-              placeholder="Qidiruv..."
-              className="pl-12 h-12 text-lg bg-background border-none ring-1 ring-border"
+              placeholder="Mahsulot qidirish..."
+              className="pl-12 h-14 text-lg"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              autoFocus
             />
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto pr-2">
+        {/* Products Grid */}
+        <div className="flex-1 overflow-y-auto">
           {productsLoading ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 animate-pulse">
-              {[1, 2, 3, 4, 5, 6, 7, 8].map(i => <div key={i} className="h-40 bg-muted/30 rounded-xl" />)}
+            <div className="grid grid-cols-3 gap-3">
+              {[1, 2, 3, 4, 5, 6].map(i => (
+                <div key={i} className="h-32 bg-muted animate-pulse rounded-lg" />
+              ))}
+            </div>
+          ) : filteredProducts.length === 0 ? (
+            <div className="flex items-center justify-center h-full text-muted-foreground">
+              <div className="text-center">
+                <p className="text-lg font-medium">Mahsulot topilmadi</p>
+                <p className="text-sm">Boshqa nom bilan qidiring</p>
+              </div>
             </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {products.map(product => (
-                <Card
+            <div className="grid grid-cols-3 gap-3 pb-4">
+              {filteredProducts.map(product => (
+                <button
                   key={product.id}
-                  className={cn(
-                    "group cursor-pointer hover:ring-2 hover:ring-primary transition-all duration-200 border-none shadow-sm overflow-hidden",
-                    product.stock <= 0 && "opacity-60 cursor-not-allowed"
-                  )}
                   onClick={() => addToCart(product)}
+                  disabled={product.stock <= 0}
+                  className="bg-card hover:bg-accent border-2 border-transparent hover:border-primary rounded-lg p-4 text-left transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-transparent h-32 flex flex-col justify-between"
                 >
-                  <CardHeader className="p-4 pb-2 text-sm font-semibold truncate group-hover:text-primary transition-colors">
-                    {product.name}
-                  </CardHeader>
-                  <CardContent className="p-4 pt-0">
-                    <div className="text-lg font-bold text-foreground mb-2">
-                      {product.sell_price.toLocaleString()} so'm
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <Badge variant={product.stock < 5 ? "destructive" : "secondary"} className="text-[10px] px-2 py-0">
-                        {product.stock} {product.unit}
-                      </Badge>
-                      <Button size="icon" className="w-8 h-8 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Plus className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
+                  <div>
+                    <h3 className="font-bold text-base mb-1 line-clamp-2">{product.name}</h3>
+                    <p className="text-2xl font-black text-primary">
+                      {product.sell_price.toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">
+                      {product.stock} {product.unit}
+                    </span>
+                    <Plus className="w-5 h-5 text-primary" />
+                  </div>
+                </button>
               ))}
             </div>
           )}
         </div>
       </div>
 
-      <div className="w-[400px] flex flex-col shrink-0">
-        <Card className="flex-1 flex flex-col border-none shadow-xl bg-card overflow-hidden">
-          <CardHeader className="bg-primary text-primary-foreground p-6 rounded-none">
-            <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-3 text-lg font-bold">
-                <ShoppingCart className="w-5 h-5" /> Savatcha
-              </CardTitle>
-              <Badge variant="outline" className="text-primary-foreground border-primary-foreground/20">
-                {cart.length} ta xarid
-              </Badge>
+      {/* Cart Section - Right Side */}
+      <div className="w-[420px] bg-card border rounded-lg flex flex-col">
+        {/* Cart Header */}
+        <div className="p-4 border-b">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold">Savatcha</h2>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">{cart.length} ta</span>
+              {cart.length > 0 && (
+                <Button variant="ghost" size="sm" onClick={clearCart}>
+                  Tozalash
+                </Button>
+              )}
             </div>
-          </CardHeader>
+          </div>
+        </div>
 
-          <CardContent className="flex-1 overflow-y-auto p-0">
-            {cart.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-muted-foreground p-8 opacity-50">
-                <ShoppingCart className="w-16 h-16 mb-4" />
-                <p className="text-center font-medium">Sotuv boshlash uchun mahsulot tanlang</p>
+        {/* Cart Items */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-2">
+          {cart.length === 0 ? (
+            <div className="flex items-center justify-center h-full text-center text-muted-foreground">
+              <div>
+                <p className="text-lg font-medium mb-1">Savat bo'sh</p>
+                <p className="text-sm">Mahsulot tanlang</p>
               </div>
-            ) : (
-              <div className="divide-y">
-                {cart.map(item => (
-                  <div key={item.product_id} className="p-4 hover:bg-muted/50 transition-colors">
-                    <div className="flex justify-between items-start mb-3">
-                      <div>
-                        <h4 className="font-semibold text-foreground text-sm">{item.name}</h4>
-                        <p className="text-xs text-muted-foreground">{item.price.toLocaleString()} so'm</p>
-                      </div>
-                      <button
-                        onClick={() => removeFromCart(item.product_id)}
-                        className="text-muted-foreground hover:text-destructive transition-colors px-2"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="w-7 h-7"
-                          onClick={() => updateQuantity(item.product_id, -1)}
-                        >
-                          <Minus className="w-3 h-3" />
-                        </Button>
-                        <span className="w-8 text-center font-bold text-sm">{item.quantity}</span>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="w-7 h-7"
-                          onClick={() => updateQuantity(item.product_id, 1)}
-                        >
-                          <Plus className="w-3 h-3" />
-                        </Button>
-                      </div>
-                      <div className="font-bold text-foreground">
-                        {(item.price * item.quantity).toLocaleString()} so'm
-                      </div>
-                    </div>
+            </div>
+          ) : (
+            cart.map(item => (
+              <div key={item.product_id} className="bg-muted/50 rounded-lg p-3">
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex-1 pr-2">
+                    <h4 className="font-semibold text-sm line-clamp-1">{item.name}</h4>
+                    <p className="text-xs text-muted-foreground">
+                      {item.price.toLocaleString()} so'm
+                    </p>
                   </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-
-          <CardFooter className="flex flex-col p-6 bg-muted/30 border-t gap-6">
-            <div className="w-full space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                  <User className="w-3 h-3" /> Mijoz
-                </label>
-                <Select value={clientId || "default"} onValueChange={(v) => setClientId(v === "default" ? null : v)}>
-                  <SelectTrigger className="bg-background h-10">
-                    <SelectValue placeholder="Umumiy xaridor" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="default">Umumiy xaridor</SelectItem>
-                    {clients.map(c => (
-                      <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                  <CreditCard className="w-3 h-3" /> To'lov Turi
-                </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { id: 'cash', label: 'Naqd', icon: Coins },
-                    { id: 'card', label: 'Karta', icon: CreditCard },
-                    { id: 'debt', label: 'Nasiya', icon: History }
-                  ].map(method => {
-                    const Icon = method.icon;
-                    return (
-                      <Button
-                        key={method.id}
-                        variant={paymentMethod === method.id ? "default" : "outline"}
-                        className={cn(
-                          "h-10 px-0 flex flex-col gap-0 items-center justify-center text-[10px] font-bold uppercase",
-                          paymentMethod === method.id ? "bg-primary shadow-md" : "bg-background"
-                        )}
-                        onClick={() => setPaymentMethod(method.id)}
-                      >
-                        <Icon className="w-3 h-3 mb-0.5" />
-                        {method.label}
-                      </Button>
-                    );
-                  })}
+                  <button
+                    onClick={() => removeFromCart(item.product_id)}
+                    className="text-muted-foreground hover:text-destructive p-1"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 bg-background rounded-md">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => updateQuantity(item.product_id, -1)}
+                      className="h-8 w-8 p-0"
+                    >
+                      <Minus className="w-4 h-4" />
+                    </Button>
+                    <span className="font-bold min-w-[2rem] text-center">
+                      {item.quantity}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => updateQuantity(item.product_id, 1)}
+                      className="h-8 w-8 p-0"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  <span className="font-bold text-lg">
+                    {(item.price * item.quantity).toLocaleString()}
+                  </span>
                 </div>
               </div>
-            </div>
+            ))
+          )}
+        </div>
 
-            <div className="w-full space-y-4 pt-2 border-t">
-              <div className="flex items-baseline justify-between">
-                <span className="text-sm font-semibold text-muted-foreground">Jami:</span>
-                <span className="text-3xl font-black tracking-tight text-foreground">
-                  {total.toLocaleString()} <span className="text-xs font-bold uppercase text-muted-foreground">so'm</span>
-                </span>
-              </div>
-
+        {/* Cart Footer - Payment & Checkout */}
+        <div className="border-t p-4 space-y-4">
+          {/* Payment Method */}
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground uppercase mb-2 block">
+              To'lov turi
+            </label>
+            <div className="grid grid-cols-3 gap-2">
               <Button
-                className="w-full h-14 text-base font-bold uppercase tracking-widest gap-3 shadow-lg"
-                disabled={cart.length === 0 || saleMutation.isPending}
-                onClick={handleCheckout}
+                variant={paymentMethod === 'cash' ? "default" : "outline"}
+                onClick={() => setPaymentMethod('cash')}
+                className="h-12 font-semibold"
               >
-                <CheckCircle className="w-5 h-5" /> Sotuvni Yakunlash
+                Naqd
+              </Button>
+              <Button
+                variant={paymentMethod === 'card' ? "default" : "outline"}
+                onClick={() => setPaymentMethod('card')}
+                className="h-12 font-semibold"
+              >
+                Karta
+              </Button>
+              <Button
+                variant={paymentMethod === 'debt' ? "default" : "outline"}
+                onClick={() => setPaymentMethod('debt')}
+                className="h-12 font-semibold"
+              >
+                Nasiya
               </Button>
             </div>
-          </CardFooter>
-        </Card>
+          </div>
+
+          {/* Total */}
+          <div className="bg-primary/10 rounded-lg p-4">
+            <div className="flex items-baseline justify-between">
+              <span className="text-sm font-semibold text-muted-foreground">JAMI:</span>
+              <div className="text-right">
+                <span className="text-3xl font-black text-primary">
+                  {total.toLocaleString()}
+                </span>
+                <span className="text-sm font-bold text-muted-foreground ml-1">so'm</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Checkout Button */}
+          <Button
+            onClick={handleCheckout}
+            disabled={cart.length === 0 || saleMutation.isPending}
+            className="w-full h-14 text-lg font-bold"
+            size="lg"
+          >
+            {saleMutation.isPending ? (
+              <>
+                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                Yuklanmoqda...
+              </>
+            ) : (
+              "Sotuvni Yakunlash"
+            )}
+          </Button>
+        </div>
       </div>
     </div>
   );

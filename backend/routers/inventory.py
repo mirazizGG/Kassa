@@ -33,12 +33,55 @@ async def create_product(
 ):
     if current_user.role not in ["admin", "manager"]:
         raise HTTPException(status_code=403, detail="Not enough permissions")
-    
+
     db_product = Product(**product.model_dump())
     db.add(db_product)
     await db.commit()
     await db.refresh(db_product)
     return db_product
+
+@router.put("/products/{product_id}", response_model=ProductOut)
+async def update_product(
+    product_id: int,
+    product: ProductCreate,
+    current_user: Employee = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    if current_user.role not in ["admin", "manager"]:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+
+    result = await db.execute(select(Product).where(Product.id == product_id))
+    db_product = result.scalars().first()
+
+    if not db_product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    # Update product fields
+    for key, value in product.model_dump().items():
+        setattr(db_product, key, value)
+
+    await db.commit()
+    await db.refresh(db_product)
+    return db_product
+
+@router.delete("/products/{product_id}")
+async def delete_product(
+    product_id: int,
+    current_user: Employee = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    if current_user.role not in ["admin", "manager"]:
+        raise HTTPException(status_code=403, detail="Only admins and managers can delete products")
+
+    result = await db.execute(select(Product).where(Product.id == product_id))
+    db_product = result.scalars().first()
+
+    if not db_product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    await db.delete(db_product)
+    await db.commit()
+    return {"status": "success", "message": "Product deleted"}
 
 # --- CATEGORIES ---
 @router.get("/categories", response_model=List[CategoryOut])
