@@ -71,6 +71,19 @@ class ProductOut(ProductBase):
     id: int
     model_config = ConfigDict(from_attributes=True)
 
+class SupplyBase(BaseModel):
+    product_id: int
+    quantity: int
+    buy_price: float
+
+class SupplyCreate(SupplyBase):
+    pass
+
+class SupplyOut(SupplyBase):
+    id: int
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
 # --- CRM SCHEMAS ---
 class ClientBase(BaseModel):
     name: str

@@ -3,11 +3,55 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, delete
 from typing import List, Optional
 
-from database import get_db, Product, Category, Employee
-from schemas import ProductCreate, ProductOut, CategoryCreate, CategoryOut
+from database import get_db, Product, Category, Employee, Supply
+from schemas import ProductCreate, ProductOut, CategoryCreate, CategoryOut, SupplyCreate, SupplyOut
 from core import get_current_user
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
+
+# --- SUPPLIES ---
+@router.post("/supplies", response_model=SupplyOut)
+async def create_supply(
+    supply: SupplyCreate,
+    current_user: Employee = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    if current_user.role not in ["admin", "manager"]:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+
+    # 1. Mahsulotni topish
+    result = await db.execute(select(Product).where(Product.id == supply.product_id))
+    product = result.scalars().first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    # 2. Kirim tarixi yaratish
+    db_supply = Supply(
+        product_id=supply.product_id,
+        quantity=supply.quantity,
+        buy_price=supply.buy_price
+    )
+    db.add(db_supply)
+
+    # 3. Mahsulot sonini va tannarxini yangilash
+    product.stock += supply.quantity
+    product.buy_price = supply.buy_price # Oxirgi kelgan narxni o'rnatamiz (yoki o'rtacha hisoblash ham mumkin)
+
+    await db.commit()
+    await db.refresh(db_supply)
+    return db_supply
+
+@router.get("/supplies", response_model=List[SupplyOut])
+async def get_supplies(
+    product_id: Optional[int] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    stmt = select(Supply).order_by(Supply.created_at.desc())
+    if product_id:
+        stmt = stmt.where(Supply.product_id == product_id)
+    
+    result = await db.execute(stmt)
+    return result.scalars().all()
 
 # --- PRODUCTS ---
 @router.get("/products", response_model=List[ProductOut])
