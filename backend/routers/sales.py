@@ -59,7 +59,7 @@ async def create_sale(
         db.add(sale_item)
 
     # 5. Handle Client Balance (if credit sale)
-    if sale.payment_method == "nasiya" and sale.client_id:
+    if sale.payment_method == "qarz" and sale.client_id:
         result = await db.execute(select(Client).where(Client.id == sale.client_id))
         client = result.scalars().first()
         if client:

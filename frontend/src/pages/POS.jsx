@@ -13,12 +13,23 @@ import {
     Loader2,
     X,
     Maximize2,
-    Minimize2
+    Minimize2,
+    Smartphone,
+    HandCoins,
+    Users
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select"
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
@@ -37,6 +48,7 @@ const POS = () => {
     const [selectedCategory, setSelectedCategory] = useState(null);
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
     const [paymentMethod, setPaymentMethod] = useState('cash');
+    const [selectedClient, setSelectedClient] = useState(null);
     const [amountPaid, setAmountPaid] = useState('');
     const [isFullscreen, setIsFullscreen] = useState(false);
     const searchInputRef = useRef(null);
@@ -55,6 +67,15 @@ const POS = () => {
         queryKey: ['categories'],
         queryFn: async () => {
             const res = await api.get('/inventory/categories');
+            return res.data;
+        }
+    });
+
+    // Fetch Clients
+    const { data: clients = [] } = useQuery({
+        queryKey: ['clients'],
+        queryFn: async () => {
+            const res = await api.get('/crm/clients');
             return res.data;
         }
     });
@@ -132,9 +153,15 @@ const POS = () => {
     };
 
     const submitSale = () => {
+        if (paymentMethod === 'qarz' && !selectedClient) {
+            toast.error("Iltimos, mijozni tanlang!");
+            return;
+        }
+
         const saleData = {
             total_amount: cartTotal,
             payment_method: paymentMethod,
+            client_id: selectedClient,
             items: cart.map(item => ({
                 product_id: item.product_id,
                 quantity: item.quantity,
@@ -146,8 +173,8 @@ const POS = () => {
 
     // Filtered Products
     const filteredProducts = products.filter(p => {
-        const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                              p.barcode?.includes(searchTerm);
+        const matchesSearch = p.name.toLowerCase().startsWith(searchTerm.toLowerCase()) || 
+                              p.barcode?.startsWith(searchTerm);
         const matchesCategory = selectedCategory ? p.category_id === selectedCategory : true;
         return matchesSearch && matchesCategory;
     });
@@ -363,9 +390,48 @@ const POS = () => {
                                 className="h-20 flex flex-col gap-1"
                             >
                                 <CreditCard className="w-6 h-6" />
-                                Karta (Terminal)
+                                Karta
+                            </Button>
+                            <Button 
+                                variant={paymentMethod === 'perevod' ? 'default' : 'outline'}
+                                onClick={() => setPaymentMethod('perevod')}
+                                className="h-20 flex flex-col gap-1"
+                            >
+                                <Smartphone className="w-6 h-6" />
+                                Perevod
+                            </Button>
+                            <Button 
+                                variant={paymentMethod === 'qarz' ? 'default' : 'outline'}
+                                onClick={() => setPaymentMethod('qarz')}
+                                className="h-20 flex flex-col gap-1"
+                            >
+                                <HandCoins className="w-6 h-6" />
+                                Qarz (Nasiya)
                             </Button>
                         </div>
+                        
+                        {(paymentMethod === 'qarz' || paymentMethod === 'perevod') && (
+                            <div className="grid gap-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                                <Label htmlFor="client-select" className="flex items-center gap-2">
+                                    <Users className="w-4 h-4" /> Mijozni tanlang
+                                </Label>
+                                <Select 
+                                    value={selectedClient?.toString()} 
+                                    onValueChange={(val) => setSelectedClient(parseInt(val))}
+                                >
+                                    <SelectTrigger id="client-select">
+                                        <SelectValue placeholder="Mijozni qidirish..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {clients.map(c => (
+                                            <SelectItem key={c.id} value={c.id.toString()}>
+                                                {c.name} {c.phone ? `(${c.phone})` : ''}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
                         
                         {/* Change Calculator Logic could go here */}
                     </div>
