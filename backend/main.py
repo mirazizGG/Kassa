@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import asyncio
 from typing import Optional
+import os
 
 from database import init_db, engine, Base, SessionLocal, Employee
 from core import get_password_hash
@@ -17,9 +18,9 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
 
     # Start Bot Polling in Background
-    asyncio.create_task(dp.start_polling(bot))
+    # asyncio.create_task(dp.start_polling(bot))
     # Start Debt Check Loop
-    asyncio.create_task(check_debts(bot))
+    # asyncio.create_task(check_debts(bot))
 
     # Admin creation if not exists
     async with SessionLocal() as db:
@@ -42,7 +43,7 @@ app = FastAPI(lifespan=lifespan, title="Kassa API", version="2.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # Change to specific origins in production
+    allow_origins=os.getenv("ALLOWED_ORIGINS", "*").split(","), # Change to specific origins in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

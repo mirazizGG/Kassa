@@ -4,8 +4,13 @@ from sqlalchemy.orm import sessionmaker, declarative_base, relationship
 from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, Boolean
 from datetime import datetime, timezone
 
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
 # Baza fayli nomi (sqlite)
-DATABASE_URL = "sqlite+aiosqlite:///./market.db"
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./market.db")
 
 engine = create_async_engine(DATABASE_URL, echo=False)
 SessionLocal = sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List, Optional
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from database import get_db, Expense, Payment, Employee, Client, Product, Sale, SaleItem
 from schemas import ExpenseCreate, ExpenseOut, PaymentCreate
@@ -47,6 +47,55 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
         "lowStock": str(low_stock),
         "totalProducts": str(total_products)
     }
+
+@router.get("/dashboard-chart")
+async def get_dashboard_chart(db: AsyncSession = Depends(get_db)):
+    # Returns last 7 days sales
+    today = datetime.now(timezone.utc).date()
+    start_date = today - timedelta(days=6) # 7 days including today
+    
+    # We need to construct a robust query. Since sqlite dates are tricky, 
+    # ensuring consistent date formatting in DB is key.
+    # Assuming Sale.created_at is stored correctly as DateTime.
+    
+    # Simple list of last 7 days
+    labels = []
+    data = []
+    
+    # This loop is not efficient for huge datasets but fine for small POS
+    for i in range(7):
+        day = start_date + timedelta(days=i)
+        day_start = datetime.combine(day, datetime.min.time())
+        day_end = datetime.combine(day, datetime.max.time())
+        
+        # We need to filter sales for this specific day
+        # Note: If sqlite stores as naive dates, this comparison might need adjustment
+        query = select(func.sum(Sale.total_amount)).where(
+            Sale.created_at >= day_start,
+            Sale.created_at <= day_end
+        )
+        result = await db.execute(query)
+        total = result.scalar() or 0
+        
+        labels.append(day.strftime("%d.%m"))
+        data.append(total)
+        
+    return {"labels": labels, "data": data}
+
+@router.get("/top-products")
+async def get_top_products(db: AsyncSession = Depends(get_db)):
+    # Top 5 products by quantity sold
+    query = (
+        select(Product.name, func.sum(SaleItem.quantity).label("total_qty"))
+        .join(SaleItem, Product.id == SaleItem.product_id)
+        .group_by(Product.id)
+        .order_by(func.sum(SaleItem.quantity).desc())
+        .limit(5)
+    )
+    result = await db.execute(query)
+    # result.all() returns list of rows (name, total_qty)
+    items = [{"name": row[0], "value": row[1]} for row in result.all()]
+    return items
 
 @router.get("/expenses", response_model=List[ExpenseOut])
 async def get_expenses(db: AsyncSession = Depends(get_db)):

@@ -56,6 +56,9 @@ async def create_sale(
         if not product:
             continue
         
+        if product.stock < item.quantity:
+             raise HTTPException(status_code=400, detail=f"Sklad da yetarli mahsulot yo'q: {product.name}. Qoldiq: {product.stock}")
+
         product.stock -= item.quantity
         
         # Create SaleItem
