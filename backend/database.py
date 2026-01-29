@@ -12,7 +12,22 @@ load_dotenv()
 # Baza fayli nomi (sqlite)
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./market.db")
 
-engine = create_async_engine(DATABASE_URL, echo=False)
+from sqlalchemy import event
+
+engine = create_async_engine(
+    DATABASE_URL, 
+    echo=False,
+    connect_args={"check_same_thread": False},
+    pool_pre_ping=True
+)
+
+@event.listens_for(engine.sync_engine, "connect")
+def set_sqlite_pragma(dbapi_connection, connection_record):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA synchronous=NORMAL")
+    cursor.close()
+
 SessionLocal = sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
 Base = declarative_base()
 
@@ -115,10 +130,12 @@ class Expense(Base):
 class AuditLog(Base):
     __tablename__ = "audit_logs"
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("employees.id")) # Fix: Point to employees, not users (bot users)
+    user_id = Column(Integer, ForeignKey("employees.id"))
     action = Column(String) # e.g., "Deleted Product", "Refunded Sale"
     details = Column(String) # JSON or description
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    user = relationship("Employee")
 
 class ExpenseCategory(Base):
     __tablename__ = "expense_categories"
@@ -180,6 +197,17 @@ class Task(Base):
     # Relationships
     assignee = relationship("Employee", foreign_keys=[assigned_to])
     creator = relationship("Employee", foreign_keys=[created_by])
+
+# 10. Do'kon Sozlamalari (Store Settings)
+class StoreSetting(Base):
+    __tablename__ = "store_settings"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, default="Mening Do'konim")
+    address = Column(String, nullable=True)
+    phone = Column(String, nullable=True)
+    header_text = Column(String, nullable=True) # Check tepasidagi yozuv
+    footer_text = Column(String, nullable=True) # Check pastidagi yozuv
+    logo_url = Column(String, nullable=True)
 
 # Bazani yaratish funksiyasi
 async def init_db():

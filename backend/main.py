@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Response
+from fastapi import FastAPI, Response  
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import asyncio
@@ -8,21 +8,19 @@ import os
 from database import init_db, engine, Base, SessionLocal, Employee
 from core import get_password_hash
 from bot import bot, dp, check_debts
-from routers import auth, inventory, pos, crm, finance, tasks, sales
+from routers import auth, inventory, pos, crm, finance, tasks, sales, audit
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Initialize DB
+    print("Startup: Initializing DB...")
     await init_db()
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    
+    # Start Bot tasks and track them
+    print("Startup: Starting background tasks...")
+    bot_task = asyncio.create_task(dp.start_polling(bot))
+    debt_task = asyncio.create_task(check_debts(bot))
 
-    # Start Bot Polling in Background
-    # asyncio.create_task(dp.start_polling(bot))
-    # Start Debt Check Loop
-    # asyncio.create_task(check_debts(bot))
-
-    # Admin creation if not exists
+    # Create admin if not exists
     async with SessionLocal() as db:
         from sqlalchemy import select
         result = await db.execute(select(Employee).where(Employee.username == "admin"))
@@ -37,7 +35,27 @@ async def lifespan(app: FastAPI):
             )
             db.add(new_admin)
             await db.commit()
-    yield
+    
+    print("Startup: Complete. Application running.")
+    try:
+        yield
+    finally:
+        print("Shutdown: Stopping background tasks...")
+        # Stop polling explicitly if possible, or just cancel tasks
+        bot_task.cancel()
+        debt_task.cancel()
+        
+        # Close bot session for clean exit
+        await bot.session.close()
+        
+        try:
+            # Wait for tasks to finish with a short timeout
+            await asyncio.wait([bot_task, debt_task], timeout=2.0)
+        except Exception as e:
+            print(f"Cleanup error: {e}")
+        
+        print("Shutdown: Complete.")
+    print("Shutdown: Application stopping...")
 
 app = FastAPI(lifespan=lifespan, title="Kassa API", version="2.0.0")
 
@@ -57,6 +75,7 @@ app.include_router(crm.router)
 app.include_router(finance.router)
 app.include_router(tasks.router)
 app.include_router(sales.router)
+app.include_router(audit.router)
 
 @app.get('/favicon.ico', include_in_schema=False)
 async def favicon():

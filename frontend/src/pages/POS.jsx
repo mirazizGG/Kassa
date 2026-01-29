@@ -205,7 +205,7 @@ const POS = () => {
 
 
     return (
-        <div className="flex h-[calc(100vh-2rem)] gap-4 overflow-hidden">
+        <div className="flex h-full w-full gap-4 overflow-hidden p-4">
             {/* Left Side - Products */}
             <div className="flex-1 flex flex-col gap-4 overflow-hidden">
                 <Card className="flex-1 flex flex-col overflow-hidden border-none shadow-md bg-card/80 backdrop-blur">
@@ -249,7 +249,7 @@ const POS = () => {
                     </ScrollArea>
 
                     <ScrollArea className="flex-1 p-4 bg-muted/10">
-                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 pb-20">
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 pb-20">
                             {filteredProducts.map(product => (
                                 <Card
                                     key={product.id}

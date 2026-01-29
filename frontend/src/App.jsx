@@ -11,6 +11,8 @@ import Inventory from './pages/Inventory';
 import CRM from './pages/CRM';
 import Finance from './pages/Finance';
 import Employees from './pages/Employees';
+import ShiftHistory from './pages/ShiftHistory'; // Added import
+import AuditLogs from './pages/AuditLogs';
 import ErrorBoundary from './components/ErrorBoundary';
 
 import { Toaster } from "@/components/ui/sonner";
@@ -36,6 +38,8 @@ function App() {
                 <Route path="crm" element={<CRM />} />
                 <Route path="finance" element={<Finance />} />
                 <Route path="employees" element={<Employees />} />
+                <Route path="shifts" element={<ShiftHistory />} />
+                <Route path="audit" element={<AuditLogs />} />
               </Route>
             </Routes>
           </Router>

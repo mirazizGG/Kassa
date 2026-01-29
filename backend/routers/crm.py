@@ -33,3 +33,44 @@ async def get_client(client_id: int, db: AsyncSession = Depends(get_db)):
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
     return client
+
+from schemas import PaymentCreate
+from database import Payment, Shift
+
+@router.post("/clients/{client_id}/pay")
+async def pay_debt(
+    client_id: int,
+    payment_data: PaymentCreate,
+    current_user: Employee = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    # 1. Mijozni tekshirish
+    result = await db.execute(select(Client).where(Client.id == client_id))
+    client = result.scalars().first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Mijoz topilmadi")
+
+    # 2. Ochiq smenani topish (ixtiyoriy)
+    shift_result = await db.execute(
+        select(Shift).where(Shift.cashier_id == current_user.id, Shift.status == "open")
+    )
+    shift = shift_result.scalars().first()
+
+    # 3. Balansni yangilash (Qarz kamayadi, ya'ni balans oshadi)
+    client.balance += payment_data.amount
+
+    # 4. To'lov tarixini yaratish
+    db_payment = Payment(
+        client_id=client_id,
+        amount=payment_data.amount,
+        payment_method=payment_data.payment_method,
+        note=payment_data.note,
+        created_by=current_user.id,
+        shift_id=shift.id if shift else None
+    )
+    
+    db.add(db_payment)
+    await db.commit()
+    await db.refresh(client)
+    
+    return {"message": "To'lov qabul qilindi", "new_balance": client.balance}

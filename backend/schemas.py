@@ -133,6 +133,7 @@ class ShiftClose(BaseModel):
 class ShiftOut(BaseModel):
     id: int
     cashier_id: int
+    cashier: Optional[EmployeeOut] = None
     opening_balance: float
     closing_balance: Optional[float] = None
     opened_at: datetime
@@ -184,4 +185,17 @@ class TaskOut(TaskBase):
     id: int
     created_at: datetime
     created_by: int
+    model_config = ConfigDict(from_attributes=True)
+
+# --- SETTINGS SCHEMAS ---
+class StoreSettingBase(BaseModel):
+    name: str
+    address: Optional[str] = None
+    phone: Optional[str] = None
+    header_text: Optional[str] = None
+    footer_text: Optional[str] = None
+    logo_url: Optional[str] = None
+
+class StoreSettingOut(StoreSettingBase):
+    id: int
     model_config = ConfigDict(from_attributes=True)

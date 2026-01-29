@@ -113,7 +113,8 @@ async def get_current_shift(
 ):
     """Get the current open shift for the authenticated user"""
     result = await db.execute(
-        select(Shift).where(Shift.cashier_id == current_user.id, Shift.status == "open")
+        select(Shift).options(joinedload(Shift.cashier))
+        .where(Shift.cashier_id == current_user.id, Shift.status == "open")
     )
     return result.scalars().first()
 
@@ -138,3 +139,25 @@ async def close_shift(
     await db.commit()
     await db.refresh(db_shift)
     return db_shift
+
+from sqlalchemy.orm import joinedload
+
+@router.get("/shifts/history", response_model=List[ShiftOut])
+async def get_shifts_history(
+    limit: int = 50,
+    offset: int = 0,
+    current_user: Employee = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get history of closed shifts. Admins see all, others see only their own."""
+    query = select(Shift).options(joinedload(Shift.cashier))
+    
+    if current_user.role != "admin":
+        query = query.where(Shift.cashier_id == current_user.id)
+    
+    result = await db.execute(
+        query.order_by(Shift.closed_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    return result.scalars().all()

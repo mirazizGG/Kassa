@@ -23,6 +23,24 @@ const StatCard = ({ title, value, icon: Icon, type = "neutral" }) => (
 );
 
 const Finance = () => {
+    const handleExport = async () => {
+        try {
+            const response = await api.get('/finance/reports/export', {
+                responseType: 'blob',
+            });
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `sotuvlar_${new Date().toISOString().split('T')[0]}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+        } catch (error) {
+            console.error('Export error:', error);
+            alert("Hisobotni yuklab olishda xatolik yuz berdi");
+        }
+    };
+
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="flex items-center justify-between">
@@ -30,8 +48,8 @@ const Finance = () => {
                     <h1 className="text-3xl font-bold tracking-tight">Moliya va Hisobotlar</h1>
                     <p className="text-muted-foreground">Do'kon daromadi, xarajatlar va foyda tahlili</p>
                 </div>
-                <Button className="shadow-lg shadow-primary/20">
-                    To'liq Hisobot (Excel)
+                <Button className="shadow-lg shadow-primary/20" onClick={handleExport}>
+                    To'liq Hisobot (Excel/CSV)
                 </Button>
             </div>
 

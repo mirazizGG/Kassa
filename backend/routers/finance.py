@@ -8,6 +8,7 @@ from database import get_db, Expense, Payment, Employee, Client, Product, Sale, 
 from schemas import ExpenseCreate, ExpenseOut, PaymentCreate
 from core import get_current_user
 from sqlalchemy import func
+from sqlalchemy.orm import joinedload
 
 router = APIRouter(prefix="/finance", tags=["finance"])
 
@@ -140,3 +141,56 @@ async def create_payment(
         
     await db.commit()
     return {"status": "success", "message": "To'lov qabul qilindi"}
+
+import csv
+import io
+from fastapi.responses import StreamingResponse
+
+@router.get("/reports/export")
+async def export_sales(
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """Sotuvlar tarixini CSV formatda yuklab olish"""
+    if not start_date:
+        start_date = datetime.now(timezone.utc) - timedelta(days=30)
+    if not end_date:
+        end_date = datetime.now(timezone.utc)
+
+    # Fetch sales with items and products
+    query = (
+        select(Sale)
+        .options(joinedload(Sale.items).joinedload(SaleItem.product), joinedload(Sale.cashier), joinedload(Sale.client))
+        .where(Sale.created_at >= start_date, Sale.created_at <= end_date)
+        .order_by(Sale.created_at.desc())
+    )
+    
+    result = await db.execute(query)
+    sales = result.unique().scalars().all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # Header
+    writer.writerow(["ID", "Sana", "Kassir", "Mijoz", "Summa", "To'lov usuli", "Mahsulotlar"])
+    
+    for s in sales:
+        items_str = "; ".join([f"{item.product.name} ({item.quantity} {item.product.unit})" for item in s.items if item.product])
+        writer.writerow([
+            s.id,
+            s.created_at.strftime("%d.%m.%Y %H:%M"),
+            s.cashier.username if s.cashier else "-",
+            s.client.name if s.client else "-",
+            s.total_amount,
+            s.payment_method,
+            items_str
+        ])
+    
+    output.seek(0)
+    
+    return StreamingResponse(
+        io.BytesIO(output.getvalue().encode('utf-8-sig')), # byte order mark for Excel
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=sotuvlar_{datetime.now().strftime('%Y%m%d')}.csv"}
+    )

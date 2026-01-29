@@ -9,7 +9,9 @@ import {
   Menu,
   X,
   CreditCard,
-  UserCog
+  UserCog,
+  History,
+  Activity
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { ModeToggle } from './mode-toggle';
@@ -31,6 +33,8 @@ const Layout = () => {
     { path: '/inventory', label: 'Ombor', icon: Package },
     { path: '/crm', label: 'Mijozlar', icon: Users },
     { path: '/finance', label: 'Moliya', icon: CreditCard },
+    { path: '/shifts', label: 'Smena Tarixi', icon: History },
+    { path: '/audit', label: 'Audit', icon: Activity },
     { path: '/employees', label: 'Xodimlar', icon: UserCog },
   ];
 
@@ -108,8 +112,8 @@ const Layout = () => {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden h-full bg-secondary/20">
-        <div className="flex-1 overflow-auto p-4 md:p-8">
-            <div className="mx-auto max-w-7xl animate-in fade-in duration-500">
+        <div className={`flex-1 overflow-auto ${location.pathname === '/pos' ? 'p-0' : 'p-4 md:p-8'}`}>
+            <div className={`mx-auto animate-in fade-in duration-500 ${location.pathname === '/pos' ? 'max-w-none h-full' : 'max-w-7xl'}`}>
                 <Outlet />
             </div>
         </div>
