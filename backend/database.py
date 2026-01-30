@@ -10,7 +10,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Baza fayli nomi (sqlite)
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./market.db")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite+aiosqlite:///{os.path.join(BASE_DIR, 'market.db')}")
 
 from sqlalchemy import event
 

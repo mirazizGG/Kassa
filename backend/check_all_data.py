@@ -12,6 +12,7 @@ from database import (
 
 async def check_all_data():
     """Check counts of all tables"""
+    print(f"DEBUG: Using DATABASE_URL = {DATABASE_URL}")
     engine = create_async_engine(DATABASE_URL, echo=False)
     async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
