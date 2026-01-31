@@ -26,6 +26,9 @@ class AuditLogOut(BaseModel):
 async def get_audit_logs(
     limit: int = 100,
     offset: int = 0,
+    employee_id: Optional[int] = None,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
     current_user: Employee = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
@@ -33,10 +36,17 @@ async def get_audit_logs(
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Ruxsat berilmagan")
         
+    query = select(AuditLog).options(joinedload(AuditLog.user))
+    
+    if employee_id:
+        query = query.where(AuditLog.user_id == employee_id)
+    if start_date:
+        query = query.where(AuditLog.created_at >= start_date)
+    if end_date:
+        query = query.where(AuditLog.created_at <= end_date)
+        
     result = await db.execute(
-        select(AuditLog)
-        .options(joinedload(AuditLog.user))
-        .order_by(AuditLog.created_at.desc())
+        query.order_by(AuditLog.created_at.desc())
         .limit(limit)
         .offset(offset)
     )

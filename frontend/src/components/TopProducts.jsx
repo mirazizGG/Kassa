@@ -4,12 +4,17 @@ import { useQuery } from '@tanstack/react-query';
 import api from '../api/axios';
 import { Loader2, TrendingUp } from 'lucide-react';
 
-const TopProducts = () => {
+const TopProducts = ({ filters }) => {
     const { data: products, isLoading } = useQuery({
-        queryKey: ['top-products'],
+        queryKey: ['top-products', filters],
         queryFn: async () => {
-             const response = await api.get('/finance/top-products');
-             return response.data; // Expecting [{name: 'Product A', value: 10}, ...]
+             const params = {};
+             if (filters?.employee_id && filters.employee_id !== 'all') params.employee_id = filters.employee_id;
+             if (filters?.start_date) params.start_date = filters.start_date;
+             if (filters?.end_date) params.end_date = filters.end_date;
+
+             const response = await api.get('/finance/top-products', { params });
+             return response.data;
         }
     });
 

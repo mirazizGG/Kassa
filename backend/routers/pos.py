@@ -19,9 +19,17 @@ async def get_sales(
 ):
     """Get sales history with pagination"""
     result = await db.execute(
-        select(Sale).order_by(Sale.created_at.desc()).limit(limit).offset(offset)
+        select(Sale)
+        .options(
+            joinedload(Sale.items).joinedload(SaleItem.product),
+            joinedload(Sale.cashier),
+            joinedload(Sale.client)
+        )
+        .order_by(Sale.created_at.desc())
+        .limit(limit)
+        .offset(offset)
     )
-    return result.scalars().all()
+    return result.unique().scalars().all()
 
 @router.post("/sales", response_model=SaleOut)
 async def create_sale(
@@ -78,8 +86,18 @@ async def create_sale(
             client.balance -= sale_data.total_amount # Negative balance means debt
 
     await db.commit()
-    await db.refresh(db_sale)
-    return db_sale
+    
+    # Reload with relationships
+    result = await db.execute(
+        select(Sale)
+        .where(Sale.id == db_sale.id)
+        .options(
+            joinedload(Sale.items).joinedload(SaleItem.product),
+            joinedload(Sale.cashier),
+            joinedload(Sale.client)
+        )
+    )
+    return result.unique().scalars().first()
 
 @router.post("/shifts/open", response_model=ShiftOut)
 async def open_shift(
@@ -146,17 +164,27 @@ from sqlalchemy.orm import joinedload
 async def get_shifts_history(
     limit: int = 50,
     offset: int = 0,
+    employee_id: Optional[int] = None,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
     current_user: Employee = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get history of closed shifts. Admins see all, others see only their own."""
+    """Get history of shifts. Admins see all, others see only their own."""
     query = select(Shift).options(joinedload(Shift.cashier))
     
     if current_user.role != "admin":
         query = query.where(Shift.cashier_id == current_user.id)
+    elif employee_id:
+        query = query.where(Shift.cashier_id == employee_id)
+        
+    if start_date:
+        query = query.where(Shift.opened_at >= start_date)
+    if end_date:
+        query = query.where(Shift.opened_at <= end_date)
     
     result = await db.execute(
-        query.order_by(Shift.closed_at.desc())
+        query.order_by(Shift.opened_at.desc())
         .limit(limit)
         .offset(offset)
     )

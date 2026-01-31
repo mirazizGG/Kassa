@@ -82,7 +82,7 @@ const POS = () => {
 
     // Sale Mutation
     const saleMutation = useMutation({
-        mutationFn: (data) => api.post('/sales', data),
+        mutationFn: (data) => api.post('/sales/', data),
         onSuccess: () => {
             toast.success("Sotuv amalga oshirildi!");
             setCart([]);

@@ -12,22 +12,51 @@ from sqlalchemy.orm import joinedload
 
 router = APIRouter(prefix="/finance", tags=["finance"])
 
+def parse_date(date_val: Optional[str], default_time=datetime.min.time()):
+    if not date_val:
+        return None
+    try:
+        # If it's just a date (YYYY-MM-DD)
+        if len(date_val) <= 10:
+            d = datetime.strptime(date_val, "%Y-%m-%d")
+            return datetime.combine(d.date(), default_time)
+        
+        # Try ISO format
+        dt = datetime.fromisoformat(date_val.replace("Z", "+00:00"))
+        if dt.tzinfo:
+            dt = dt.replace(tzinfo=None)
+        return dt
+    except ValueError:
+        return None
+
 @router.get("/stats")
-async def get_stats(db: AsyncSession = Depends(get_db)):
-    # 1. Daily Sales
-    today = datetime.now(timezone.utc).date()
-    # Note: SQLite stores dates as strings or separate logic might be needed, but assume standard alchemy behavior for now.
-    # We might need to filter by range for today.
-    # For now, let's just get total sales as 'dailySales' mock-up or implement properly if possible.
-    # Let's try to query sales created >= today's start.
+async def get_stats(
+    employee_id: Optional[int] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    start_date = parse_date(start_date, datetime.min.time())
+    end_date = parse_date(end_date, datetime.max.time())
+    # 1. Daily Sales or custom range
+    if not start_date:
+        today = datetime.now(timezone.utc).date()
+        start_date = datetime.combine(today, datetime.min.time())
+    if not end_date:
+        end_date = datetime.now(timezone.utc)
     
-    start_of_day = datetime.combine(today, datetime.min.time())
-    
-    sales_query = select(func.sum(Sale.total_amount)).where(Sale.created_at >= start_of_day)
+    sales_query = select(func.sum(Sale.total_amount)).where(
+        Sale.created_at >= start_date,
+        Sale.created_at <= end_date,
+        Sale.status == "completed"
+    )
+    if employee_id:
+        sales_query = sales_query.where(Sale.cashier_id == employee_id)
+        
     sales_result = await db.execute(sales_query)
-    daily_sales = sales_result.scalar() or 0
+    sales_total = sales_result.scalar() or 0
     
-    # 2. Client Count
+    # 2. Client Count (Usually global, but let's keep it as is or count active in range)
     client_query = select(func.count(Client.id))
     client_result = await db.execute(client_query)
     client_count = client_result.scalar() or 0
@@ -43,38 +72,37 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
     total_products = product_result.scalar() or 0
     
     return {
-        "dailySales": f"{daily_sales:,.0f} so'm",
+        "dailySales": f"{sales_total:,.0f} so'm",
         "clientCount": str(client_count),
         "lowStock": str(low_stock),
         "totalProducts": str(total_products)
     }
 
 @router.get("/dashboard-chart")
-async def get_dashboard_chart(db: AsyncSession = Depends(get_db)):
+async def get_dashboard_chart(
+    employee_id: Optional[int] = None,
+    db: AsyncSession = Depends(get_db)
+):
     # Returns last 7 days sales
     today = datetime.now(timezone.utc).date()
     start_date = today - timedelta(days=6) # 7 days including today
     
-    # We need to construct a robust query. Since sqlite dates are tricky, 
-    # ensuring consistent date formatting in DB is key.
-    # Assuming Sale.created_at is stored correctly as DateTime.
-    
-    # Simple list of last 7 days
     labels = []
     data = []
     
-    # This loop is not efficient for huge datasets but fine for small POS
     for i in range(7):
         day = start_date + timedelta(days=i)
         day_start = datetime.combine(day, datetime.min.time())
         day_end = datetime.combine(day, datetime.max.time())
         
-        # We need to filter sales for this specific day
-        # Note: If sqlite stores as naive dates, this comparison might need adjustment
         query = select(func.sum(Sale.total_amount)).where(
             Sale.created_at >= day_start,
-            Sale.created_at <= day_end
+            Sale.created_at <= day_end,
+            Sale.status == "completed"
         )
+        if employee_id:
+            query = query.where(Sale.cashier_id == employee_id)
+            
         result = await db.execute(query)
         total = result.scalar() or 0
         
@@ -84,23 +112,56 @@ async def get_dashboard_chart(db: AsyncSession = Depends(get_db)):
     return {"labels": labels, "data": data}
 
 @router.get("/top-products")
-async def get_top_products(db: AsyncSession = Depends(get_db)):
-    # Top 5 products by quantity sold
+async def get_top_products(
+    limit: int = 5,
+    employee_id: Optional[int] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    start_date = parse_date(start_date, datetime.min.time())
+    end_date = parse_date(end_date, datetime.max.time())
     query = (
         select(Product.name, func.sum(SaleItem.quantity).label("total_qty"))
         .join(SaleItem, Product.id == SaleItem.product_id)
+        .join(Sale, Sale.id == SaleItem.sale_id)
+        .where(Sale.status == "completed")
         .group_by(Product.id)
         .order_by(func.sum(SaleItem.quantity).desc())
-        .limit(5)
+        .limit(limit)
     )
+    if employee_id:
+        query = query.where(Sale.cashier_id == employee_id)
+    if start_date:
+        query = query.where(Sale.created_at >= start_date)
+    if end_date:
+        query = query.where(Sale.created_at <= end_date)
+        
     result = await db.execute(query)
-    # result.all() returns list of rows (name, total_qty)
     items = [{"name": row[0], "value": row[1]} for row in result.all()]
     return items
 
 @router.get("/expenses", response_model=List[ExpenseOut])
-async def get_expenses(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Expense))
+async def get_expenses(
+    category: Optional[str] = None,
+    employee_id: Optional[int] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    start_date = parse_date(start_date, datetime.min.time())
+    end_date = parse_date(end_date, datetime.max.time())
+    query = select(Expense)
+    if employee_id:
+        query = query.where(Expense.created_by == employee_id)
+    if category:
+        query = query.where(Expense.category == category)
+    if start_date:
+        query = query.where(Expense.created_at >= start_date)
+    if end_date:
+        query = query.where(Expense.created_at <= end_date)
+        
+    result = await db.execute(query.order_by(Expense.created_at.desc()))
     return result.scalars().all()
 
 @router.post("/expenses", response_model=ExpenseOut)
@@ -146,12 +207,14 @@ import csv
 import io
 from fastapi.responses import StreamingResponse
 
-@router.get("/reports/export")
+@router.get("/export-sales")
 async def export_sales(
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
     db: AsyncSession = Depends(get_db)
 ):
+    start_date = parse_date(start_date, datetime.min.time())
+    end_date = parse_date(end_date, datetime.max.time())
     """Sotuvlar tarixini CSV formatda yuklab olish"""
     if not start_date:
         start_date = datetime.now(timezone.utc) - timedelta(days=30)

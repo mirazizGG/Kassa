@@ -1,13 +1,31 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
-from typing import List
+from typing import List, Optional
+from datetime import datetime
 
 from database import get_db, Product, Sale, SaleItem, Employee, Client
 from schemas import SaleCreate, SaleOut
 from core import get_current_user
 
+from sqlalchemy.orm import joinedload
+
 router = APIRouter(prefix="/sales", tags=["sales"])
+
+def parse_date(date_val: Optional[str], default_time=datetime.min.time()):
+    if not date_val:
+        return None
+    try:
+        if len(date_val) <= 10:
+            d = datetime.strptime(date_val, "%Y-%m-%d")
+            return datetime.combine(d.date(), default_time)
+        
+        dt = datetime.fromisoformat(date_val.replace("Z", "+00:00"))
+        if dt.tzinfo:
+            dt = dt.replace(tzinfo=None)
+        return dt
+    except ValueError:
+        return None
 
 @router.post("/", response_model=SaleOut)
 async def create_sale(
@@ -66,14 +84,45 @@ async def create_sale(
             client.balance -= sale.total_amount # Increase debt (negative balance)
     
     await db.commit()
-    await db.refresh(db_sale)
-    return db_sale
+    
+    # Reload with relationships for response_model
+    result = await db.execute(
+        select(Sale)
+        .where(Sale.id == db_sale.id)
+        .options(
+            joinedload(Sale.items).joinedload(SaleItem.product),
+            joinedload(Sale.cashier),
+            joinedload(Sale.client)
+        )
+    )
+    db_sale_full = result.unique().scalars().first()
+    return db_sale_full
 
 @router.get("/", response_model=List[SaleOut])
 async def get_sales(
     skip: int = 0, 
     limit: int = 100,
+    employee_id: Optional[int] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
     db: AsyncSession = Depends(get_db)
 ):
-    result = await db.execute(select(Sale).offset(skip).limit(limit).order_by(Sale.created_at.desc()))
-    return result.scalars().all()
+    start_date = parse_date(start_date, datetime.min.time())
+    end_date = parse_date(end_date, datetime.max.time())
+    query = (
+        select(Sale)
+        .options(
+            joinedload(Sale.items).joinedload(SaleItem.product),
+            joinedload(Sale.cashier),
+            joinedload(Sale.client)
+        )
+    )
+    if employee_id:
+        query = query.where(Sale.cashier_id == employee_id)
+    if start_date:
+        query = query.where(Sale.created_at >= start_date)
+    if end_date:
+        query = query.where(Sale.created_at <= end_date)
+        
+    result = await db.execute(query.offset(skip).limit(limit).order_by(Sale.created_at.desc()))
+    return result.unique().scalars().all()

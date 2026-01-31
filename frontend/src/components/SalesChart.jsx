@@ -5,11 +5,15 @@ import { useQuery } from '@tanstack/react-query';
 import api from '../api/axios';
 import { Loader2 } from 'lucide-react';
 
-const SalesChart = () => {
+const SalesChart = ({ filters }) => {
     const { data, isLoading } = useQuery({
-        queryKey: ['dashboard-chart'],
+        queryKey: ['dashboard-chart', filters?.employee_id],
         queryFn: async () => {
-            const response = await api.get('/finance/dashboard-chart');
+            const params = {};
+            if (filters?.employee_id && filters.employee_id !== 'all') {
+                params.employee_id = filters.employee_id;
+            }
+            const response = await api.get('/finance/dashboard-chart', { params });
             return response.data;
         }
     });

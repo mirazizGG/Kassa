@@ -34,6 +34,7 @@ const Layout = () => {
     { path: '/crm', label: 'Mijozlar', icon: Users },
     { path: '/finance', label: 'Moliya', icon: CreditCard },
     { path: '/shifts', label: 'Smena Tarixi', icon: History },
+    { path: '/sales', label: 'Savdolar Tarixi', icon: ShoppingCart },
     { path: '/audit', label: 'Audit', icon: Activity },
     { path: '/employees', label: 'Xodimlar', icon: UserCog },
   ];

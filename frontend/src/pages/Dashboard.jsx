@@ -11,20 +11,31 @@ import {
     TrendingUp,
     Briefcase
 } from 'lucide-react';
+import FilterBar from '../components/FilterBar';
 import SalesChart from '../components/SalesChart';
 import TopProducts from '../components/TopProducts';
 
 const Dashboard = () => {
+    const today = new Date().toISOString().split('T')[0];
+    const [filters, setFilters] = React.useState({
+        employee_id: '',
+        start_date: today,
+        end_date: today
+    });
+
     const { data: stats, isLoading, error } = useQuery({
-        queryKey: ['dashboard-stats'],
+        queryKey: ['dashboard-stats', filters],
         queryFn: async () => {
-             // Mock data fallback if API fails (or handle gracefully)
+             const params = {};
+             if (filters.employee_id && filters.employee_id !== 'all') params.employee_id = filters.employee_id;
+             if (filters.start_date) params.start_date = filters.start_date;
+             if (filters.end_date) params.end_date = filters.end_date;
+
              try {
-                const response = await api.get('/finance/stats');
+                const response = await api.get('/finance/stats', { params });
                 return response.data;
              } catch (e) {
                 console.error("Stats API failed", e);
-                // Return dummy data for dev if needed, or rethrow
                 throw e;
              }
         }
@@ -66,9 +77,12 @@ const Dashboard = () => {
 
     return (
         <div className="space-y-6">
-            <div>
-                <h2 className="text-3xl font-bold tracking-tight">Boshqaruv Paneli</h2>
-                <p className="text-muted-foreground">Do'koningizning umumiy holati</p>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <h2 className="text-3xl font-bold tracking-tight">Boshqaruv Paneli</h2>
+                    <p className="text-muted-foreground">Do'koningizning umumiy holati</p>
+                </div>
+                <FilterBar filters={filters} onFilterChange={setFilters} />
             </div>
 
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -91,8 +105,8 @@ const Dashboard = () => {
             </div>
 
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-                <SalesChart />
-                <TopProducts />
+                <SalesChart filters={filters} />
+                <TopProducts filters={filters} />
             </div>
             
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">

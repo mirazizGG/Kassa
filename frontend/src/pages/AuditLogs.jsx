@@ -6,7 +6,6 @@ import {
     User,
     Clock,
     Info,
-    Search,
     AlertTriangle,
     FileText
 } from 'lucide-react';
@@ -15,41 +14,46 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Input } from "@/components/ui/input";
+import FilterBar from '../components/FilterBar';
 
 const AuditLogs = () => {
+    const today = new Date().toISOString().split('T')[0];
+    const [filters, setFilters] = React.useState({
+        employee_id: '',
+        start_date: today,
+        end_date: today
+    });
+
     const { data: logs = [], isLoading } = useQuery({
-        queryKey: ['audit-logs'],
+        queryKey: ['audit-logs', filters],
         queryFn: async () => {
-            const res = await api.get('/audit/logs');
+            const params = {};
+            if (filters.employee_id && filters.employee_id !== 'all') params.employee_id = filters.employee_id;
+            if (filters.start_date) params.start_date = filters.start_date;
+            if (filters.end_date) params.end_date = filters.end_date;
+
+            const res = await api.get('/audit/logs', { params });
             return res.data;
         }
     });
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight">Audit va Nazorat</h1>
                     <p className="text-muted-foreground">Tizimdagi barcha muhim amallar va o'zgarishlar tarixi</p>
                 </div>
+                <FilterBar filters={filters} onFilterChange={setFilters} />
             </div>
 
             <Card className="border-none shadow-md overflow-hidden bg-background/60 backdrop-blur-xl">
                 <CardHeader>
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <CardTitle className="flex items-center gap-2">
-                                <Activity className="w-5 h-5 text-primary" />
-                                Amallar Tarixi
-                            </CardTitle>
-                            <CardDescription>Kim, qachon va qanday amalni bajargani haqida ma'lumot</CardDescription>
-                        </div>
-                        <div className="relative w-full max-w-sm">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                            <Input placeholder="Qidirish..." className="pl-10 h-9" />
-                        </div>
-                    </div>
+                    <CardTitle className="flex items-center gap-2">
+                        <Activity className="w-5 h-5 text-primary" />
+                        Amallar Tarixi
+                    </CardTitle>
+                    <CardDescription>Kim, qachon va qanday amalni bajargani haqida ma'lumot</CardDescription>
                 </CardHeader>
                 <CardContent className="p-0">
                     <Table>

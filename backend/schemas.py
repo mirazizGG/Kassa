@@ -106,6 +106,11 @@ class SaleItemBase(BaseModel):
     quantity: int
     price: float
 
+class SaleItemOut(SaleItemBase):
+    id: int
+    product: Optional[ProductOut] = None
+    model_config = ConfigDict(from_attributes=True)
+
 class SaleCreate(BaseModel):
     total_amount: float
     payment_method: str
@@ -118,8 +123,11 @@ class SaleOut(BaseModel):
     total_amount: float
     payment_method: str
     cashier_id: int
+    cashier: Optional[EmployeeOut] = None
     client_id: Optional[int] = None
+    client: Optional[ClientOut] = None
     status: str
+    items: List[SaleItemOut] = []
     model_config = ConfigDict(from_attributes=True)
 
 class ShiftOpen(BaseModel):

@@ -7,6 +7,9 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { useQuery } from '@tanstack/react-query';
+import api from '../api/axios';
+import FilterBar from '../components/FilterBar';
 
 const StatCard = ({ title, value, icon: Icon, type = "neutral" }) => (
     <Card>
@@ -23,9 +26,34 @@ const StatCard = ({ title, value, icon: Icon, type = "neutral" }) => (
 );
 
 const Finance = () => {
+    const today = new Date().toISOString().split('T')[0];
+    const [filters, setFilters] = React.useState({
+        employee_id: '',
+        start_date: today,
+        end_date: today
+    });
+
+    const { data: stats, isLoading } = useQuery({
+        queryKey: ['finance-stats', filters],
+        queryFn: async () => {
+            const params = {};
+            if (filters.employee_id && filters.employee_id !== 'all') params.employee_id = filters.employee_id;
+            if (filters.start_date) params.start_date = filters.start_date;
+            if (filters.end_date) params.end_date = filters.end_date;
+            
+            const response = await api.get('/finance/stats', { params });
+            return response.data;
+        }
+    });
+
     const handleExport = async () => {
         try {
+            const params = {};
+            if (filters.start_date) params.start_date = filters.start_date;
+            if (filters.end_date) params.end_date = filters.end_date;
+
             const response = await api.get('/finance/reports/export', {
+                params,
                 responseType: 'blob',
             });
             const url = window.URL.createObjectURL(new Blob([response.data]));
@@ -43,26 +71,29 @@ const Finance = () => {
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight">Moliya va Hisobotlar</h1>
                     <p className="text-muted-foreground">Do'kon daromadi, xarajatlar va foyda tahlili</p>
                 </div>
-                <Button className="shadow-lg shadow-primary/20" onClick={handleExport}>
-                    To'liq Hisobot (Excel/CSV)
-                </Button>
+                <div className="flex items-center gap-2">
+                    <FilterBar filters={filters} onFilterChange={setFilters} />
+                    <Button className="shadow-lg shadow-primary/20" onClick={handleExport}>
+                        To'liq Hisobot (Excel/CSV)
+                    </Button>
+                </div>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <StatCard
-                    title="Jami Savdo (Oy)"
-                    value="0 so'm"
+                    title="Jami Savdo"
+                    value={isLoading ? "..." : stats?.dailySales || "0 so'm"}
                     icon={DollarSign}
                     type="positive"
                 />
                 <StatCard
                     title="Sof Foyda"
-                    value="0 so'm"
+                    value="Hozircha hisoblanmadi"
                     icon={TrendingUp}
                     type="positive"
                 />
@@ -73,8 +104,8 @@ const Finance = () => {
                     type="negative"
                 />
                 <StatCard
-                    title="O'rtacha Chek"
-                    value="0 so'm"
+                    title="Mijozlar"
+                    value={isLoading ? "..." : stats?.clientCount || "0"}
                     icon={PieChart}
                 />
             </div>

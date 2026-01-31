@@ -11,7 +11,8 @@ import Inventory from './pages/Inventory';
 import CRM from './pages/CRM';
 import Finance from './pages/Finance';
 import Employees from './pages/Employees';
-import ShiftHistory from './pages/ShiftHistory'; // Added import
+import ShiftHistory from './pages/ShiftHistory';
+import SalesHistory from './pages/SalesHistory';
 import AuditLogs from './pages/AuditLogs';
 import ErrorBoundary from './components/ErrorBoundary';
 
@@ -39,6 +40,7 @@ function App() {
                 <Route path="finance" element={<Finance />} />
                 <Route path="employees" element={<Employees />} />
                 <Route path="shifts" element={<ShiftHistory />} />
+                <Route path="sales" element={<SalesHistory />} />
                 <Route path="audit" element={<AuditLogs />} />
               </Route>
             </Routes>
