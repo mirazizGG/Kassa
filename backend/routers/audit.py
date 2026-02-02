@@ -8,7 +8,7 @@ from database import get_db, AuditLog, Employee
 from schemas import EmployeeOut # For reference if needed
 from core import get_current_user
 from pydantic import BaseModel, ConfigDict
-from datetime import datetime
+from datetime import datetime, date, time
 
 router = APIRouter(prefix="/audit", tags=["audit"])
 
@@ -27,8 +27,8 @@ async def get_audit_logs(
     limit: int = 100,
     offset: int = 0,
     employee_id: Optional[int] = None,
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
     current_user: Employee = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
@@ -41,9 +41,11 @@ async def get_audit_logs(
     if employee_id:
         query = query.where(AuditLog.user_id == employee_id)
     if start_date:
-        query = query.where(AuditLog.created_at >= start_date)
+        start_dt = datetime.combine(start_date, time.min)
+        query = query.where(AuditLog.created_at >= start_dt)
     if end_date:
-        query = query.where(AuditLog.created_at <= end_date)
+        end_dt = datetime.combine(end_date, time.max)
+        query = query.where(AuditLog.created_at <= end_dt)
         
     result = await db.execute(
         query.order_by(AuditLog.created_at.desc())

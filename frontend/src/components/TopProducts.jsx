@@ -30,6 +30,8 @@ const TopProducts = ({ filters }) => {
             </Card>
         )
     }
+    
+    const maxVal = products?.length > 0 ? Math.max(...products.map(p => p.value)) : 100;
 
     return (
         <Card className="col-span-3">
@@ -40,19 +42,23 @@ const TopProducts = ({ filters }) => {
                 </CardTitle>
             </CardHeader>
             <CardContent>
-                <div className="space-y-6">
+                <div className="space-y-5">
                     {products?.map((product, index) => (
-                        <div key={index} className="flex items-center">
-                            <div className="flex-1 space-y-1">
-                                <p className="text-sm font-medium leading-none">{product.name}</p>
+                        <div key={index} className="space-y-2">
+                            <div className="flex items-center justify-between text-sm">
+                                <span className="font-medium">{product.name}</span>
+                                <span className="font-bold">{product.value} <span className="text-muted-foreground font-normal text-xs">dona</span></span>
                             </div>
-                            <div className="font-bold relative ml-auto">
-                                +{product.value} <span className="text-muted-foreground text-xs font-normal">dona</span>
+                            <div className="h-2 w-full bg-muted/50 rounded-full overflow-hidden">
+                                <div 
+                                    className="h-full bg-primary rounded-full transition-all duration-1000 ease-out"
+                                    style={{ width: `${(product.value / maxVal) * 100}%` }}
+                                />
                             </div>
                         </div>
                     ))}
                     {(!products || products.length === 0) && (
-                         <div className="text-center text-muted-foreground py-4">Sotuvlar yo'q</div>
+                         <div className="text-center text-muted-foreground py-8">Sotuvlar yo'q</div>
                     )}
                 </div>
             </CardContent>

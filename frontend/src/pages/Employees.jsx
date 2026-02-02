@@ -193,7 +193,7 @@ const Employees = () => {
                     <div className="flex justify-end mb-4">
                         <Dialog open={isEmployeeModalOpen} onOpenChange={setIsEmployeeModalOpen}>
                             <DialogTrigger asChild>
-                                <Button className="gap-2 shadow-lg shadow-primary/20">
+                                <Button className="gap-2 shadow-lg shadow-indigo-500/20" variant="indigo">
                                     <UserPlus className="w-4 h-4" /> Yangi Xodim
                                 </Button>
                             </DialogTrigger>
@@ -282,7 +282,7 @@ const Employees = () => {
                                             {isEmployeesLoading ? (
                                                 <TableRow><TableCell colSpan={6} className="text-center h-24">Yuklanmoqda...</TableCell></TableRow>
                                             ) : employees.map((emp) => (
-                                                <TableRow key={emp.id} className="hover:bg-muted/50">
+                                                <TableRow key={emp.id} className="group hover:bg-muted/50 transition-colors odd:bg-muted/10">
                                                     <TableCell className="pl-6 font-medium">{emp.full_name || '-'}</TableCell>
                                                     <TableCell className="text-muted-foreground">@{emp.username}</TableCell>
                                                     <TableCell>
@@ -336,7 +336,7 @@ const Employees = () => {
                      <div className="flex justify-end mb-4">
                         <Dialog open={isTaskModalOpen} onOpenChange={setIsTaskModalOpen}>
                             <DialogTrigger asChild>
-                                <Button className="gap-2 shadow-lg shadow-primary/20">
+                                <Button className="gap-2 shadow-lg shadow-blue-500/20" variant="info">
                                     <Plus className="w-4 h-4" /> Yangi Vazifa
                                 </Button>
                             </DialogTrigger>

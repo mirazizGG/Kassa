@@ -116,6 +116,12 @@ class SaleCreate(BaseModel):
     payment_method: str
     client_id: Optional[int] = None
     items: List[SaleItemBase]
+    
+    # Optional split payment amounts
+    cash_amount: Optional[float] = 0
+    card_amount: Optional[float] = 0
+    transfer_amount: Optional[float] = 0
+    debt_amount: Optional[float] = 0
 
 class SaleOut(BaseModel):
     id: int
@@ -127,6 +133,10 @@ class SaleOut(BaseModel):
     client_id: Optional[int] = None
     client: Optional[ClientOut] = None
     status: str
+    cash_amount: float = 0
+    card_amount: float = 0
+    transfer_amount: float = 0
+    debt_amount: float = 0
     items: List[SaleItemOut] = []
     model_config = ConfigDict(from_attributes=True)
 

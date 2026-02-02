@@ -286,7 +286,7 @@ const Inventory = () => {
 
                     <Dialog open={isSupplyModalOpen} onOpenChange={setIsSupplyModalOpen}>
                         <DialogTrigger asChild>
-                            <Button variant="secondary" className="gap-2 ml-2">
+                            <Button variant="warning" className="gap-2 ml-2 shadow-lg shadow-orange-500/20">
                                 <Truck className="w-4 h-4" /> Kirim Qilish
                             </Button>
                         </DialogTrigger>
@@ -346,7 +346,7 @@ const Inventory = () => {
                                     </div>
                                 </div>
                                 <DialogFooter>
-                                    <Button type="submit" disabled={supplyMutation.isPending}>
+                                    <Button type="submit" disabled={supplyMutation.isPending} variant="warning">
                                         {supplyMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                                         Kirim Qilish
                                     </Button>
@@ -549,7 +549,7 @@ const Inventory = () => {
                                     </TableCell>
                                 </TableRow>
                             ) : filteredProducts.map((product) => (
-                                <TableRow key={product.id} className="group hover:bg-muted/30 transition-colors border-b-border/50">
+                                <TableRow key={product.id} className="group hover:bg-muted/50 transition-colors border-b-border/50 odd:bg-muted/10">
                                     <TableCell className="pl-8 font-medium text-foreground">{product.name}</TableCell>
                                     <TableCell className="text-muted-foreground font-mono text-xs">{product.barcode || '-'}</TableCell>
                                     <TableCell>

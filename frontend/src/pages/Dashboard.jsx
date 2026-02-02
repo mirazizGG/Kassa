@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useQuery } from '@tanstack/react-query';
 import api from '../api/axios';
@@ -50,28 +51,40 @@ const Dashboard = () => {
             value: stats?.dailySales || "0 so'm",
             icon: DollarSign,
             description: "Bugungi tushum",
-            color: "text-green-500"
+            color: "text-emerald-600 dark:text-emerald-400",
+            bg: "bg-emerald-100/50 dark:bg-emerald-900/20",
+            iconBg: "bg-emerald-100 dark:bg-emerald-900/50",
+            borderColor: "border-emerald-200 dark:border-emerald-800"
         },
         {
             title: "Mijozlar",
             value: stats?.clientCount || "0",
             icon: Users,
             description: "Jami mijozlar",
-            color: "text-blue-500"
+            color: "text-blue-600 dark:text-blue-400",
+            bg: "bg-blue-100/50 dark:bg-blue-900/20",
+            iconBg: "bg-blue-100 dark:bg-blue-900/50",
+            borderColor: "border-blue-200 dark:border-blue-800"
         },
         {
             title: "Kam Qolgan",
             value: stats?.lowStock || "0",
             icon: AlertTriangle,
             description: "Tugayotgan mahsulotlar",
-            color: "text-amber-500"
+            color: "text-amber-600 dark:text-amber-400",
+            bg: "bg-amber-100/50 dark:bg-amber-900/20",
+            iconBg: "bg-amber-100 dark:bg-amber-900/50",
+            borderColor: "border-amber-200 dark:border-amber-800"
         },
         {
             title: "Mahsulotlar",
             value: stats?.totalProducts || "0",
             icon: Package,
             description: "Jami nomdagi mahsulot",
-            color: "text-purple-500"
+            color: "text-indigo-600 dark:text-indigo-400",
+            bg: "bg-indigo-100/50 dark:bg-indigo-900/20",
+            iconBg: "bg-indigo-100 dark:bg-indigo-900/50",
+            borderColor: "border-indigo-200 dark:border-indigo-800"
         }
     ];
 
@@ -87,16 +100,18 @@ const Dashboard = () => {
 
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 {cards.map((card, index) => (
-                    <Card key={index} className="hover:shadow-md transition-shadow">
+                    <Card key={index} className={`hover:shadow-lg transition-all duration-300 border ${card.bg} ${card.borderColor}`}>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium">
+                            <CardTitle className="text-sm font-medium text-muted-foreground">
                                 {card.title}
                             </CardTitle>
-                            <card.icon className={`h-4 w-4 ${card.color}`} />
+                            <div className={`p-2 rounded-full ${card.iconBg}`}>
+                                <card.icon className={`h-5 w-5 ${card.color}`} />
+                            </div>
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold">{card.value}</div>
-                            <p className="text-xs text-muted-foreground">
+                            <div className="text-3xl font-bold tracking-tight">{card.value}</div>
+                            <p className="text-xs text-muted-foreground mt-1 font-medium">
                                 {card.description}
                             </p>
                         </CardContent>
@@ -110,29 +125,69 @@ const Dashboard = () => {
             </div>
             
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-                 <Card className="col-span-7">
+                 <Card className="col-span-7 transition-all hover:shadow-md">
                     <CardHeader>
                         <CardTitle>Tezkor Havolalar</CardTitle>
                         <CardDescription>Tez-tez ishlatiladigan bo'limlarga o'tish</CardDescription>
                     </CardHeader>
-                    <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                         {/* Quick Links can go here if needed later */}
-                         <div className="p-4 border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer flex flex-col items-center justify-center gap-2 text-center text-muted-foreground hover:text-foreground">
-                             <DollarSign className="h-6 w-6" />
-                             <span>Yangi Savdo</span>
-                         </div>
-                          <div className="p-4 border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer flex flex-col items-center justify-center gap-2 text-center text-muted-foreground hover:text-foreground">
-                             <Package className="h-6 w-6" />
-                             <span>Mahsulot Qo'shish</span>
-                         </div>
-                          <div className="p-4 border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer flex flex-col items-center justify-center gap-2 text-center text-muted-foreground hover:text-foreground">
-                             <Users className="h-6 w-6" />
-                             <span>Mijoz Qo'shish</span>
-                         </div>
-                          <div className="p-4 border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer flex flex-col items-center justify-center gap-2 text-center text-muted-foreground hover:text-foreground">
-                             <Briefcase className="h-6 w-6" />
-                             <span>Hisobotlarni Ko'rish</span>
-                         </div>
+                    <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                         
+                         {/* POS Link */}
+                         <Link to="/pos" className="group relative overflow-hidden rounded-2xl border bg-white p-6 shadow-sm transition-all hover:shadow-lg hover:-translate-y-1 hover:border-emerald-200">
+                             <div className="absolute inset-0 bg-gradient-to-br from-emerald-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                             <div className="relative flex flex-col items-center gap-3 text-center">
+                                 <div className="p-4 rounded-2xl bg-emerald-100 text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-colors duration-300">
+                                     <DollarSign className="h-8 w-8" />
+                                 </div>
+                                 <div className="space-y-1">
+                                     <h3 className="font-bold text-lg text-gray-900">Yangi Savdo</h3>
+                                     <p className="text-sm text-muted-foreground">Sotuv oynasini ochish</p>
+                                 </div>
+                             </div>
+                         </Link>
+
+                         {/* Inventory Link */}
+                         <Link to="/inventory" className="group relative overflow-hidden rounded-2xl border bg-white p-6 shadow-sm transition-all hover:shadow-lg hover:-translate-y-1 hover:border-blue-200">
+                             <div className="absolute inset-0 bg-gradient-to-br from-blue-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                             <div className="relative flex flex-col items-center gap-3 text-center">
+                                 <div className="p-4 rounded-2xl bg-blue-100 text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300">
+                                     <Package className="h-8 w-8" />
+                                 </div>
+                                 <div className="space-y-1">
+                                     <h3 className="font-bold text-lg text-gray-900">Mahsulotlar</h3>
+                                     <p className="text-sm text-muted-foreground">Omborni boshqarish</p>
+                                 </div>
+                             </div>
+                         </Link>
+
+                         {/* CRM Link */}
+                         <Link to="/crm" className="group relative overflow-hidden rounded-2xl border bg-white p-6 shadow-sm transition-all hover:shadow-lg hover:-translate-y-1 hover:border-purple-200">
+                             <div className="absolute inset-0 bg-gradient-to-br from-purple-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                             <div className="relative flex flex-col items-center gap-3 text-center">
+                                 <div className="p-4 rounded-2xl bg-purple-100 text-purple-600 group-hover:bg-purple-600 group-hover:text-white transition-colors duration-300">
+                                     <Users className="h-8 w-8" />
+                                 </div>
+                                 <div className="space-y-1">
+                                     <h3 className="font-bold text-lg text-gray-900">Mijozlar</h3>
+                                     <p className="text-sm text-muted-foreground">Mijozlar bazasi</p>
+                                 </div>
+                             </div>
+                         </Link>
+
+                         {/* Finance Link */}
+                         <Link to="/finance" className="group relative overflow-hidden rounded-2xl border bg-white p-6 shadow-sm transition-all hover:shadow-lg hover:-translate-y-1 hover:border-amber-200">
+                             <div className="absolute inset-0 bg-gradient-to-br from-amber-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                             <div className="relative flex flex-col items-center gap-3 text-center">
+                                 <div className="p-4 rounded-2xl bg-amber-100 text-amber-600 group-hover:bg-amber-600 group-hover:text-white transition-colors duration-300">
+                                     <Briefcase className="h-8 w-8" />
+                                 </div>
+                                 <div className="space-y-1">
+                                     <h3 className="font-bold text-lg text-gray-900">Hisobotlar</h3>
+                                     <p className="text-sm text-muted-foreground">Moliya va kirim-chiqim</p>
+                                 </div>
+                             </div>
+                         </Link>
+
                     </CardContent>
                  </Card>
             </div>

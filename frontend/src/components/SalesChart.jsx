@@ -46,8 +46,8 @@ const SalesChart = ({ filters }) => {
                     <AreaChart data={chartData}>
                         <defs>
                             <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3}/>
-                                <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
+                                <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.4}/>
+                                <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0.05}/>
                             </linearGradient>
                         </defs>
                         <XAxis 
@@ -74,12 +74,13 @@ const SalesChart = ({ filters }) => {
                             itemStyle={{ color: "hsl(var(--foreground))" }}
                         />
                         <Area 
-                            type="monotone" 
+                            type="natural" 
                             dataKey="total" 
                             stroke="hsl(var(--primary))" 
                             fillOpacity={1} 
                             fill="url(#colorTotal)" 
-                            strokeWidth={2}
+                            strokeWidth={3}
+                            activeDot={{ r: 6, strokeWidth: 0 }}
                         />
                     </AreaChart>
                 </ResponsiveContainer>

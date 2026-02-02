@@ -100,6 +100,12 @@ class Sale(Base):
     client_id = Column(Integer, ForeignKey("clients.id"), nullable=True) # Mijoz (optional)
     status = Column(String, default="completed") # completed, refunded
     
+    # Split Payment Columns
+    cash_amount = Column(Float, default=0)
+    card_amount = Column(Float, default=0)
+    transfer_amount = Column(Float, default=0)
+    debt_amount = Column(Float, default=0)
+    
     # Relationships
     items = relationship("SaleItem", back_populates="sale")
     cashier = relationship("Employee")

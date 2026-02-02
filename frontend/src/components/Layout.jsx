@@ -14,7 +14,6 @@ import {
   Activity
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
-import { ModeToggle } from './mode-toggle';
 
 const Layout = () => {
   const navigate = useNavigate();
@@ -92,13 +91,6 @@ const Layout = () => {
         </nav>
 
         <div className="mt-auto p-4 border-t border-border space-y-4">
-             {isSidebarOpen && (
-                 <div className="flex items-center justify-between px-2">
-                    <span className="text-sm font-medium text-muted-foreground">Theme</span>
-                    <ModeToggle />
-                 </div>
-             )}
-            {!isSidebarOpen && <div className="flex justify-center"><ModeToggle /></div>}
 
             <Button
                 variant="destructive"
@@ -114,7 +106,10 @@ const Layout = () => {
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden h-full bg-secondary/20">
         <div className={`flex-1 overflow-auto ${location.pathname === '/pos' ? 'p-0' : 'p-4 md:p-8'}`}>
-            <div className={`mx-auto animate-in fade-in duration-500 ${location.pathname === '/pos' ? 'max-w-none h-full' : 'max-w-7xl'}`}>
+            <div 
+                key={location.pathname}
+                className={`mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500 ease-in-out ${location.pathname === '/pos' ? 'max-w-none h-full' : 'max-w-7xl'}`}
+            >
                 <Outlet />
             </div>
         </div>

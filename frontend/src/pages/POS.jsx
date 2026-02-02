@@ -37,6 +37,7 @@ import {
     DialogContent,
     DialogHeader,
     DialogTitle,
+    DialogDescription,
     DialogFooter
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -47,9 +48,8 @@ const POS = () => {
     const [cart, setCart] = useState([]);
     const [selectedCategory, setSelectedCategory] = useState(null);
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-    const [paymentMethod, setPaymentMethod] = useState('cash');
+    const [paymentAmounts, setPaymentAmounts] = useState({ cash: '', card: '', perevod: '', qarz: '' });
     const [selectedClient, setSelectedClient] = useState(null);
-    const [amountPaid, setAmountPaid] = useState('');
     const [isFullscreen, setIsFullscreen] = useState(false);
     const searchInputRef = useRef(null);
 
@@ -87,11 +87,23 @@ const POS = () => {
             toast.success("Sotuv amalga oshirildi!");
             setCart([]);
             setIsPaymentModalOpen(false);
-            setAmountPaid('');
-            queryClient.invalidateQueries(['products']); // Update stock
+            setPaymentAmounts({ cash: '', card: '', perevod: '', qarz: '' });
+            queryClient.invalidateQueries({ queryKey: ['products'] }); 
         },
         onError: (err) => {
-            toast.error("Xatolik!", { description: err.response?.data?.detail || "Sotuvni amalga oshirib bo'lmadi" });
+            const responseData = err.response?.data;
+            let message = "Sotuvni amalga oshirib bo'lmadi";
+            
+            if (responseData?.detail) {
+                const detail = responseData.detail;
+                message = typeof detail === 'string' 
+                    ? detail 
+                    : (Array.isArray(detail) ? detail.map(d => `${d.loc?.join('.') || 'error'}: ${d.msg}`).join(', ') : JSON.stringify(detail));
+            } else if (err.message) {
+                message = err.message;
+            }
+            
+            toast.error("Xatolik!", { description: message });
         }
     });
 
@@ -147,26 +159,53 @@ const POS = () => {
     };
 
     const cartTotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    const totalPaid = Number(paymentAmounts.cash) + Number(paymentAmounts.card) + Number(paymentAmounts.perevod) + Number(paymentAmounts.qarz);
 
     const handlePayment = () => {
+        setPaymentAmounts({ cash: '', card: '', perevod: '', qarz: '' });
         setIsPaymentModalOpen(true);
     };
 
+    const handleFillRemaining = (method) => {
+        // Calculate remaining amount needed
+        const currentTotal = Number(paymentAmounts.cash) + Number(paymentAmounts.card) + Number(paymentAmounts.perevod) + Number(paymentAmounts.qarz);
+        // Exclude the current field we are clicking
+        const otherTotal = currentTotal - Number(paymentAmounts[method]);
+        const remaining = Math.max(0, cartTotal - otherTotal);
+        
+        setPaymentAmounts(prev => ({
+            ...prev,
+            [method]: remaining
+        }));
+    };
+
     const submitSale = () => {
-        if (paymentMethod === 'qarz' && !selectedClient) {
+        if (Number(paymentAmounts.qarz) > 0 && !selectedClient) {
             toast.error("Iltimos, mijozni tanlang!");
             return;
         }
 
+        // Determine main payment method
+        let method = 'mixed';
+        if (Number(paymentAmounts.cash) >= cartTotal) method = 'cash';
+        else if (Number(paymentAmounts.card) >= cartTotal) method = 'card';
+        else if (Number(paymentAmounts.perevod) >= cartTotal) method = 'perevod';
+        else if (Number(paymentAmounts.qarz) >= cartTotal) method = 'qarz';
+
         const saleData = {
             total_amount: cartTotal,
-            payment_method: paymentMethod,
+            payment_method: method,
             client_id: selectedClient,
             items: cart.map(item => ({
                 product_id: item.product_id,
                 quantity: item.quantity,
                 price: item.price
-            }))
+            })),
+            // Split amounts
+            cash_amount: Number(paymentAmounts.cash) || 0,
+            card_amount: Number(paymentAmounts.card) || 0,
+            transfer_amount: Number(paymentAmounts.perevod) || 0,
+            debt_amount: Number(paymentAmounts.qarz) || 0
         };
         saleMutation.mutate(saleData);
     };
@@ -352,9 +391,10 @@ const POS = () => {
 
                         <Button
                             size="lg"
-                            className="w-full text-lg shadow-lg shadow-primary/20"
+                            className="w-full text-lg shadow-lg shadow-emerald-500/20"
                             disabled={cart.length === 0 || saleMutation.isPending}
                             onClick={handlePayment}
+                            variant="success"
                         >
                             {saleMutation.isPending ? <Loader2 className="mr-2 animate-spin" /> : <CreditCard className="mr-2" />}
                             To'lov Qilish (Enter)
@@ -365,61 +405,133 @@ const POS = () => {
 
             {/* Payment Modal */}
             <Dialog open={isPaymentModalOpen} onOpenChange={setIsPaymentModalOpen}>
-                <DialogContent className="sm:max-w-[400px]">
-                    <DialogHeader>
-                        <DialogTitle>To'lovni Tasdiqlash</DialogTitle>
-                    </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                        <div className="bg-muted p-4 rounded-lg text-center">
-                            <div className="text-sm text-muted-foreground">To'lanadigan summa</div>
-                            <div className="text-3xl font-bold text-primary">{cartTotal.toLocaleString()} so'm</div>
+                <DialogContent className="sm:max-w-[480px] p-0 gap-0 border-0 shadow-2xl overflow-hidden rounded-2xl">
+                    <DialogTitle className="sr-only">To'lov oynasi</DialogTitle>
+                    <DialogDescription className="sr-only">
+                        Savdo uchun to'lov usulini tanlang va summani kiriting.
+                    </DialogDescription>
+                     {/* Header */}
+                    <div className="bg-slate-900 p-6 text-white text-center relative overflow-hidden">
+                        <div className="relative z-10">
+                            <p className="text-slate-400 font-medium mb-1 uppercase tracking-wider text-xs">Jami To'lov Summasi</p>
+                            <div className="text-5xl font-bold tracking-tight">{cartTotal.toLocaleString()}</div>
+                            <p className="text-slate-500 text-sm mt-1">so'm</p>
+                        </div>
+                    </div>
+                    
+                    <div className="p-6 space-y-6 bg-white">
+                        <div className="space-y-4">
+                            {/* Cash */}
+                            <div className="flex items-center gap-3">
+                                <div className="h-12 w-12 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-200">
+                                    <Banknote className="w-6 h-6" />
+                                </div>
+                                <div className="flex-1 space-y-1">
+                                    <Label className="text-xs text-muted-foreground font-bold uppercase tracking-wide">Naqd Pul</Label>
+                                    <Input 
+                                        type="number" 
+                                        placeholder="0" 
+                                        className="h-10 border-slate-200 text-lg font-bold focus-visible:ring-emerald-500" 
+                                        value={paymentAmounts.cash}
+                                        onChange={(e) => setPaymentAmounts(prev => ({ ...prev, cash: e.target.value }))}
+                                        autoFocus
+                                    />
+                                </div>
+                                <Button 
+                                    size="sm" 
+                                    variant="outline" 
+                                    className="h-10 px-3 bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 hover:text-emerald-800 font-semibold self-end" 
+                                    onClick={() => handleFillRemaining('cash')}
+                                >
+                                    Jami
+                                </Button>
+                            </div>
+
+                            {/* Card */}
+                            <div className="flex items-center gap-3">
+                                <div className="h-12 w-12 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center shrink-0 border border-blue-200">
+                                    <CreditCard className="w-6 h-6" />
+                                </div>
+                                <div className="flex-1 space-y-1">
+                                    <Label className="text-xs text-muted-foreground font-bold uppercase tracking-wide">Karta (Terminal)</Label>
+                                    <Input 
+                                        type="number" 
+                                        placeholder="0" 
+                                        className="h-10 border-slate-200 text-lg font-bold focus-visible:ring-blue-500" 
+                                        value={paymentAmounts.card}
+                                        onChange={(e) => setPaymentAmounts(prev => ({ ...prev, card: e.target.value }))}
+                                    />
+                                </div>
+                                <Button 
+                                    size="sm" 
+                                    variant="outline" 
+                                    className="h-10 px-3 bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 hover:text-blue-800 font-semibold self-end" 
+                                    onClick={() => handleFillRemaining('card')}
+                                >
+                                    Jami
+                                </Button>
+                            </div>
+
+                             {/* Perevod */}
+                            <div className="flex items-center gap-3">
+                                <div className="h-12 w-12 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center shrink-0 border border-purple-200">
+                                     <Smartphone className="w-6 h-6" />
+                                </div>
+                                <div className="flex-1 space-y-1">
+                                    <Label className="text-xs text-muted-foreground font-bold uppercase tracking-wide">Perevod</Label>
+                                    <Input 
+                                        type="number" 
+                                        placeholder="0" 
+                                        className="h-10 border-slate-200 text-lg font-bold focus-visible:ring-purple-500" 
+                                        value={paymentAmounts.perevod}
+                                        onChange={(e) => setPaymentAmounts(prev => ({ ...prev, perevod: e.target.value }))}
+                                    />
+                                </div>
+                                <Button 
+                                    size="sm" 
+                                    variant="outline" 
+                                    className="h-10 px-3 bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 hover:text-purple-800 font-semibold self-end" 
+                                    onClick={() => handleFillRemaining('perevod')}
+                                >
+                                    Jami
+                                </Button>
+                            </div>
+
+                            {/* Debt */}
+                            <div className="flex items-center gap-3">
+                                <div className="h-12 w-12 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center shrink-0 border border-amber-200">
+                                     <HandCoins className="w-6 h-6" />
+                                </div>
+                                <div className="flex-1 space-y-1">
+                                    <Label className="text-xs text-muted-foreground font-bold uppercase tracking-wide">Nasiya (Qarz)</Label>
+                                    <Input 
+                                        type="number" 
+                                        placeholder="0" 
+                                        className="h-10 border-slate-200 text-lg font-bold focus-visible:ring-amber-500" 
+                                        value={paymentAmounts.qarz}
+                                        onChange={(e) => setPaymentAmounts(prev => ({ ...prev, qarz: e.target.value }))}
+                                    />
+                                </div>
+                                <Button 
+                                    size="sm" 
+                                    variant="outline" 
+                                    className="h-10 px-3 bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 hover:text-amber-800 font-semibold self-end" 
+                                    onClick={() => handleFillRemaining('qarz')}
+                                >
+                                    Jami
+                                </Button>
+                            </div>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-2">
-                            <Button
-                                variant={paymentMethod === 'cash' ? 'default' : 'outline'}
-                                onClick={() => setPaymentMethod('cash')}
-                                className="h-20 flex flex-col gap-1"
-                            >
-                                <Banknote className="w-6 h-6" />
-                                Naqd Pul
-                            </Button>
-                            <Button
-                                variant={paymentMethod === 'card' ? 'default' : 'outline'}
-                                onClick={() => setPaymentMethod('card')}
-                                className="h-20 flex flex-col gap-1"
-                            >
-                                <CreditCard className="w-6 h-6" />
-                                Karta
-                            </Button>
-                            <Button
-                                variant={paymentMethod === 'perevod' ? 'default' : 'outline'}
-                                onClick={() => setPaymentMethod('perevod')}
-                                className="h-20 flex flex-col gap-1"
-                            >
-                                <Smartphone className="w-6 h-6" />
-                                Perevod
-                            </Button>
-                            <Button
-                                variant={paymentMethod === 'qarz' ? 'default' : 'outline'}
-                                onClick={() => setPaymentMethod('qarz')}
-                                className="h-20 flex flex-col gap-1"
-                            >
-                                <HandCoins className="w-6 h-6" />
-                                Qarz (Nasiya)
-                            </Button>
-                        </div>
-
-                        {paymentMethod === 'qarz' && (
-                            <div className="grid gap-2 animate-in fade-in slide-in-from-top-2 duration-300">
-                                <Label htmlFor="client-select" className="flex items-center gap-2">
-                                    <Users className="w-4 h-4" /> Mijozni tanlang
-                                </Label>
+                        {/* Client Select for Debt */}
+                        {Number(paymentAmounts.qarz) > 0 && (
+                            <div className="animate-in fade-in zoom-in-95 duration-200 p-4 bg-amber-50 rounded-xl border border-amber-100">
+                                <Label className="text-sm font-medium text-amber-900 mb-2 block">Mijozni tanlang (Qarz uchun)</Label>
                                 <Select
                                     value={selectedClient?.toString()}
                                     onValueChange={(val) => setSelectedClient(parseInt(val))}
                                 >
-                                    <SelectTrigger id="client-select">
+                                    <SelectTrigger className="h-11 bg-white border-amber-200 text-amber-900">
                                         <SelectValue placeholder="Mijozni qidirish..." />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -433,36 +545,52 @@ const POS = () => {
                             </div>
                         )}
 
-                        {paymentMethod === 'cash' && (
-                            <div className="space-y-4 bg-muted/50 p-4 rounded-lg animate-in fade-in slide-in-from-top-2">
-                                <div className="space-y-2">
-                                    <Label>Mijoz bergan summa</Label>
-                                    <Input
-                                        type="number"
-                                        placeholder="0"
-                                        className="text-xl font-bold h-12"
-                                        value={amountPaid}
-                                        onChange={(e) => setAmountPaid(e.target.value)}
-                                        autoFocus
-                                    />
-                                </div>
-                                <div className="flex justify-between items-center pt-2 border-t">
-                                    <span className="font-medium text-muted-foreground">Qaytim:</span>
-                                    <span className={`text-2xl font-bold ${(amountPaid - cartTotal) < 0 ? 'text-destructive' : 'text-emerald-600'
-                                        }`}>
-                                        {amountPaid ? (amountPaid - cartTotal).toLocaleString() : '0'} so'm
+                        {/* Summary & Actions */}
+                        <div className="pt-4 border-t border-slate-100 space-y-4">
+                            <div className="flex justify-between items-center bg-slate-50 p-4 rounded-xl">
+                                <div className="flex flex-col">
+                                    <span className="text-sm font-medium text-slate-500">Kassada to'lanmoqda:</span>
+                                    <span className={cn("text-2xl font-bold", totalPaid >= cartTotal ? "text-emerald-600" : "text-slate-800")}>
+                                        {totalPaid.toLocaleString()}
                                     </span>
                                 </div>
+                                {totalPaid >= cartTotal ? (
+                                    <div className="text-right">
+                                        <span className="text-xs text-slate-500 block uppercase font-bold">Qaytim</span>
+                                        <span className="text-xl font-bold text-emerald-600">{(totalPaid - cartTotal).toLocaleString()}</span>
+                                    </div>
+                                ) : (
+                                    <div className="text-right">
+                                        <span className="text-xs text-slate-500 block uppercase font-bold">Yana kerak</span>
+                                        <span className="text-xl font-bold text-rose-500">{(cartTotal - totalPaid).toLocaleString()}</span>
+                                    </div>
+                                )}
                             </div>
-                        )}
+
+                            <div className="flex gap-3 h-14">
+                                <Button 
+                                    variant="outline" 
+                                    onClick={() => setIsPaymentModalOpen(false)}
+                                    className="h-full px-6 border-2 text-slate-500 hover:text-slate-700 hover:bg-slate-50"
+                                >
+                                    Bekor qilish
+                                </Button>
+                                <Button 
+                                    onClick={submitSale} 
+                                    disabled={saleMutation.isPending || totalPaid < cartTotal} 
+                                    className={cn(
+                                        "flex-1 h-full text-xl font-bold shadow-lg transition-all",
+                                        totalPaid >= cartTotal 
+                                            ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-200" 
+                                            : "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none"
+                                    )}
+                                >
+                                    {saleMutation.isPending && <Loader2 className="mr-2 animate-spin" />}
+                                    {totalPaid >= cartTotal ? "To'lovni Tasdiqlash" : "Summa yetarli emas"}
+                                </Button>
+                            </div>
+                        </div>
                     </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setIsPaymentModalOpen(false)}>Bekor qilish</Button>
-                        <Button onClick={submitSale} disabled={saleMutation.isPending}>
-                            {saleMutation.isPending && <Loader2 className="mr-2 animate-spin" />}
-                            To'lovni Yakunlash
-                        </Button>
-                    </DialogFooter>
                 </DialogContent>
             </Dialog>
         </div>

@@ -62,11 +62,15 @@ async def create_sale(
 
     # 3. Create Sale Record
     db_sale = Sale(
-        total_amount=sale.total_amount, # Trust frontend total or use total_amount_check? Let's use frontend for flexible pricing, but validation is good practice.
+        total_amount=sale.total_amount, 
         payment_method=sale.payment_method,
         cashier_id=current_user.id,
         client_id=sale.client_id,
-        status="completed"
+        status="completed",
+        cash_amount=sale.cash_amount,
+        card_amount=sale.card_amount,
+        transfer_amount=sale.transfer_amount,
+        debt_amount=sale.debt_amount
     )
     db.add(db_sale)
     await db.flush() # Get ID
@@ -76,12 +80,12 @@ async def create_sale(
         sale_item.sale_id = db_sale.id
         db.add(sale_item)
 
-    # 5. Handle Client Balance (if credit sale)
-    if sale.payment_method == "qarz" and sale.client_id:
+    # 5. Handle Client Balance (if any debt amount)
+    if sale.debt_amount > 0 and sale.client_id:
         result = await db.execute(select(Client).where(Client.id == sale.client_id))
         client = result.scalars().first()
         if client:
-            client.balance -= sale.total_amount # Increase debt (negative balance)
+            client.balance -= sale.debt_amount # Increase debt by specific debt amount
     
     await db.commit()
     
