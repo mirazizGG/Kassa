@@ -47,40 +47,40 @@ const Dashboard = () => {
 
     const cards = [
         {
-            title: "Kunlik Savdo",
-            value: stats?.dailySales || "0 so'm",
+            title: "Davr Savdosi",
+            value: stats?.dailySalesFormatted || "0 so'm",
             icon: DollarSign,
-            description: "Bugungi tushum",
-            color: "text-emerald-600 dark:text-emerald-400",
-            bg: "bg-emerald-100/50 dark:bg-emerald-900/20",
-            iconBg: "bg-emerald-100 dark:bg-emerald-900/50",
-            borderColor: "border-emerald-200 dark:border-emerald-800"
-        },
-        {
-            title: "Mijozlar",
-            value: stats?.clientCount || "0",
-            icon: Users,
-            description: "Jami mijozlar",
+            description: "Tanlangan vaqtdagi tushum",
             color: "text-blue-600 dark:text-blue-400",
             bg: "bg-blue-100/50 dark:bg-blue-900/20",
             iconBg: "bg-blue-100 dark:bg-blue-900/50",
             borderColor: "border-blue-200 dark:border-blue-800"
         },
         {
-            title: "Kam Qolgan",
-            value: stats?.lowStock || "0",
-            icon: AlertTriangle,
-            description: "Tugayotgan mahsulotlar",
+            title: "Sof Foyda",
+            value: stats?.netProfitFormatted || "0 so'm",
+            icon: TrendingUp,
+            description: "Daromad - Chiqimlar",
+            color: "text-emerald-600 dark:text-emerald-400",
+            bg: "bg-emerald-100/50 dark:bg-emerald-900/20",
+            iconBg: "bg-emerald-100 dark:bg-emerald-900/50",
+            borderColor: "border-emerald-200 dark:border-emerald-800"
+        },
+        {
+            title: "Xarajatlar",
+            value: `${stats?.totalExpenses?.toLocaleString() || 0} so'm`,
+            icon: Briefcase,
+            description: "Jami chiqimlar",
             color: "text-amber-600 dark:text-amber-400",
             bg: "bg-amber-100/50 dark:bg-amber-900/20",
             iconBg: "bg-amber-100 dark:bg-amber-900/50",
             borderColor: "border-amber-200 dark:border-amber-800"
         },
         {
-            title: "Mahsulotlar",
-            value: stats?.totalProducts || "0",
-            icon: Package,
-            description: "Jami nomdagi mahsulot",
+            title: "Keltirilgan To'lov",
+            value: stats?.clientCount || "0",
+            icon: Users,
+            description: "Jami mijozlar",
             color: "text-indigo-600 dark:text-indigo-400",
             bg: "bg-indigo-100/50 dark:bg-indigo-900/20",
             iconBg: "bg-indigo-100 dark:bg-indigo-900/50",
@@ -123,6 +123,43 @@ const Dashboard = () => {
                 <SalesChart filters={filters} />
                 <TopProducts filters={filters} />
             </div>
+
+            {/* Low Stock Section */}
+            {stats?.lowStockItems?.length > 0 && (
+                <Card className="border-amber-200 bg-amber-50/30 dark:bg-amber-950/10">
+                    <CardHeader className="flex flex-row items-center justify-between">
+                        <div>
+                            <CardTitle className="flex items-center gap-2 text-amber-600">
+                                <AlertTriangle className="h-5 w-5" />
+                                Tugayotgan Mahsulotlar
+                            </CardTitle>
+                            <CardDescription>Ushbu mahsulotlar soni 5 tadan kam qolgan</CardDescription>
+                        </div>
+                        <Link to="/inventory">
+                           <Button variant="outline" size="sm" className="border-amber-200 hover:bg-amber-100">
+                               Hammasini ko'rish
+                           </Button>
+                        </Link>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                            {stats.lowStockItems.map((item) => (
+                                <div key={item.id} className="flex items-center justify-between p-3 rounded-xl border bg-white dark:bg-slate-900 shadow-sm">
+                                    <div className="space-y-1">
+                                        <p className="font-semibold text-sm">{item.name}</p>
+                                        <p className="text-xs text-muted-foreground">{item.sell_price.toLocaleString()} so'm</p>
+                                    </div>
+                                    <div className="text-right">
+                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                                            {item.stock} {item.unit}
+                                        </span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
             
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
                  <Card className="col-span-7 transition-all hover:shadow-md">

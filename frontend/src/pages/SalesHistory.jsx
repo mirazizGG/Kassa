@@ -11,7 +11,10 @@ import {
     ChevronDown,
     ChevronUp,
     Search,
-    CreditCard
+    CreditCard,
+    RotateCcw,
+    AlertCircle,
+    Loader2
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -20,6 +23,17 @@ import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import FilterBar from '../components/FilterBar';
 import { Button } from "@/components/ui/button";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from "@/components/ui/dialog";
+import { toast } from "sonner";
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 const SalesHistory = () => {
     const today = new Date().toISOString().split('T')[0];
@@ -30,6 +44,7 @@ const SalesHistory = () => {
     });
 
     const [expandedSale, setExpandedSale] = React.useState(null);
+    const queryClient = useQueryClient();
 
     const { data: sales = [], isLoading } = useQuery({
         queryKey: ['sales-history', filters],
@@ -43,6 +58,24 @@ const SalesHistory = () => {
             return res.data;
         }
     });
+
+    const refundMutation = useMutation({
+        mutationFn: (saleId) => api.post(`/sales/${saleId}/refund`),
+        onSuccess: () => {
+            queryClient.invalidateQueries(['sales-history']);
+            queryClient.invalidateQueries(['finance-stats']);
+            queryClient.invalidateQueries(['dashboard-stats']);
+            queryClient.invalidateQueries(['products']); 
+            toast.success("Muvaffaqiyatli!", { description: "Savdo qaytarildi va mahsulotlar omborga qo'shildi." });
+        },
+        onError: (error) => {
+            toast.error("Xatolik!", { description: error.response?.data?.detail || "Savdoni qaytarib bo'lmadi." });
+        }
+    });
+
+    const handleRefund = (id) => {
+        refundMutation.mutate(id);
+    };
 
     const toggleExpand = (id) => {
         setExpandedSale(expandedSale === id ? null : id);
@@ -128,14 +161,53 @@ const SalesHistory = () => {
                                     {expandedSale === sale.id && (
                                         <TableRow className="bg-muted/20">
                                             <TableCell colSpan={7} className="p-4">
-                                                <div className="rounded-lg border bg-card p-4 space-y-3">
-                                                    <h4 className="font-semibold flex items-center gap-2">
-                                                        <Package className="w-4 h-4 text-primary" />
-                                                        Sotilgan Mahsulotlar
-                                                    </h4>
+                                                    <div className="flex items-center justify-between">
+                                                        <h4 className="font-semibold flex items-center gap-2">
+                                                            <Package className="w-4 h-4 text-primary" />
+                                                            Sotilgan Mahsulotlar
+                                                        </h4>
+                                                        
+                                                        {sale.status === 'completed' && (
+                                                            <Dialog>
+                                                                <DialogTrigger asChild>
+                                                                    <Button variant="destructive" size="sm" className="gap-2 h-8">
+                                                                        <RotateCcw className="w-3.5 h-3.5" />
+                                                                        Vozvrat qilish
+                                                                    </Button>
+                                                                </DialogTrigger>
+                                                                <DialogContent>
+                                                                    <DialogHeader>
+                                                                        <DialogTitle className="flex items-center gap-2">
+                                                                            <AlertCircle className="w-5 h-5 text-destructive" />
+                                                                            Haqiqatdan ham qaytarmoqchimisiz?
+                                                                        </DialogTitle>
+                                                                        <DialogDescription>
+                                                                            Ushbu amal tanlangan barcha mahsulotlarni omborga qaytaradi va moliya tushumidan ayirib tashlaydi.
+                                                                        </DialogDescription>
+                                                                    </DialogHeader>
+                                                                    <DialogFooter>
+                                                                        <DialogHeader className="w-full"> {/* Just using header for spacing if needed or just buttons */}
+                                                                           <div className="flex justify-end gap-2 pt-4">
+                                                                                <DialogTrigger asChild>
+                                                                                    <Button variant="outline">Yo'q, bekor qilish</Button>
+                                                                                </DialogTrigger>
+                                                                                <Button 
+                                                                                    variant="destructive"
+                                                                                    onClick={() => handleRefund(sale.id)}
+                                                                                >
+                                                                                    Ha, qaytarish
+                                                                                </Button>
+                                                                           </div>
+                                                                        </DialogHeader>
+                                                                    </DialogFooter>
+                                                                </DialogContent>
+                                                            </Dialog>
+                                                        )}
+                                                    </div>
+                                                    
                                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
                                                         {sale.items.map((item, idx) => (
-                                                            <div key={idx} className="flex justify-between items-center p-2 rounded-md bg-secondary/50 border text-sm">
+                                                            <div key={idx} className={`flex justify-between items-center p-2 rounded-md bg-secondary/50 border text-sm ${sale.status === 'refunded' ? 'opacity-60 grayscale' : ''}`}>
                                                                 <span className="font-medium">{item.product?.name || 'Mahsulot'}</span>
                                                                 <span className="text-muted-foreground">
                                                                     {item.quantity} x {item.price.toLocaleString()} = {(item.quantity * item.price).toLocaleString()}
@@ -143,11 +215,10 @@ const SalesHistory = () => {
                                                             </div>
                                                         ))}
                                                     </div>
-                                                </div>
-                                            </TableCell>
-                                        </TableRow>
-                                    )}
-                                </React.Fragment>
+                                                </TableCell>
+                                            </TableRow>
+                                        )}
+                                    </React.Fragment>
                             ))}
                         </TableBody>
                     </Table>

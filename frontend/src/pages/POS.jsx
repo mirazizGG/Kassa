@@ -89,6 +89,9 @@ const POS = () => {
             setIsPaymentModalOpen(false);
             setPaymentAmounts({ cash: '', card: '', perevod: '', qarz: '' });
             queryClient.invalidateQueries({ queryKey: ['products'] }); 
+            queryClient.invalidateQueries({ queryKey: ['sales-history'] });
+            queryClient.invalidateQueries({ queryKey: ['finance-stats'] });
+            queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
         },
         onError: (err) => {
             const responseData = err.response?.data;

@@ -56,25 +56,69 @@ async def get_stats(
     sales_result = await db.execute(sales_query)
     sales_total = sales_result.scalar() or 0
     
-    # 2. Client Count (Usually global, but let's keep it as is or count active in range)
+    # 1.1 Total Cost (Buy Price * Quantity)
+    cost_query = (
+        select(func.sum(SaleItem.quantity * Product.buy_price))
+        .join(Product, SaleItem.product_id == Product.id)
+        .join(Sale, SaleItem.sale_id == Sale.id)
+        .where(
+            Sale.created_at >= start_date,
+            Sale.created_at <= end_date,
+            Sale.status == "completed"
+        )
+    )
+    if employee_id:
+        cost_query = cost_query.where(Sale.cashier_id == employee_id)
+    
+    cost_result = await db.execute(cost_query)
+    total_cost = cost_result.scalar() or 0
+
+    # 1.2 Total Expenses
+    expense_query = select(func.sum(Expense.amount)).where(
+        Expense.created_at >= start_date,
+        Expense.created_at <= end_date
+    )
+    if employee_id:
+        expense_query = expense_query.where(Expense.created_by == employee_id)
+    
+    expense_result = await db.execute(expense_query)
+    total_expenses = expense_result.scalar() or 0
+
+    net_profit = sales_total - total_cost - total_expenses
+
+    # 2. Client Count
     client_query = select(func.count(Client.id))
     client_result = await db.execute(client_query)
     client_count = client_result.scalar() or 0
     
-    # 3. Low Stock
-    stock_query = select(func.count(Product.id)).where(Product.stock < 5)
+    # 3. Low Stock Items List
+    stock_query = select(Product).where(Product.stock < 5).limit(10)
     stock_result = await db.execute(stock_query)
-    low_stock = stock_result.scalar() or 0
+    low_stock_items = stock_result.scalars().all()
     
-    # 4. Total Products
+    # 4. Total Products Count
     product_query = select(func.count(Product.id))
     product_result = await db.execute(product_query)
     total_products = product_result.scalar() or 0
     
     return {
-        "dailySales": f"{sales_total:,.0f} so'm",
+        "dailySales": sales_total,
+        "dailySalesFormatted": f"{sales_total:,.0f} so'm",
+        "totalCost": total_cost,
+        "totalExpenses": total_expenses,
+        "netProfit": net_profit,
+        "netProfitFormatted": f"{net_profit:,.0f} so'm",
         "clientCount": str(client_count),
-        "lowStock": str(low_stock),
+        "lowStock": str(len(low_stock_items)),
+        "lowStockItems": [
+            {
+                "id": p.id,
+                "name": p.name,
+                "stock": p.stock,
+                "unit": p.unit,
+                "sell_price": p.sell_price
+            } for p in low_stock_items
+        ],
         "totalProducts": str(total_products)
     }
 
@@ -151,7 +195,7 @@ async def get_expenses(
 ):
     start_date = parse_date(start_date, datetime.min.time())
     end_date = parse_date(end_date, datetime.max.time())
-    query = select(Expense)
+    query = select(Expense).options(joinedload(Expense.creator))
     if employee_id:
         query = query.where(Expense.created_by == employee_id)
     if category:
@@ -257,3 +301,11 @@ async def export_sales(
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename=sotuvlar_{datetime.now().strftime('%Y%m%d')}.csv"}
     )
+
+@router.get("/categories")
+async def get_expense_categories(db: AsyncSession = Depends(get_db)):
+    # You might have an ExpenseCategory table, let's check database.py
+    # From database.py: class ExpenseCategory(Base): __tablename__ = "expense_categories"
+    from database import ExpenseCategory
+    result = await db.execute(select(ExpenseCategory))
+    return result.scalars().all()

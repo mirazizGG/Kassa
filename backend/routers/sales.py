@@ -130,3 +130,52 @@ async def get_sales(
         
     result = await db.execute(query.offset(skip).limit(limit).order_by(Sale.created_at.desc()))
     return result.unique().scalars().all()
+
+@router.post("/{sale_id}/refund", response_model=SaleOut)
+async def refund_sale(
+    sale_id: int,
+    current_user: Employee = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    # 1. Fetch the sale with items
+    result = await db.execute(
+        select(Sale)
+        .where(Sale.id == sale_id)
+        .options(
+            joinedload(Sale.items).joinedload(SaleItem.product),
+            joinedload(Sale.client)
+        )
+    )
+    db_sale = result.unique().scalars().first()
+    
+    if not db_sale:
+        raise HTTPException(status_code=404, detail="Sale not found")
+    
+    if db_sale.status == "refunded":
+        raise HTTPException(status_code=400, detail="Sale already refunded")
+
+    # 2. Restore stock for each item
+    for item in db_sale.items:
+        if item.product:
+            item.product.stock += item.quantity
+    
+    # 3. Handle Client Balance (if it was a debt)
+    if db_sale.debt_amount > 0 and db_sale.client:
+        db_sale.client.balance += db_sale.debt_amount # Reduce debt (balance is typically negative in this system based on create_sale)
+
+    # 4. Update Sale Status
+    db_sale.status = "refunded"
+    
+    await db.commit()
+    
+    # Reload for response
+    result = await db.execute(
+        select(Sale)
+        .where(Sale.id == sale_id)
+        .options(
+            joinedload(Sale.items).joinedload(SaleItem.product),
+            joinedload(Sale.cashier),
+            joinedload(Sale.client)
+        )
+    )
+    return result.unique().scalars().first()

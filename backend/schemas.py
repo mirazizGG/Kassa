@@ -173,6 +173,7 @@ class ExpenseOut(ExpenseBase):
     id: int
     created_at: datetime
     created_by: Optional[int] = None
+    creator: Optional[EmployeeOut] = None
     model_config = ConfigDict(from_attributes=True)
 
 class PaymentCreate(BaseModel):
