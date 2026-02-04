@@ -9,7 +9,10 @@ import {
     FileText,
     Save,
     Loader2,
-    Image as ImageIcon
+    Image as ImageIcon,
+    ShieldCheck,
+    DownloadCloud,
+    History
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -26,7 +29,8 @@ const Settings = () => {
         phone: '',
         header_text: '',
         footer_text: '',
-        logo_url: ''
+        logo_url: '',
+        low_stock_threshold: 5
     });
 
     const { data: settings, isLoading } = useQuery({
@@ -45,7 +49,8 @@ const Settings = () => {
                 phone: settings.phone || '',
                 header_text: settings.header_text || '',
                 footer_text: settings.footer_text || '',
-                logo_url: settings.logo_url || ''
+                logo_url: settings.logo_url || '',
+                low_stock_threshold: settings.low_stock_threshold || 5
             });
         }
     }, [settings]);
@@ -132,6 +137,21 @@ const Settings = () => {
                                     />
                                 </div>
                             </div>
+                            <div className="space-y-2 pt-2">
+                                <Label htmlFor="threshold">Kam Qolgan Mahsulotlar Chegarasi (Threshold)</Label>
+                                <div className="flex items-center gap-4">
+                                    <Input 
+                                        id="threshold" 
+                                        type="number"
+                                        value={formData.low_stock_threshold} 
+                                        onChange={e => setFormData({...formData, low_stock_threshold: parseInt(e.target.value) || 0})}
+                                        className="w-24"
+                                    />
+                                    <span className="text-sm text-muted-foreground">
+                                        Mahsulot soni shundan kam bo'lsa, dashboardda va botda ogohlantirish chiqadi.
+                                    </span>
+                                </div>
+                            </div>
                         </CardContent>
                     </Card>
 
@@ -175,6 +195,55 @@ const Settings = () => {
                     </Button>
                 </div>
             </form>
+
+            <div className="grid gap-6 md:grid-cols-2">
+                <Card className="border-none shadow-md bg-background/60 backdrop-blur-xl border-l-4 border-l-emerald-500">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <ShieldCheck className="w-5 h-5 text-emerald-500" />
+                            Ma'lumotlar Xavfsizligi
+                        </CardTitle>
+                        <CardDescription>Baza zahira nusxasini boshqarish va xavfsizlik</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-100 dark:bg-emerald-950/20 dark:border-emerald-900/30">
+                            <div className="flex items-start gap-3">
+                                <div className="p-2 rounded-lg bg-white dark:bg-emerald-900 shadow-sm text-emerald-600">
+                                    <History className="w-4 h-4" />
+                                </div>
+                                <div className="space-y-1">
+                                    <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-100">Avtomatik Zahiralash Faol</p>
+                                    <p className="text-xs text-emerald-700/80 dark:text-emerald-400/80">
+                                        Sotuvlar va smena yopilishida tizim avtomatik ravishda nusxa oladi.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div className="flex flex-col gap-3">
+                            <Button 
+                                type="button"
+                                variant="outline" 
+                                className="w-full justify-start gap-2 h-12 border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 transition-all dark:border-emerald-900 dark:hover:bg-emerald-900/50"
+                                onClick={async () => {
+                                    try {
+                                        const res = await api.post('/settings/backup');
+                                        toast.success("Muvaffaqiyatli!", { description: res.data.message });
+                                    } catch (err) {
+                                        toast.error("Xatolik!", { description: "Zahira olib bo'lmadi" });
+                                    }
+                                }}
+                            >
+                                <DownloadCloud className="w-4 h-4" />
+                                Hozir zahira nusxasini olish (Manual Backup)
+                            </Button>
+                            <p className="text-[10px] text-muted-foreground px-1">
+                                * Zahira nusxalari serverning <code>backups/</code> papkasida saqlanadi.
+                            </p>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
         </div>
     );
 };

@@ -14,6 +14,8 @@ import Employees from './pages/Employees';
 import ShiftHistory from './pages/ShiftHistory';
 import SalesHistory from './pages/SalesHistory';
 import AuditLogs from './pages/AuditLogs';
+import Suppliers from './pages/Suppliers';
+import Settings from './pages/Settings';
 import ErrorBoundary from './components/ErrorBoundary';
 
 import { Toaster } from "@/components/ui/sonner";
@@ -22,6 +24,16 @@ import { ThemeProvider } from "@/components/theme-provider"
 const ProtectedRoute = ({ children }) => {
   const token = localStorage.getItem('token');
   return token ? children : <Navigate to="/login" />;
+};
+
+const RoleProtectedRoute = ({ children, allowedRoles }) => {
+  const token = localStorage.getItem('token');
+  const role = localStorage.getItem('role');
+  
+  if (!token) return <Navigate to="/login" />;
+  if (!allowedRoles.includes(role)) return <Navigate to="/" />;
+  
+  return children;
 };
 
 function App() {
@@ -37,11 +49,13 @@ function App() {
                 <Route path="pos" element={<POS />} />
                 <Route path="inventory" element={<Inventory />} />
                 <Route path="crm" element={<CRM />} />
-                <Route path="finance" element={<Finance />} />
-                <Route path="employees" element={<Employees />} />
+                <Route path="finance" element={<RoleProtectedRoute allowedRoles={['admin', 'manager']}><Finance /></RoleProtectedRoute>} />
+                <Route path="employees" element={<RoleProtectedRoute allowedRoles={['admin', 'manager']}><Employees /></RoleProtectedRoute>} />
                 <Route path="shifts" element={<ShiftHistory />} />
                 <Route path="sales" element={<SalesHistory />} />
-                <Route path="audit" element={<AuditLogs />} />
+                <Route path="suppliers" element={<RoleProtectedRoute allowedRoles={['admin', 'manager']}><Suppliers /></RoleProtectedRoute>} />
+                <Route path="audit" element={<RoleProtectedRoute allowedRoles={['admin']}><AuditLogs /></RoleProtectedRoute>} />
+                <Route path="settings" element={<RoleProtectedRoute allowedRoles={['admin']}><Settings /></RoleProtectedRoute>} />
               </Route>
             </Routes>
           </Router>

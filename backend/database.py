@@ -64,7 +64,7 @@ class Product(Base):
     barcode = Column(String, unique=True, index=True) # Shtrix kod
     buy_price = Column(Float) # Kelish narxi
     sell_price = Column(Float) # Sotish narxi
-    stock = Column(Integer, default=0) # Qoldiq
+    stock = Column(Float, default=0) # Qoldiq
     unit = Column(String, default="dona") # dona, kg, litr
     category_id = Column(Integer, ForeignKey("categories.id"), nullable=True)
     is_favorite = Column(Boolean, default=False) # Sevimli mahsulot (kassada yuqorida)
@@ -116,7 +116,7 @@ class SaleItem(Base):
     id = Column(Integer, primary_key=True, index=True)
     sale_id = Column(Integer, ForeignKey("sales.id"))
     product_id = Column(Integer, ForeignKey("products.id"))
-    quantity = Column(Integer) # Nechta?
+    quantity = Column(Float) # Nechta?
     price = Column(Float) # Qanchadan sotildi?
     
     # Relationships
@@ -154,7 +154,7 @@ class Supply(Base):
     __tablename__ = "supplies"
     id = Column(Integer, primary_key=True, index=True)
     product_id = Column(Integer, ForeignKey("products.id"))
-    quantity = Column(Integer)
+    quantity = Column(Float)
     buy_price = Column(Float) # O'sha paytdagi kirim narxi
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
@@ -205,7 +205,39 @@ class Task(Base):
     assignee = relationship("Employee", foreign_keys=[assigned_to])
     creator = relationship("Employee", foreign_keys=[created_by])
 
-# 10. Do'kon Sozlamalari (Store Settings)
+# 11. Firmalar (Suppliers)
+class Supplier(Base):
+    __tablename__ = "suppliers"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True)
+    phone = Column(String, nullable=True)
+    address = Column(String, nullable=True)
+    balance = Column(Float, default=0) # Qancha qarzimiz bor (musbat bo'lsa qarzmiz, manfiy bo'lsa haqimiz)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+class SupplyReceipt(Base):
+    __tablename__ = "supply_receipts"
+    id = Column(Integer, primary_key=True, index=True)
+    supplier_id = Column(Integer, ForeignKey("suppliers.id"))
+    total_amount = Column(Float) # Jami kelgan mol summasi
+    invoice_image = Column(String, nullable=True) # Nakladnoy rasmi yo'li
+    date = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    note = Column(String, nullable=True)
+    
+    supplier = relationship("Supplier")
+
+class SupplierPayment(Base):
+    __tablename__ = "supplier_payments"
+    id = Column(Integer, primary_key=True, index=True)
+    supplier_id = Column(Integer, ForeignKey("suppliers.id"))
+    amount = Column(Float) # To'langan summa
+    payment_method = Column(String, default="cash") # cash, card, transfer
+    date = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    note = Column(String, nullable=True)
+    
+    supplier = relationship("Supplier")
+
+# Do'kon Sozlamalari (Store Settings)
 class StoreSetting(Base):
     __tablename__ = "store_settings"
     id = Column(Integer, primary_key=True, index=True)
@@ -215,6 +247,7 @@ class StoreSetting(Base):
     header_text = Column(String, nullable=True) # Check tepasidagi yozuv
     footer_text = Column(String, nullable=True) # Check pastidagi yozuv
     logo_url = Column(String, nullable=True)
+    low_stock_threshold = Column(Integer, default=5)
 
 # Bazani yaratish funksiyasi
 async def init_db():

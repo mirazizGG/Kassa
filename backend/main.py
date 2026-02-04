@@ -8,7 +8,8 @@ import os
 from database import init_db, engine, Base, SessionLocal, Employee
 from core import get_password_hash
 from bot import bot, dp, check_debts
-from routers import auth, inventory, pos, crm, finance, tasks, sales, audit
+from routers import auth, inventory, pos, crm, finance, tasks, sales, audit, settings, suppliers
+from fastapi.staticfiles import StaticFiles
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -59,6 +60,22 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan, title="Kassa API", version="2.0.0")
 
+from fastapi import Request
+from fastapi.responses import JSONResponse
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Global error: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Ichki server xatoligi yuz berdi. Iltimos, administratorga murojaat qiling."},
+    )
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=os.getenv("ALLOWED_ORIGINS", "*").split(","), # Change to specific origins in production
@@ -76,6 +93,11 @@ app.include_router(finance.router)
 app.include_router(tasks.router)
 app.include_router(sales.router)
 app.include_router(audit.router)
+app.include_router(settings.router)
+app.include_router(suppliers.router)
+
+# Static files for invoices
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 @app.get('/favicon.ico', include_in_schema=False)
 async def favicon():

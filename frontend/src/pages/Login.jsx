@@ -33,15 +33,20 @@ const Login = () => {
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
             });
 
-            const { access_token, role, username: user } = response.data;
+            const { access_token, role, username: user, user_id } = response.data;
             localStorage.setItem('token', access_token);
             localStorage.setItem('role', role);
             localStorage.setItem('username', user);
+            localStorage.setItem('userId', user_id);
 
             toast.success("Muvaffaqiyatli kirildi!", {
                 description: `Xush kelibsiz, ${user}`
             });
-            navigate('/');
+            if (role === 'cashier') {
+                navigate('/pos');
+            } else {
+                navigate('/');
+            }
         } catch (err) {
             toast.error("Xatolik!", {
                 description: err.response?.data?.detail || "Login yoki parol noto'g'ri."

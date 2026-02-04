@@ -26,21 +26,29 @@ const Layout = () => {
     navigate('/login');
   };
 
+  const role = localStorage.getItem('role');
+
   const navItems = [
     { path: '/', label: 'Asosiy', icon: LayoutDashboard },
     { path: '/pos', label: 'Sotuv (POS)', icon: ShoppingCart },
     { path: '/inventory', label: 'Ombor', icon: Package },
     { path: '/crm', label: 'Mijozlar', icon: Users },
-    { path: '/finance', label: 'Moliya', icon: CreditCard },
+    ...(role === 'admin' || role === 'manager' ? [{ path: '/finance', label: 'Moliya', icon: CreditCard }] : []),
     { path: '/shifts', label: 'Smena Tarixi', icon: History },
     { path: '/sales', label: 'Savdolar Tarixi', icon: ShoppingCart },
-    { path: '/audit', label: 'Audit', icon: Activity },
-    { path: '/employees', label: 'Xodimlar', icon: UserCog },
+    ...(role === 'admin' ? [{ path: '/audit', label: 'Audit', icon: Activity }] : []),
+    ...(role === 'admin' || role === 'manager' ? [
+        { path: '/employees', label: 'Xodimlar', icon: UserCog },
+        { path: '/suppliers', label: 'Firmalar', icon: Package }
+    ] : []),
+    ...(role === 'admin' ? [{ path: '/settings', label: 'Sozlamalar', icon: UserCog }] : []),
   ];
 
   return (
     <div className="flex h-screen w-full bg-background transition-colors duration-300">
       {/* Sidebar */}
+      {/* Sidebar - Hide for Cashier */}
+      {role !== 'cashier' && (
       <aside
         className={`${isSidebarOpen ? 'w-64' : 'w-20'} 
           bg-card border-r border-border transition-all duration-300 flex flex-col h-full shadow-xl z-50`}
@@ -91,10 +99,26 @@ const Layout = () => {
         </nav>
 
         <div className="mt-auto p-4 border-t border-border space-y-4">
+            {/* User Profile Info */}
+            <div className={`flex items-center gap-3 px-2 py-2 rounded-xl bg-muted/50 border border-border/50 ${!isSidebarOpen && 'justify-center px-0'}`}>
+                <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary shrink-0">
+                    <Users className="w-4 h-4" />
+                </div>
+                {isSidebarOpen && (
+                    <div className="flex flex-col overflow-hidden">
+                        <span className="text-sm font-bold truncate text-foreground leading-tight">
+                            {localStorage.getItem('username') || 'Foydalanuvchi'}
+                        </span>
+                        <span className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground leading-tight mt-0.5">
+                            {role === 'admin' ? 'Administrator' : role === 'manager' ? 'Menejer' : 'Kassir'}
+                        </span>
+                    </div>
+                )}
+            </div>
 
             <Button
                 variant="destructive"
-                className={`w-full justify-start gap-3 ${!isSidebarOpen && 'justify-center px-0'}`}
+                className={`w-full justify-start gap-3 rounded-xl shadow-lg shadow-destructive/10 transition-all hover:scale-[1.02] active:scale-95 ${!isSidebarOpen && 'justify-center px-0'}`}
                 onClick={handleLogout}
             >
                 <LogOut className="w-5 h-5" />
@@ -102,17 +126,40 @@ const Layout = () => {
             </Button>
         </div>
       </aside>
+      )}
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden h-full bg-secondary/20">
-        <div className={`flex-1 overflow-auto ${location.pathname === '/pos' ? 'p-0' : 'p-4 md:p-8'}`}>
+        <div className={`flex-1 overflow-auto ${location.pathname === '/pos' ? 'p-0' : 'p-4 md:p-8'} ${role === 'cashier' ? 'pb-20' : ''}`}>
             <div 
                 key={location.pathname}
                 className={`mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500 ease-in-out ${location.pathname === '/pos' ? 'max-w-none h-full' : 'max-w-7xl'}`}
             >
                 <Outlet />
             </div>
-        </div>
+            </div>
+        
+        {/* Bottom Nav for Cashier */}
+        {role === 'cashier' && (
+            <div className="fixed bottom-0 left-0 right-0 h-16 bg-card border-t border-border flex items-center justify-around z-50 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
+                <NavLink to="/pos" className={({ isActive }) => `flex flex-col items-center justify-center w-full h-full gap-1 ${isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}>
+                    <ShoppingCart className="w-6 h-6" />
+                    <span className="text-xs font-medium">Kassa</span>
+                </NavLink>
+                 <NavLink to="/sales" className={({ isActive }) => `flex flex-col items-center justify-center w-full h-full gap-1 ${isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}>
+                    <History className="w-6 h-6" />
+                    <span className="text-xs font-medium">Tarix</span>
+                </NavLink>
+                <NavLink to="/crm" className={({ isActive }) => `flex flex-col items-center justify-center w-full h-full gap-1 ${isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}>
+                    <Users className="w-6 h-6" />
+                    <span className="text-xs font-medium">Mijozlar</span>
+                </NavLink>
+                <button onClick={handleLogout} className="flex flex-col items-center justify-center w-full h-full gap-1 text-destructive hover:bg-destructive/10">
+                    <LogOut className="w-6 h-6" />
+                    <span className="text-xs font-medium">Chiqish</span>
+                </button>
+            </div>
+        )}
       </main>
     </div>
   );

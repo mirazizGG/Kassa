@@ -18,6 +18,7 @@ import TopProducts from '../components/TopProducts';
 
 const Dashboard = () => {
     const today = new Date().toISOString().split('T')[0];
+    const role = localStorage.getItem('role');
     const [filters, setFilters] = React.useState({
         employee_id: '',
         start_date: today,
@@ -56,28 +57,32 @@ const Dashboard = () => {
             iconBg: "bg-blue-100 dark:bg-blue-900/50",
             borderColor: "border-blue-200 dark:border-blue-800"
         },
+        ...(role === 'admin' ? [
+            {
+                title: "Sof Foyda",
+                value: stats?.netProfitFormatted || "0 so'm",
+                icon: TrendingUp,
+                description: "Daromad - Chiqimlar",
+                color: "text-emerald-600 dark:text-emerald-400",
+                bg: "bg-emerald-100/50 dark:bg-emerald-900/20",
+                iconBg: "bg-emerald-100 dark:bg-emerald-900/50",
+                borderColor: "border-emerald-200 dark:border-emerald-800"
+            }
+        ] : []),
+        ...(role === 'admin' || role === 'manager' ? [
+            {
+                title: "Xarajatlar",
+                value: `${stats?.totalExpenses?.toLocaleString() || 0} so'm`,
+                icon: Briefcase,
+                description: "Jami chiqimlar",
+                color: "text-amber-600 dark:text-amber-400",
+                bg: "bg-amber-100/50 dark:bg-amber-900/20",
+                iconBg: "bg-amber-100 dark:bg-amber-900/50",
+                borderColor: "border-amber-200 dark:border-amber-800"
+            }
+        ] : []),
         {
-            title: "Sof Foyda",
-            value: stats?.netProfitFormatted || "0 so'm",
-            icon: TrendingUp,
-            description: "Daromad - Chiqimlar",
-            color: "text-emerald-600 dark:text-emerald-400",
-            bg: "bg-emerald-100/50 dark:bg-emerald-900/20",
-            iconBg: "bg-emerald-100 dark:bg-emerald-900/50",
-            borderColor: "border-emerald-200 dark:border-emerald-800"
-        },
-        {
-            title: "Xarajatlar",
-            value: `${stats?.totalExpenses?.toLocaleString() || 0} so'm`,
-            icon: Briefcase,
-            description: "Jami chiqimlar",
-            color: "text-amber-600 dark:text-amber-400",
-            bg: "bg-amber-100/50 dark:bg-amber-900/20",
-            iconBg: "bg-amber-100 dark:bg-amber-900/50",
-            borderColor: "border-amber-200 dark:border-amber-800"
-        },
-        {
-            title: "Keltirilgan To'lov",
+            title: "Mijozlar",
             value: stats?.clientCount || "0",
             icon: Users,
             description: "Jami mijozlar",
@@ -124,42 +129,7 @@ const Dashboard = () => {
                 <TopProducts filters={filters} />
             </div>
 
-            {/* Low Stock Section */}
-            {stats?.lowStockItems?.length > 0 && (
-                <Card className="border-amber-200 bg-amber-50/30 dark:bg-amber-950/10">
-                    <CardHeader className="flex flex-row items-center justify-between">
-                        <div>
-                            <CardTitle className="flex items-center gap-2 text-amber-600">
-                                <AlertTriangle className="h-5 w-5" />
-                                Tugayotgan Mahsulotlar
-                            </CardTitle>
-                            <CardDescription>Ushbu mahsulotlar soni 5 tadan kam qolgan</CardDescription>
-                        </div>
-                        <Link to="/inventory">
-                           <Button variant="outline" size="sm" className="border-amber-200 hover:bg-amber-100">
-                               Hammasini ko'rish
-                           </Button>
-                        </Link>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                            {stats.lowStockItems.map((item) => (
-                                <div key={item.id} className="flex items-center justify-between p-3 rounded-xl border bg-white dark:bg-slate-900 shadow-sm">
-                                    <div className="space-y-1">
-                                        <p className="font-semibold text-sm">{item.name}</p>
-                                        <p className="text-xs text-muted-foreground">{item.sell_price.toLocaleString()} so'm</p>
-                                    </div>
-                                    <div className="text-right">
-                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
-                                            {item.stock} {item.unit}
-                                        </span>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </CardContent>
-                </Card>
-            )}
+            {/* Low Stock Section removed */}
             
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
                  <Card className="col-span-7 transition-all hover:shadow-md">
@@ -212,18 +182,20 @@ const Dashboard = () => {
                          </Link>
 
                          {/* Finance Link */}
-                         <Link to="/finance" className="group relative overflow-hidden rounded-2xl border bg-white p-6 shadow-sm transition-all hover:shadow-lg hover:-translate-y-1 hover:border-amber-200">
-                             <div className="absolute inset-0 bg-gradient-to-br from-amber-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                             <div className="relative flex flex-col items-center gap-3 text-center">
-                                 <div className="p-4 rounded-2xl bg-amber-100 text-amber-600 group-hover:bg-amber-600 group-hover:text-white transition-colors duration-300">
-                                     <Briefcase className="h-8 w-8" />
+                         {(role === 'admin' || role === 'manager') && (
+                             <Link to="/finance" className="group relative overflow-hidden rounded-2xl border bg-white p-6 shadow-sm transition-all hover:shadow-lg hover:-translate-y-1 hover:border-amber-200">
+                                 <div className="absolute inset-0 bg-gradient-to-br from-amber-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                                 <div className="relative flex flex-col items-center gap-3 text-center">
+                                     <div className="p-4 rounded-2xl bg-amber-100 text-amber-600 group-hover:bg-amber-600 group-hover:text-white transition-colors duration-300">
+                                         <Briefcase className="h-8 w-8" />
+                                     </div>
+                                     <div className="space-y-1">
+                                         <h3 className="font-bold text-lg text-gray-900">Hisobotlar</h3>
+                                         <p className="text-sm text-muted-foreground">Moliya va kirim-chiqim</p>
+                                     </div>
                                  </div>
-                                 <div className="space-y-1">
-                                     <h3 className="font-bold text-lg text-gray-900">Hisobotlar</h3>
-                                     <p className="text-sm text-muted-foreground">Moliya va kirim-chiqim</p>
-                                 </div>
-                             </div>
-                         </Link>
+                             </Link>
+                         )}
 
                     </CardContent>
                  </Card>

@@ -10,8 +10,13 @@ import {
     MoreHorizontal,
     Trash,
     Users,
+    User,
     CheckSquare,
-    Calendar
+    Calendar,
+    TrendingUp,
+    BarChart3,
+    Ban,
+    UserCheck
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -45,6 +50,8 @@ import {
 import { toast } from "sonner";
 
 const Employees = () => {
+    const role = localStorage.getItem('role');
+    const currentUserId = parseInt(localStorage.getItem('userId')); // Assuming userId is stored
     const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
     const [isEmployeeModalOpen, setIsEmployeeModalOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -84,6 +91,14 @@ const Employees = () => {
         queryKey: ['tasks'],
         queryFn: async () => {
             const res = await api.get('/tasks');
+            return res.data;
+        }
+    });
+
+    const { data: performance = [], isLoading: isPerformanceLoading } = useQuery({
+        queryKey: ['employee-performance'],
+        queryFn: async () => {
+            const res = await api.get('/finance/employee-performance');
             return res.data;
         }
     });
@@ -183,9 +198,10 @@ const Employees = () => {
             </div>
 
             <Tabs defaultValue="list" className="w-full">
-                <TabsList className="grid w-full grid-cols-2 max-w-[400px]">
+                <TabsList className="grid w-full grid-cols-3 max-w-[500px]">
                     <TabsTrigger value="list" className="gap-2"><Users className="w-4 h-4"/> Xodimlar</TabsTrigger>
                     <TabsTrigger value="tasks" className="gap-2"><CheckSquare className="w-4 h-4"/> Vazifalar</TabsTrigger>
+                    <TabsTrigger value="performance" className="gap-2"><TrendingUp className="w-4 h-4"/> Samaradorlik</TabsTrigger>
                 </TabsList>
 
                 {/* --- EMPLOYEES LIST CONTENT --- */}
@@ -245,8 +261,8 @@ const Employees = () => {
                                                     <SelectValue placeholder="Lavozimni tanlang" />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                    <SelectItem value="admin">Admin</SelectItem>
-                                                    <SelectItem value="manager">Manager</SelectItem>
+                                                    {role === 'admin' && <SelectItem value="admin">Admin</SelectItem>}
+                                                    {role === 'admin' && <SelectItem value="manager">Manager</SelectItem>}
                                                     <SelectItem value="cashier">Kassir</SelectItem>
                                                 </SelectContent>
                                             </Select>
@@ -305,21 +321,42 @@ const Employees = () => {
                                                                 </Button>
                                                             </DropdownMenuTrigger>
                                                             <DropdownMenuContent align="end">
-                                                                <DropdownMenuItem onClick={() => {
-                                                                    setEditingEmployee({ ...emp, password: '' });
-                                                                    setIsEditModalOpen(true);
-                                                                }}>
-                                                                    <UserPlus className="w-4 h-4 mr-2" /> Tahrirlash
-                                                                </DropdownMenuItem>
-                                                                <DropdownMenuItem 
-                                                                    className="text-rose-500 focus:text-rose-500"
-                                                                    onClick={() => {
-                                                                        setDeletingEmployee(emp);
-                                                                        setIsDeleteConfirmOpen(true);
-                                                                    }}
-                                                                >
-                                                                    <Trash className="w-4 h-4 mr-2" /> O'chirish
-                                                                </DropdownMenuItem>
+                                                                {((role === 'admin' && emp.id !== currentUserId) || (role === 'manager' && emp.role === 'cashier')) && (
+                                                                    <DropdownMenuItem onClick={() => {
+                                                                        setEditingEmployee({ ...emp, password: '' });
+                                                                        setIsEditModalOpen(true);
+                                                                    }}>
+                                                                        <UserPlus className="w-4 h-4 mr-2" /> Tahrirlash
+                                                                    </DropdownMenuItem>
+                                                                )}
+                                                                {((role === 'admin' && emp.id !== currentUserId) || (role === 'manager' && emp.role === 'cashier')) && (
+                                                                    <DropdownMenuItem 
+                                                                        onClick={() => {
+                                                                            updateEmployeeMutation.mutate({ 
+                                                                                id: emp.id, 
+                                                                                is_active: !emp.is_active 
+                                                                            });
+                                                                        }}
+                                                                        className={emp.is_active ? "text-amber-600 focus:text-amber-600 font-medium" : "text-emerald-600 focus:text-emerald-600 font-medium"}
+                                                                    >
+                                                                        {emp.is_active ? (
+                                                                            <><Ban className="w-4 h-4 mr-2" /> Bloklash</>
+                                                                        ) : (
+                                                                            <><UserCheck className="w-4 h-4 mr-2" /> Faollashtirish</>
+                                                                        )}
+                                                                    </DropdownMenuItem>
+                                                                )}
+                                                                {role === 'admin' && (
+                                                                    <DropdownMenuItem 
+                                                                        className="text-rose-500 focus:text-rose-500"
+                                                                        onClick={() => {
+                                                                            setDeletingEmployee(emp);
+                                                                            setIsDeleteConfirmOpen(true);
+                                                                        }}
+                                                                    >
+                                                                        <Trash className="w-4 h-4 mr-2" /> O'chirish
+                                                                    </DropdownMenuItem>
+                                                                )}
                                                             </DropdownMenuContent>
                                                         </DropdownMenu>
                                                     </TableCell>
@@ -411,6 +448,65 @@ const Employees = () => {
                         ))}
                     </div>
                 </TabsContent>
+
+                {/* --- PERFORMANCE CONTENT --- */}
+                <TabsContent value="performance" className="mt-6">
+                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                        {isPerformanceLoading ? (
+                            <p>Yuklanmoqda...</p>
+                        ) : performance.map(emp => (
+                            <Card key={emp.id} className="border-none shadow-md bg-background/60 backdrop-blur-xl transition-all hover:shadow-lg">
+                                <CardHeader className="pb-2">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                                            <User className="w-5 h-5 text-primary" />
+                                        </div>
+                                        <div>
+                                            <CardTitle className="text-base font-bold">{emp.full_name || emp.username}</CardTitle>
+                                            <CardDescription className="text-[10px] uppercase font-semibold">{emp.role}</CardDescription>
+                                        </div>
+                                    </div>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="p-3 rounded-xl bg-orange-500/10 border border-orange-500/20">
+                                            <div className="text-[10px] text-orange-600 font-bold uppercase mb-1">Savdolar Soni</div>
+                                            <div className="text-xl font-bold">{emp.sale_count}</div>
+                                        </div>
+                                        <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                                            <div className="text-[10px] text-emerald-600 font-bold uppercase mb-1">Jami Savdo</div>
+                                            <div className="text-xl font-bold truncate" title={`${emp.sale_total.toLocaleString()} so'm`}>
+                                                {emp.sale_total >= 1000000 
+                                                    ? `${(emp.sale_total / 1000000).toFixed(1)}M` 
+                                                    : emp.sale_total.toLocaleString()}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="space-y-2">
+                                        <div className="flex justify-between text-xs font-medium">
+                                            <span className="text-muted-foreground">Vazifalar bajarilishi</span>
+                                            <span>{emp.completed_tasks} / {emp.total_tasks}</span>
+                                        </div>
+                                        <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
+                                            <div 
+                                                className="h-full bg-primary transition-all duration-500" 
+                                                style={{ width: `${emp.total_tasks > 0 ? (emp.completed_tasks / emp.total_tasks) * 100 : 0}%` }}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center justify-between pt-2 border-t text-[10px] text-muted-foreground">
+                                        <div className="flex items-center gap-1">
+                                            <BarChart3 className="w-3 h-3" />
+                                            Oxirgi 30 kunlik ko'rsatkich
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        ))}
+                    </div>
+                </TabsContent>
             </Tabs>
 
             {/* --- EDIT EMPLOYEE MODAL --- */}
@@ -460,7 +556,11 @@ const Employees = () => {
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="grid gap-2">
                                         <Label>Lavozim</Label>
-                                        <Select value={editingEmployee.role} onValueChange={(v) => setEditingEmployee({...editingEmployee, role: v})}>
+                                        <Select 
+                                            value={editingEmployee.role} 
+                                            onValueChange={(v) => setEditingEmployee({...editingEmployee, role: v})}
+                                            disabled={editingEmployee.id === currentUserId || (role === 'manager' && editingEmployee.role !== 'cashier')}
+                                        >
                                             <SelectTrigger><SelectValue /></SelectTrigger>
                                             <SelectContent>
                                                 <SelectItem value="admin">Admin</SelectItem>
@@ -468,16 +568,32 @@ const Employees = () => {
                                                 <SelectItem value="cashier">Kassir</SelectItem>
                                             </SelectContent>
                                         </Select>
+                                        {editingEmployee.id === currentUserId && (
+                                            <span className="text-[10px] text-amber-600 font-medium">O'z rolingizni o'zgartira olmaysiz</span>
+                                        )}
+                                        {role === 'manager' && editingEmployee.role !== 'cashier' && (
+                                            <span className="text-[10px] text-amber-600 font-medium">Faqat kassirlarni boshqara olasiz</span>
+                                        )}
                                     </div>
                                     <div className="grid gap-2">
                                         <Label>Status</Label>
-                                        <Select value={editingEmployee.is_active ? "active" : "blocked"} onValueChange={(v) => setEditingEmployee({...editingEmployee, is_active: v === "active"})}>
+                                        <Select 
+                                            value={editingEmployee.is_active ? "active" : "blocked"} 
+                                            onValueChange={(v) => setEditingEmployee({...editingEmployee, is_active: v === "active"})}
+                                            disabled={editingEmployee.id === currentUserId || (role === 'manager' && editingEmployee.role !== 'cashier')}
+                                        >
                                             <SelectTrigger><SelectValue /></SelectTrigger>
                                             <SelectContent>
                                                 <SelectItem value="active">Aktiv</SelectItem>
                                                 <SelectItem value="blocked">Bloklangan</SelectItem>
                                             </SelectContent>
                                         </Select>
+                                        {editingEmployee.id === currentUserId && (
+                                            <span className="text-[10px] text-amber-600 font-medium">O'zingizni bloklay olmaysiz</span>
+                                        )}
+                                        {role === 'manager' && editingEmployee.role !== 'cashier' && (
+                                            <span className="text-[10px] text-amber-600 font-medium">Faqat kassirlarni bloklay olasiz</span>
+                                        )}
                                     </div>
                                 </div>
                             </div>

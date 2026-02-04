@@ -11,7 +11,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 
 from sqlalchemy import select
-from database import SessionLocal as AsyncSessionLocal, Client
+from database import SessionLocal as AsyncSessionLocal, Client, Employee
 from datetime import datetime
 import os
 from dotenv import load_dotenv
@@ -28,10 +28,13 @@ class Registration(StatesGroup):
 dp = Dispatcher(storage=MemoryStorage())
 
 # --- MENU ---
-def get_main_menu():
+def get_main_menu(role="client"):
     kb = [
         [KeyboardButton(text="💰 Balansim")]
     ]
+    if role == "admin":
+        kb.append([KeyboardButton(text="Ma'lumotlar 📦")])
+    
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
 # --- COMMANDS ---
@@ -45,9 +48,14 @@ async def command_start_handler(message: Message, state: FSMContext) -> None:
         client = result.scalars().first()
 
         if client:
+            # Check if employee for role-based menu
+            role_result = await db.execute(select(Employee).where(Employee.telegram_id == telegram_id))
+            employee = role_result.scalars().first()
+            role = employee.role if employee else "client"
+            
             await message.answer(
                 f"Salom, {client.name}! 👋\nSiz avval ro'yxatdan o'tgansiz.",
-                reply_markup=get_main_menu()
+                reply_markup=get_main_menu(role)
             )
             await state.clear()
             return
@@ -98,7 +106,13 @@ async def name_handler(message: Message, state: FSMContext) -> None:
             existing_client.name = full_name
             existing_client.telegram_id = message.from_user.id
             await db.commit()
-            await message.answer(f"Siz avval ro'yxatdan o'tgansiz. Ma'lumotlaringiz yangilandi! ✅", reply_markup=get_main_menu())
+            
+            # Get user role for menu
+            role_result = await db.execute(select(Employee).where(Employee.telegram_id == message.from_user.id))
+            employee = role_result.scalars().first()
+            role = employee.role if employee else "client"
+            
+            await message.answer(f"Siz avval ro'yxatdan o'tgansiz. Ma'lumotlaringiz yangilandi! ✅", reply_markup=get_main_menu(role))
         else:
             new_client = Client(name=full_name, phone=phone, telegram_id=message.from_user.id, balance=0)
             db.add(new_client)
@@ -133,6 +147,25 @@ async def balance_handler(message: Message) -> None:
             await message.answer(text)
         else:
             await message.answer("Siz hali ro'yxatdan o'tmagansiz. /start ni bosing.")
+
+# --- ADMIN: MA'LUMOTLAR (BACKUP) ---
+@dp.message(F.text == "Ma'lumotlar 📦")
+async def admin_backup_handler(message: Message) -> None:
+    telegram_id = message.from_user.id
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(Employee).where(Employee.telegram_id == telegram_id, Employee.role == "admin"))
+        admin = result.scalars().first()
+
+        if not admin:
+            await message.answer("Bu tugma faqat adminlar uchun!")
+            return
+
+        await message.answer("Tayyorlanmoqda... ⏳")
+        try:
+            from utils.backup import send_backup_to_telegram
+            await send_backup_to_telegram(bot, telegram_id)
+        except Exception as e:
+            await message.answer(f"Xatolik yuz berdi: {e}")
 
 # --- QARZ ESLATMALARI ---
 async def check_debts(bot: Bot):
