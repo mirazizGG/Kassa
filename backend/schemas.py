@@ -9,6 +9,7 @@ class Token(BaseModel):
     role: str
     permissions: str
     username: str
+    user_id: Optional[int] = None
 
 class TokenData(BaseModel):
     username: Optional[str] = None
@@ -59,7 +60,7 @@ class ProductBase(BaseModel):
     barcode: Optional[str] = None
     buy_price: float
     sell_price: float
-    stock: int = 0
+    stock: float = 0
     unit: str = "dona"
     category_id: Optional[int] = None
     is_favorite: bool = False
@@ -73,7 +74,7 @@ class ProductOut(ProductBase):
 
 class SupplyBase(BaseModel):
     product_id: int
-    quantity: int
+    quantity: float
     buy_price: float
 
 class SupplyCreate(SupplyBase):
@@ -103,7 +104,7 @@ class ClientOut(ClientBase):
 # --- POS SCHEMAS ---
 class SaleItemBase(BaseModel):
     product_id: int
-    quantity: int
+    quantity: float
     price: float
 
 class SaleItemOut(SaleItemBase):
@@ -158,6 +159,9 @@ class ShiftOut(BaseModel):
     closed_at: Optional[datetime] = None
     status: str
     note: Optional[str] = None
+    total_cash: Optional[float] = 0
+    total_card: Optional[float] = 0
+    total_debt: Optional[float] = 0
     model_config = ConfigDict(from_attributes=True)
 
 # --- FINANCE SCHEMAS ---
@@ -214,6 +218,7 @@ class StoreSettingBase(BaseModel):
     header_text: Optional[str] = None
     footer_text: Optional[str] = None
     logo_url: Optional[str] = None
+    low_stock_threshold: Optional[int] = 5
 
 class StoreSettingOut(StoreSettingBase):
     id: int

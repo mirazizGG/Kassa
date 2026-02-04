@@ -1,1 +1,1 @@
-from . import auth, inventory, pos, crm, finance, tasks, sales, audit
+from . import auth, inventory, pos, crm, finance, tasks, sales, audit, settings

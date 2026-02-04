@@ -39,7 +39,8 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
         "token_type": "bearer",
         "role": user.role,
         "permissions": user.permissions,
-        "username": user.username
+        "username": user.username,
+        "user_id": user.id
     }
 
 @router.post("/employees", response_model=EmployeeOut)
@@ -50,6 +51,9 @@ async def create_employee(
 ):
     if current_user.role not in ["admin", "manager"]:
         raise HTTPException(status_code=403, detail="Only admins and managers can create employees")
+    
+    if current_user.role == "manager" and user.role != "cashier":
+        raise HTTPException(status_code=403, detail="Menejer faqat kassir yarata oladi")
     
     hashed_password = get_password_hash(user.password)
     db_user = Employee(
@@ -73,11 +77,17 @@ async def get_employees(
     current_user: Employee = Depends(get_current_user), 
     db: AsyncSession = Depends(get_db)
 ):
-    if current_user.role not in ["admin", "manager"]:
-        raise HTTPException(status_code=403, detail="Only admins and managers can view employee list")
+    if current_user.role not in ["admin", "manager", "cashier"]:
+        raise HTTPException(status_code=403, detail="Ruxsat berilmagan")
     
     from sqlalchemy import select
-    result = await db.execute(select(Employee))
+    query = select(Employee)
+    if current_user.role == "manager":
+        query = query.where(Employee.role != "admin")
+    elif current_user.role == "cashier":
+        query = query.where(Employee.id == current_user.id)
+        
+    result = await db.execute(query)
     return result.scalars().all()
 @router.patch("/employees/{employee_id}", response_model=EmployeeOut)
 async def update_employee(
@@ -86,8 +96,9 @@ async def update_employee(
     current_user: Employee = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    if current_user.role != "admin" and current_user.id != employee_id:
-        raise HTTPException(status_code=403, detail="Not authorized to update this employee")
+    # Faqat Admin va Manager boshqa xodimlarni o'zgartira oladi.
+    if current_user.role not in ["admin", "manager"] and current_user.id != employee_id:
+        raise HTTPException(status_code=403, detail="Ruxsat berilmagan. Faqat admin va menejerlar xodimlarni o'zgartirishi mumkin.")
     
     from sqlalchemy import select
     result = await db.execute(select(Employee).where(Employee.id == employee_id))
@@ -101,6 +112,22 @@ async def update_employee(
     if "password" in update_data and update_data["password"]:
         update_data["hashed_password"] = get_password_hash(update_data.pop("password"))
     
+    if "is_active" in update_data and employee_id == current_user.id:
+        raise HTTPException(status_code=400, detail="O'zingizni o'zingiz bloklay olmaysiz")
+    
+    if "is_active" in update_data and current_user.role == "manager" and db_user.role != "cashier":
+        raise HTTPException(status_code=403, detail="Menejer faqat kassirlarni bloklay oladi")
+
+    if "role" in update_data and employee_id == current_user.id and update_data["role"] != db_user.role:
+        raise HTTPException(status_code=400, detail="O'z rolingizni o'zingiz o'zgartira olmaysiz")
+
+    if current_user.role == "manager" and db_user.role != "cashier":
+         # If a manager tries to change ANYTHING on a non-cashier
+         raise HTTPException(status_code=403, detail="Menejer faqat kassirlarni tahrirlay oladi")
+
+    if "role" in update_data and current_user.role == "manager" and update_data["role"] != "cashier":
+        raise HTTPException(status_code=403, detail="Menejer faqat kassir rolini bera oladi")
+
     for key, value in update_data.items():
         setattr(db_user, key, value)
     
@@ -128,5 +155,13 @@ async def delete_employee(
         raise HTTPException(status_code=404, detail="Employee not found")
         
     await db.delete(db_user)
+    
+    # Audit Log
+    try:
+        from routers.audit import log_action
+        await log_action(db, current_user.id, "DELETE_EMPLOYEE", f"Xodim o'chirildi: {db_user.username} (ID: {employee_id})")
+    except:
+        pass
+
     await db.commit()
     return None

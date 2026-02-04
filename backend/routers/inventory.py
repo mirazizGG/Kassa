@@ -124,6 +124,14 @@ async def delete_product(
         raise HTTPException(status_code=404, detail="Product not found")
 
     await db.delete(db_product)
+    
+    # Audit Log
+    try:
+        from routers.audit import log_action
+        await log_action(db, current_user.id, "DELETE_PRODUCT", f"Mahsulot o'chirildi: {db_product.name} (ID: {product_id})")
+    except:
+        pass
+
     await db.commit()
     return {"status": "success", "message": "Product deleted"}
 
@@ -147,3 +155,22 @@ async def create_category(
     await db.commit()
     await db.refresh(db_category)
     return db_category
+@router.post("/products/{product_id}/toggle-favorite", response_model=ProductOut)
+async def toggle_favorite(
+    product_id: int,
+    current_user: Employee = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    if current_user.role not in ["admin", "manager"]:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+
+    result = await db.execute(select(Product).where(Product.id == product_id))
+    db_product = result.scalars().first()
+
+    if not db_product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    db_product.is_favorite = not db_product.is_favorite
+    await db.commit()
+    await db.refresh(db_product)
+    return db_product

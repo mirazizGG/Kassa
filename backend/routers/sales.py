@@ -4,7 +4,7 @@ from sqlalchemy import select, update
 from typing import List, Optional
 from datetime import datetime
 
-from database import get_db, Product, Sale, SaleItem, Employee, Client
+from database import get_db, Product, Sale, SaleItem, Employee, Client, StoreSetting
 from schemas import SaleCreate, SaleOut
 from core import get_current_user
 
@@ -46,11 +46,11 @@ async def create_sale(
         if not product:
             raise HTTPException(status_code=404, detail=f"Product {item.product_id} not found")
         
-        if product.stock < item.quantity:
-            raise HTTPException(status_code=400, detail=f"Not enough stock for {product.name}. Available: {product.stock}")
+        # if product.stock < item.quantity:
+        #     raise HTTPException(status_code=400, detail=f"Not enough stock for {product.name}. Available: {product.stock}")
         
         # Deduct stock
-        product.stock -= item.quantity
+        # product.stock -= item.quantity
         total_amount_check += item.quantity * item.price
         
         # Prepare item data for DB
@@ -89,6 +89,13 @@ async def create_sale(
     
     await db.commit()
     
+    # 6. Safety Backup (Automatic)
+    try:
+        from utils.backup import create_backup
+        create_backup()
+    except:
+        pass
+    
     # Reload with relationships for response_model
     result = await db.execute(
         select(Sale)
@@ -109,10 +116,16 @@ async def get_sales(
     employee_id: Optional[int] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
+    current_user: Employee = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    # Enforce RBAC
+    if current_user.role == "cashier":
+        employee_id = current_user.id
+        
     start_date = parse_date(start_date, datetime.min.time())
     end_date = parse_date(end_date, datetime.max.time())
+    
     query = (
         select(Sale)
         .options(
@@ -123,6 +136,21 @@ async def get_sales(
     )
     if employee_id:
         query = query.where(Sale.cashier_id == employee_id)
+        
+    # Manager restriction: Filter out Admin sales if viewing 'all' or specific admin
+    if current_user.role == "manager":
+         # Join with Employee to check role of the cashier
+         # This is a bit complex for a simple list, but let's just do a simple check if employee_id is provided
+         if employee_id:
+             target_emp = await db.scalar(select(Employee).where(Employee.id == employee_id))
+             if target_emp and target_emp.role == "admin":
+                 # Return empty or error? Empty seems safer for list view
+                 return []
+         else:
+             # If listing all, exclude sales made by admins
+             # We need to join with Employee table to filter by role
+             query = query.join(Employee, Sale.cashier_id == Employee.id).where(Employee.role != "admin")
+
     if start_date:
         query = query.where(Sale.created_at >= start_date)
     if end_date:

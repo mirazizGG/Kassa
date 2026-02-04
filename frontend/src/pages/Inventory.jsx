@@ -14,7 +14,8 @@ import {
     Loader2,
     Truck,
     FolderPlus,
-    History
+    History,
+    Star
 } from 'lucide-react';
 import { format } from "date-fns";
 import {
@@ -111,6 +112,16 @@ const Inventory = () => {
         enabled: isHistoryOpen
     });
 
+    const { data: settings } = useQuery({
+        queryKey: ['settings'],
+        queryFn: async () => {
+            const res = await api.get('/settings');
+            return res.data;
+        }
+    });
+
+    const threshold = settings?.low_stock_threshold ?? 5;
+
     const productMutation = useMutation({
         mutationFn: (data) => editingProduct
             ? api.put(`/inventory/products/${editingProduct.id}`, data)
@@ -161,6 +172,17 @@ const Inventory = () => {
         }
     });
 
+    const favoriteMutation = useMutation({
+        mutationFn: (productId) => api.post(`/inventory/products/${productId}/toggle-favorite`),
+        onSuccess: () => {
+            queryClient.invalidateQueries(['products']);
+            toast.success("Mahsulot holati yangilandi");
+        },
+        onError: (err) => {
+            toast.error("Xatolik!", { description: err.response?.data?.detail || "Amalni bajarib bo'lmadi" });
+        }
+    });
+
     const handleCategorySubmit = (e) => {
         e.preventDefault();
         categoryMutation.mutate(newCategoryName);
@@ -171,7 +193,7 @@ const Inventory = () => {
         supplyMutation.mutate({
             ...supplyData,
             product_id: parseInt(supplyData.product_id),
-            quantity: parseInt(supplyData.quantity),
+            quantity: parseFloat(supplyData.quantity),
             buy_price: parseFloat(supplyData.buy_price)
         });
     };
@@ -284,76 +306,7 @@ const Inventory = () => {
 
 
 
-                    <Dialog open={isSupplyModalOpen} onOpenChange={setIsSupplyModalOpen}>
-                        <DialogTrigger asChild>
-                            <Button variant="warning" className="gap-2 ml-2 shadow-lg shadow-orange-500/20">
-                                <Truck className="w-4 h-4" /> Kirim Qilish
-                            </Button>
-                        </DialogTrigger>
-                        <DialogContent className="sm:max-w-[500px]">
-                            <form onSubmit={handleSupplySubmit}>
-                                <DialogHeader>
-                                    <DialogTitle>Mahsulot Kirimi</DialogTitle>
-                                    <DialogDescription>
-                                        Omborga yangi tovar kelganda kirim qiling.
-                                    </DialogDescription>
-                                </DialogHeader>
-                                <div className="grid gap-4 py-4">
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="supply-product">Mahsulot</Label>
-                                        <Select
-                                            value={supplyData.product_id?.toString()}
-                                            onValueChange={(val) => {
-                                                const prod = products.find(p => p.id.toString() === val);
-                                                setSupplyData(prev => ({
-                                                    ...prev,
-                                                    product_id: val,
-                                                    buy_price: prod ? prod.buy_price : 0
-                                                }));
-                                            }}
-                                        >
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Mahsulotni tanlang..." />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {products.map(p => (
-                                                    <SelectItem key={p.id} value={p.id.toString()}>
-                                                        {p.name}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="supply-qty">Soni</Label>
-                                        <Input
-                                            id="supply-qty"
-                                            type="number"
-                                            value={supplyData.quantity}
-                                            onChange={(e) => setSupplyData({ ...supplyData, quantity: e.target.value })}
-                                            required
-                                        />
-                                    </div>
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="supply-price">Kelish Narxi (dona)</Label>
-                                        <Input
-                                            id="supply-price"
-                                            type="number"
-                                            value={supplyData.buy_price}
-                                            onChange={(e) => setSupplyData({ ...supplyData, buy_price: e.target.value })}
-                                            required
-                                        />
-                                    </div>
-                                </div>
-                                <DialogFooter>
-                                    <Button type="submit" disabled={supplyMutation.isPending} variant="warning">
-                                        {supplyMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                        Kirim Qilish
-                                    </Button>
-                                </DialogFooter>
-                            </form>
-                        </DialogContent>
-                    </Dialog>
+                    {/* Supply button removed */}
 
                     <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
                         <DialogTrigger asChild>
@@ -459,13 +412,24 @@ const Inventory = () => {
                                     <Label htmlFor="sell_price" className="text-right">Sotish Narxi</Label>
                                     <Input id="sell_price" type="number" className="col-span-3" value={formData.sell_price} onChange={(e) => setFormData({ ...formData, sell_price: parseFloat(e.target.value) })} required />
                                 </div>
-                                <div className="grid grid-cols-4 items-center gap-4">
-                                    <Label htmlFor="stock" className="text-right">Qoldiq</Label>
-                                    <Input id="stock" type="number" className="col-span-3" value={formData.stock} onChange={(e) => setFormData({ ...formData, stock: parseInt(e.target.value) })} required />
-                                </div>
+                                {/* Stock input removed */}
                                 <div className="grid grid-cols-4 items-center gap-4">
                                     <Label htmlFor="unit" className="text-right">Birlik</Label>
-                                    <Input id="unit" className="col-span-3" value={formData.unit} onChange={(e) => setFormData({ ...formData, unit: e.target.value })} placeholder="dona, kg, litr..." required />
+                                    <Select
+                                        value={formData.unit}
+                                        onValueChange={(val) => setFormData({ ...formData, unit: val })}
+                                    >
+                                        <SelectTrigger className="col-span-3">
+                                            <SelectValue placeholder="Birlikni tanlang" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="dona">dona</SelectItem>
+                                            <SelectItem value="kg">kg (vaznli)</SelectItem>
+                                            <SelectItem value="litr">litr (vaznli)</SelectItem>
+                                            <SelectItem value="metr">metr</SelectItem>
+                                            <SelectItem value="pachka">pachka</SelectItem>
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                             </div>
                             <DialogFooter>
@@ -515,8 +479,6 @@ const Inventory = () => {
                                     <SelectItem value="name-asc">Nomi (A-Z)</SelectItem>
                                     <SelectItem value="price-asc">Arzonlari oldin</SelectItem>
                                     <SelectItem value="price-desc">Qimmatlari oldin</SelectItem>
-                                    <SelectItem value="stock-asc">Kam qolganlari</SelectItem>
-                                    <SelectItem value="stock-desc">Ko'p qolganlari</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
@@ -530,7 +492,6 @@ const Inventory = () => {
                                 <TableHead className="h-12">Shtrix Kod</TableHead>
                                 <TableHead className="h-12">Kategoriya</TableHead>
                                 <TableHead className="h-12">Sotish Narxi</TableHead>
-                                <TableHead className="h-12">Qoldiq</TableHead>
                                 <TableHead className="h-12">Birlik</TableHead>
                                 <TableHead className="pr-8 text-right h-12">Amallar</TableHead>
                             </TableRow>
@@ -550,7 +511,22 @@ const Inventory = () => {
                                 </TableRow>
                             ) : filteredProducts.map((product) => (
                                 <TableRow key={product.id} className="group hover:bg-muted/50 transition-colors border-b-border/50 odd:bg-muted/10">
-                                    <TableCell className="pl-8 font-medium text-foreground">{product.name}</TableCell>
+                                    <TableCell className="pl-8 font-medium text-foreground">
+                                        <div className="flex items-center gap-2">
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className={cn(
+                                                    "w-6 h-6 p-0 hover:bg-transparent",
+                                                    product.is_favorite ? "text-amber-500 fill-amber-500" : "text-muted-foreground/30 hover:text-amber-500/50"
+                                                )}
+                                                onClick={() => favoriteMutation.mutate(product.id)}
+                                            >
+                                                <Star className="w-4 h-4" />
+                                            </Button>
+                                            {product.name}
+                                        </div>
+                                    </TableCell>
                                     <TableCell className="text-muted-foreground font-mono text-xs">{product.barcode || '-'}</TableCell>
                                     <TableCell>
                                         <Badge variant="outline" className="font-normal bg-background/50">
@@ -559,17 +535,6 @@ const Inventory = () => {
                                     </TableCell>
                                     <TableCell className="font-semibold text-foreground">
                                         {product.sell_price.toLocaleString()} <span className="text-[10px] text-muted-foreground font-medium uppercase">so'm</span>
-                                    </TableCell>
-                                    <TableCell>
-                                        <Badge
-                                            variant={product.stock < 5 ? "destructive" : "secondary"}
-                                            className={cn(
-                                                "font-semibold px-2 py-0.5",
-                                                product.stock >= 5 && "bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border-emerald-500/20"
-                                            )}
-                                        >
-                                            {product.stock}
-                                        </Badge>
                                     </TableCell>
                                     <TableCell className="text-muted-foreground">{product.unit}</TableCell>
                                     <TableCell className="pr-8 text-right">
@@ -605,12 +570,12 @@ const Inventory = () => {
                 </CardContent>
             </Card>
 
-            {filteredProducts.some(p => p.stock < 5) && (
+            {filteredProducts.some(p => p.stock < threshold) && (
                 <div className="bg-amber-500/10 dark:bg-amber-500/20 border border-amber-500/30 rounded-xl p-4 flex items-start gap-3 shadow-sm">
                     <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-500 mt-0.5" />
                     <div>
                         <h4 className="font-bold text-amber-900 dark:text-amber-300">Past Qoldiq Ogohlantirishi</h4>
-                        <p className="text-sm text-amber-700 dark:text-amber-400">Ba'zi mahsulotlar qoldig'i 5 tadan kam qolgan. Omboringizni to'ldirishingizni tavsiya qilamiz.</p>
+                        <p className="text-sm text-amber-700 dark:text-amber-400">Ba'zi mahsulotlar qoldig'i {threshold} tadan kam qolgan. Omboringizni to'ldirishingizni tavsiya qilamiz.</p>
                     </div>
                 </div>
             )}

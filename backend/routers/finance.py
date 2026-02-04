@@ -1,14 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func, case
 from typing import List, Optional
 from datetime import datetime, timezone, timedelta
 
-from database import get_db, Expense, Payment, Employee, Client, Product, Sale, SaleItem
+from database import get_db, Expense, Payment, Employee, Client, Product, Sale, SaleItem, StoreSetting, Task
 from schemas import ExpenseCreate, ExpenseOut, PaymentCreate
 from core import get_current_user
-from sqlalchemy import func
+# from sqlalchemy import func # Already imported above
 from sqlalchemy.orm import joinedload
+import io
 
 router = APIRouter(prefix="/finance", tags=["finance"])
 
@@ -34,8 +35,24 @@ async def get_stats(
     employee_id: Optional[int] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
+    current_user: Employee = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    # Allow admin, manager, and cashier (but cashier is restricted)
+    if current_user.role not in ["admin", "manager", "cashier"]:
+         raise HTTPException(status_code=403, detail="Ruxsat berilmagan")
+    
+    # CASHIER RESTRICTION: Can only see their own stats
+    if current_user.role == "cashier":
+        employee_id = current_user.id
+    
+    # RBAC v3: Manager cannot spy on Admin stats
+    if employee_id and current_user.role == "manager":
+        # Check if the target employee is an admin
+        target_emp_res = await db.execute(select(Employee).where(Employee.id == employee_id))
+        target_emp = target_emp_res.scalars().first()
+        if target_emp and target_emp.role == "admin":
+             raise HTTPException(status_code=403, detail="Menejer admin hisobotini ko'ra olmaydi")
     start_date = parse_date(start_date, datetime.min.time())
     end_date = parse_date(end_date, datetime.max.time())
     # 1. Daily Sales or custom range
@@ -84,7 +101,13 @@ async def get_stats(
     expense_result = await db.execute(expense_query)
     total_expenses = expense_result.scalar() or 0
 
-    net_profit = sales_total - total_cost - total_expenses
+    # If manager, hide sensitive profit/cost data
+    # If manager or cashier, hide sensitive profit/cost data
+    if current_user.role in ["manager", "cashier"]:
+        total_cost = 0
+        net_profit = 0
+    else:
+        net_profit = sales_total - total_cost - total_expenses
 
     # 2. Client Count
     client_query = select(func.count(Client.id))
@@ -92,7 +115,11 @@ async def get_stats(
     client_count = client_result.scalar() or 0
     
     # 3. Low Stock Items List
-    stock_query = select(Product).where(Product.stock < 5).limit(10)
+    settings_result = await db.execute(select(StoreSetting))
+    settings = settings_result.scalars().first()
+    threshold = settings.low_stock_threshold if settings else 5
+
+    stock_query = select(Product).where(Product.stock <= threshold).limit(10)
     stock_result = await db.execute(stock_query)
     low_stock_items = stock_result.scalars().all()
     
@@ -122,11 +149,167 @@ async def get_stats(
         "totalProducts": str(total_products)
     }
 
+@router.get("/expenses-by-category")
+async def get_expenses_by_category(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    current_user: Employee = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    if current_user.role not in ["admin", "manager"]:
+        raise HTTPException(status_code=403, detail="Ruxsat berilmagan")
+    start_date = parse_date(start_date, datetime.min.time())
+    end_date = parse_date(end_date, datetime.max.time())
+    
+    if not start_date:
+        start_date = datetime.now(timezone.utc) - timedelta(days=30)
+    if not end_date:
+        end_date = datetime.now(timezone.utc)
+        
+    query = (
+        select(Expense.category, func.sum(Expense.amount))
+        .where(Expense.created_at >= start_date, Expense.created_at <= end_date)
+        .group_by(Expense.category)
+    )
+    result = await db.execute(query)
+    return [{"category": row[0], "amount": row[1]} for row in result.all()]
+
+@router.get("/employee-performance")
+async def get_employee_performance(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    current_user: Employee = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get sales and task statistics for all employees (Admin/Manager only)"""
+    if current_user.role not in ["admin", "manager"]:
+        raise HTTPException(status_code=403, detail="Ruxsat berilmagan")
+        
+    start_date_parsed = parse_date(start_date, datetime.min.time())
+    end_date_parsed = parse_date(end_date, datetime.max.time())
+    
+    if not start_date_parsed:
+        start_date_parsed = datetime.now(timezone.utc) - timedelta(days=30)
+    if not end_date_parsed:
+        end_date_parsed = datetime.now(timezone.utc)
+        
+    # Get employees (Managers don't see Admin performance)
+    query = select(Employee)
+    if current_user.role == "manager":
+        query = query.where(Employee.role != "admin")
+        
+    employees_result = await db.execute(query)
+    employees = employees_result.scalars().all()
+    
+    performance_data = []
+    
+    for emp in employees:
+        # Sales count and total
+        sales_query = (
+            select(func.count(Sale.id), func.sum(Sale.total_amount))
+            .where(Sale.cashier_id == emp.id, Sale.created_at >= start_date_parsed, Sale.created_at <= end_date_parsed)
+        )
+        sales_result = await db.execute(sales_query)
+        sale_count, sale_total = sales_result.first()
+        
+        # Tasks count (completed / total)
+        task_query = (
+            select(
+                func.count(Task.id),
+                func.sum(case((Task.status == 'completed', 1), else_=0))
+            )
+            .where(Task.assigned_to == emp.id)
+        )
+        task_result = await db.execute(task_query)
+        total_tasks, completed_tasks = task_result.first()
+        
+        performance_data.append({
+            "id": emp.id,
+            "username": emp.username,
+            "full_name": emp.full_name,
+            "role": emp.role,
+            "sale_count": sale_count or 0,
+            "sale_total": float(sale_total or 0),
+            "total_tasks": total_tasks or 0,
+            "completed_tasks": int(completed_tasks or 0)
+        })
+        
+    return performance_data
+
+@router.get("/profit-chart")
+async def get_profit_chart(
+    days: int = 7,
+    current_user: Employee = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    if current_user.role not in ["admin", "manager"]:
+        raise HTTPException(status_code=403, detail="Ruxsat berilmagan")
+    # Returns last N days profit/revenue/expense
+    today = datetime.now(timezone.utc).date()
+    start_date = today - timedelta(days=days-1)
+    
+    results = []
+    for i in range(days):
+        day = start_date + timedelta(days=i)
+        day_start = datetime.combine(day, datetime.min.time())
+        day_end = datetime.combine(day, datetime.max.time())
+        
+        # Revenue
+        rev_query = select(func.sum(Sale.total_amount)).where(
+            Sale.created_at >= day_start,
+            Sale.created_at <= day_end,
+            Sale.status == "completed"
+        )
+        rev_result = await db.execute(rev_query)
+        revenue = rev_result.scalar() or 0
+        
+        # Expenses
+        exp_query = select(func.sum(Expense.amount)).where(
+            Expense.created_at >= day_start,
+            Expense.created_at <= day_end
+        )
+        exp_result = await db.execute(exp_query)
+        expenses = exp_result.scalar() or 0
+        
+        # Cost of Goods Sold (COGS)
+        cost_query = (
+            select(func.sum(SaleItem.quantity * Product.buy_price))
+            .join(Product, SaleItem.product_id == Product.id)
+            .join(Sale, SaleItem.sale_id == Sale.id)
+            .where(
+                Sale.created_at >= day_start,
+                Sale.created_at <= day_end,
+                Sale.status == "completed"
+            )
+        )
+        cost_result = await db.execute(cost_query)
+        cogs = cost_result.scalar() or 0
+        
+        if current_user.role == "manager":
+            display_expenses = expenses # Only store expenses
+            display_profit = 0
+        else:
+            display_expenses = expenses + cogs
+            display_profit = revenue - cogs - expenses
+        
+        results.append({
+            "date": day.strftime("%d.%m"),
+            "revenue": revenue,
+            "expenses": display_expenses,
+            "profit": display_profit
+        })
+        
+    return results
+
 @router.get("/dashboard-chart")
 async def get_dashboard_chart(
     employee_id: Optional[int] = None,
+    current_user: Employee = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    # Cashier can only see their own chart
+    if current_user.role == "cashier":
+        employee_id = current_user.id
     # Returns last 7 days sales
     today = datetime.now(timezone.utc).date()
     start_date = today - timedelta(days=6) # 7 days including today
@@ -220,6 +403,14 @@ async def create_expense(
         created_at=datetime.now(timezone.utc)
     )
     db.add(db_expense)
+    
+    # Audit Log
+    try:
+        from routers.audit import log_action
+        await log_action(db, current_user.id, "CREATE_EXPENSE", f"Xarajat qo'shildi: {db_expense.amount:,.0f} so'm ({db_expense.category})")
+    except:
+        pass
+
     await db.commit()
     await db.refresh(db_expense)
     return db_expense
@@ -255,8 +446,11 @@ from fastapi.responses import StreamingResponse
 async def export_sales(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
+    current_user: Employee = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Ruxsat berilmagan")
     start_date = parse_date(start_date, datetime.min.time())
     end_date = parse_date(end_date, datetime.max.time())
     """Sotuvlar tarixini CSV formatda yuklab olish"""
@@ -300,6 +494,62 @@ async def export_sales(
         io.BytesIO(output.getvalue().encode('utf-8-sig')), # byte order mark for Excel
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename=sotuvlar_{datetime.now().strftime('%Y%m%d')}.csv"}
+    )
+
+@router.get("/export-sales-excel")
+async def export_sales_excel(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    current_user: Employee = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Ruxsat berilmagan")
+    import pandas as pd
+    
+    start_date = parse_date(start_date, datetime.min.time())
+    end_date = parse_date(end_date, datetime.max.time())
+    
+    if not start_date:
+        start_date = datetime.now(timezone.utc) - timedelta(days=30)
+    if not end_date:
+        end_date = datetime.now(timezone.utc)
+
+    query = (
+        select(Sale)
+        .options(joinedload(Sale.items).joinedload(SaleItem.product), joinedload(Sale.cashier), joinedload(Sale.client))
+        .where(Sale.created_at >= start_date, Sale.created_at <= end_date)
+        .order_by(Sale.created_at.desc())
+    )
+    
+    result = await db.execute(query)
+    sales = result.unique().scalars().all()
+
+    data = []
+    for s in sales:
+        items_str = ", ".join([f"{item.product.name} ({item.quantity} {item.product.unit})" for item in s.items if item.product])
+        data.append({
+            "ID": s.id,
+            "Sana": s.created_at.strftime("%d.%m.%Y %H:%M"),
+            "Kassir": s.cashier.username if s.cashier else "-",
+            "Mijoz": s.client.name if s.client else "-",
+            "Summa": s.total_amount,
+            "To'lov usuli": s.payment_method,
+            "Mahsulotlar": items_str
+        })
+    
+    df = pd.DataFrame(data)
+    
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Savdolar')
+    
+    output.seek(0)
+    
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename=sotuvlar_{datetime.now().strftime('%Y%m%d')}.xlsx"}
     )
 
 @router.get("/categories")

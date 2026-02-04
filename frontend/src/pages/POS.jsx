@@ -16,7 +16,8 @@ import {
     Minimize2,
     Smartphone,
     HandCoins,
-    Users
+    Users,
+    Star
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,7 +52,66 @@ const POS = () => {
     const [paymentAmounts, setPaymentAmounts] = useState({ cash: '', card: '', perevod: '', qarz: '' });
     const [selectedClient, setSelectedClient] = useState(null);
     const [isFullscreen, setIsFullscreen] = useState(false);
+    const [isShiftModalOpen, setIsShiftModalOpen] = useState(false);
+    const [shiftBalance, setShiftBalance] = useState('');
+    const [isWeightModalOpen, setIsWeightModalOpen] = useState(false);
+    const [selectedProductForWeight, setSelectedProductForWeight] = useState(null);
+    const [weightInput, setWeightInput] = useState('');
+    const [amountInput, setAmountInput] = useState('');
     const searchInputRef = useRef(null);
+    const role = localStorage.getItem('role');
+
+    // Fetch Active Shift
+    const { data: activeShift, isLoading: isShiftLoading } = useQuery({
+        queryKey: ['active-shift'],
+        queryFn: async () => {
+            const res = await api.get('/pos/shifts/active');
+            return res.data;
+        }
+    });
+
+    // Auto-open shift modal if cashier has no active shift
+    useEffect(() => {
+        if (!isShiftLoading && !activeShift && role === 'cashier') {
+             // Small delay to ensure UI is ready
+             const timer = setTimeout(() => setIsShiftModalOpen(true), 500);
+             return () => clearTimeout(timer);
+        }
+    }, [activeShift, isShiftLoading, role]);
+
+    const toggleFullscreen = () => {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen();
+            setIsFullscreen(true);
+        } else {
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+                setIsFullscreen(false);
+            }
+        }
+    };
+
+
+    const openShiftMutation = useMutation({
+        mutationFn: (data) => api.post('/pos/shifts/open', data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['active-shift'] });
+            setIsShiftModalOpen(false);
+            setShiftBalance('');
+            toast.success("Smena ochildi!");
+        }
+    });
+
+    const closeShiftMutation = useMutation({
+        mutationFn: (data) => api.post('/pos/shifts/close', data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['active-shift'] });
+            setIsShiftModalOpen(false);
+            setShiftBalance('');
+            toast.success("Smena yopildi!");
+        }
+    });
+
 
     // Fetch Products
     const { data: products = [], isLoading } = useQuery({
@@ -111,22 +171,37 @@ const POS = () => {
     });
 
     // Logic
-    const addToCart = (product) => {
+    const addToCart = (product, forcedQuantity = null) => {
+        /* 
         if (product.stock <= 0) {
             toast.error("Mahsulot qolmagan!");
             return;
         }
+        */
+
+        // If it's a weighted item and no quantity provided, open modal
+        if ((product.unit === 'kg' || product.unit === 'litr') && forcedQuantity === null) {
+            setSelectedProductForWeight(product);
+            setWeightInput('');
+            setAmountInput('');
+            setIsWeightModalOpen(true);
+            return;
+        }
+
+        const quantityToAdd = forcedQuantity !== null ? forcedQuantity : 1;
 
         setCart(prev => {
             const existing = prev.find(item => item.product_id === product.id);
             if (existing) {
-                if (existing.quantity >= product.stock) {
+                /*
+                if (existing.quantity + quantityToAdd > product.stock) {
                     toast.warning("Boshqa qoldiq yo'q");
                     return prev;
                 }
+                */
                 return prev.map(item =>
                     item.product_id === product.id
-                        ? { ...item, quantity: item.quantity + 1 }
+                        ? { ...item, quantity: item.quantity + quantityToAdd }
                         : item
                 );
             }
@@ -134,8 +209,9 @@ const POS = () => {
                 product_id: product.id,
                 name: product.name,
                 price: product.sell_price,
-                quantity: 1,
-                max_stock: product.stock
+                quantity: quantityToAdd,
+                max_stock: product.stock,
+                unit: product.unit
             }];
         });
         setSearchTerm(''); // Clear search after adding
@@ -146,10 +222,12 @@ const POS = () => {
         setCart(prev => prev.map(item => {
             if (item.product_id === id) {
                 const newQty = item.quantity + delta;
+                /*
                 if (newQty > item.max_stock) {
                     toast.warning("Omborda yetarli emas");
                     return item;
                 }
+                */
                 if (newQty < 1) return item;
                 return { ...item, quantity: newQty };
             }
@@ -161,10 +239,16 @@ const POS = () => {
         setCart(prev => prev.filter(item => item.product_id !== id));
     };
 
-    const cartTotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    const cartTotal = Math.round(cart.reduce((sum, item) => sum + (item.price * item.quantity), 0));
     const totalPaid = Number(paymentAmounts.cash) + Number(paymentAmounts.card) + Number(paymentAmounts.perevod) + Number(paymentAmounts.qarz);
 
     const handlePayment = () => {
+        if (!activeShift) {
+            setShiftBalance('');
+            setIsShiftModalOpen(true);
+            toast.info("Savdo qilish uchun avval smena oching");
+            return;
+        }
         setPaymentAmounts({ cash: '', card: '', perevod: '', qarz: '' });
         setIsPaymentModalOpen(true);
     };
@@ -219,6 +303,11 @@ const POS = () => {
             p.barcode?.startsWith(searchTerm);
         const matchesCategory = selectedCategory ? p.category_id === selectedCategory : true;
         return matchesSearch && matchesCategory;
+    }).sort((a, b) => {
+        // Favorites first
+        if (a.is_favorite && !b.is_favorite) return -1;
+        if (!a.is_favorite && b.is_favorite) return 1;
+        return 0;
     });
 
     // Shortcuts
@@ -263,6 +352,15 @@ const POS = () => {
                                 autoFocus
                             />
                         </div>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={toggleFullscreen}
+                            className="h-12 w-12 rounded-xl text-muted-foreground hover:bg-muted"
+                            title="To'liq ekran"
+                        >
+                            {isFullscreen ? <Minimize2 className="w-6 h-6" /> : <Maximize2 className="w-6 h-6" />}
+                        </Button>
                     </div>
 
                     {/* Categories Bar */}
@@ -296,11 +394,15 @@ const POS = () => {
                                 <Card
                                     key={product.id}
                                     className={cn(
-                                        "cursor-pointer hover:shadow-lg transition-all active:scale-95 flex flex-col justify-between overflow-hidden border-0 bg-card",
-                                        product.stock <= 0 && "opacity-50 grayscale pointer-events-none"
+                                        "cursor-pointer hover:shadow-lg transition-all active:scale-95 flex flex-col justify-between overflow-hidden border-0 bg-card relative"
                                     )}
                                     onClick={() => addToCart(product)}
                                 >
+                                    {product.is_favorite && (
+                                        <div className="absolute top-2 right-2 z-10">
+                                            <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
+                                        </div>
+                                    )}
                                     <div className="h-24 bg-gradient-to-br from-primary/10 to-primary/5 p-4 flex items-center justify-center">
                                         <div className="text-4xl font-bold text-primary/20">
                                             {product.name.charAt(0).toUpperCase()}
@@ -308,10 +410,7 @@ const POS = () => {
                                     </div>
                                     <div className="p-3">
                                         <h3 className="font-bold truncate" title={product.name}>{product.name}</h3>
-                                        <div className="flex justify-between items-center mt-1">
-                                            <span className="font-mono text-xs text-muted-foreground">{product.stock} {product.unit}</span>
-                                            <span className="font-bold text-primary">{product.sell_price.toLocaleString()}</span>
-                                        </div>
+                                            <span className="font-bold text-primary ml-auto">{product.sell_price.toLocaleString()}</span>
                                     </div>
                                 </Card>
                             ))}
@@ -334,9 +433,15 @@ const POS = () => {
                             <ShoppingCart className="w-5 h-5" />
                             <h2 className="font-bold text-lg">Savatcha</h2>
                         </div>
-                        <Badge variant="secondary" className="font-mono text-lg px-3">
-                            {cartTotal.toLocaleString()} so'm
-                        </Badge>
+                        <div className="flex flex-col items-end">
+                            <Badge 
+                                variant={activeShift ? "outline" : "destructive"} 
+                                className={cn("cursor-pointer mb-1", activeShift ? "bg-emerald-500/20 text-white border-emerald-400" : "animate-pulse")}
+                                onClick={() => setIsShiftModalOpen(true)}
+                            >
+                                {activeShift ? "Smena Ochiq" : "Smena Yopiq"}
+                            </Badge>
+                        </div>
                     </div>
 
                     <ScrollArea className="flex-1 p-4">
@@ -346,7 +451,7 @@ const POS = () => {
                                     <div className="flex-1">
                                         <div className="font-medium truncate">{item.name}</div>
                                         <div className="text-sm text-muted-foreground">
-                                            {item.price.toLocaleString()} x {item.quantity} = {(item.price * item.quantity).toLocaleString()}
+                                            {item.price.toLocaleString()} x {item.quantity} = {Math.round(item.price * item.quantity).toLocaleString()}
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-1 bg-background rounded-md border shadow-sm">
@@ -358,7 +463,9 @@ const POS = () => {
                                         >
                                             {item.quantity === 1 ? <Trash2 className="w-4 h-4" /> : <Minus className="w-3 h-3" />}
                                         </Button>
-                                        <div className="w-8 text-center font-bold text-sm select-none">{item.quantity}</div>
+                                        <div className="px-2 text-center font-bold text-sm select-none min-w-[70px]">
+                                            {Math.round(item.price * item.quantity).toLocaleString()}
+                                        </div>
                                         <Button
                                             variant="ghost"
                                             size="icon"
@@ -384,11 +491,11 @@ const POS = () => {
                         <div className="space-y-1">
                             <div className="flex justify-between text-sm">
                                 <span className="text-muted-foreground">Jami Mahsulotlar:</span>
-                                <span className="font-bold">{cart.reduce((a, b) => a + b.quantity, 0)} dona</span>
+                                <span className="font-bold">{cart.length} tur</span>
                             </div>
                             <div className="flex justify-between text-xl font-bold pt-2 border-t mt-2">
                                 <span>Jami Summa:</span>
-                                <span className="text-primary">{cartTotal.toLocaleString()} so'm</span>
+                                <span className="text-primary">{Math.round(cartTotal).toLocaleString()} so'm</span>
                             </div>
                         </div>
 
@@ -594,6 +701,142 @@ const POS = () => {
                             </div>
                         </div>
                     </div>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={isWeightModalOpen} onOpenChange={setIsWeightModalOpen}>
+                <DialogContent className="sm:max-w-[420px] p-0 overflow-hidden border-none shadow-2xl">
+                    <DialogHeader className="p-4 bg-primary text-primary-foreground">
+                        <DialogTitle className="text-xl font-black flex items-center justify-between uppercase tracking-tighter">
+                            {selectedProductForWeight?.name}
+                            <Badge variant="outline" className="text-sm py-0.5 px-2 border-primary-foreground/30 text-primary-foreground font-mono">
+                                {selectedProductForWeight?.sell_price.toLocaleString()} s / {selectedProductForWeight?.unit}
+                            </Badge>
+                        </DialogTitle>
+                    </DialogHeader>
+                    
+                    <div className="p-6 space-y-4 bg-background">
+                        <div className="space-y-2 uppercase">
+                            <Label className="text-sm font-black text-primary tracking-tighter">
+                                Sotiladigan Summa
+                            </Label>
+                            <div className="relative">
+                                    <Input 
+                                        type="number" 
+                                        value={amountInput} 
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            setAmountInput(val);
+                                            if (val && selectedProductForWeight) {
+                                                const calcWeight = (parseFloat(val) / selectedProductForWeight.sell_price).toFixed(5);
+                                                setWeightInput(calcWeight);
+                                            } else {
+                                                setWeightInput('');
+                                            }
+                                        }}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && weightInput > 0) {
+                                                addToCart(selectedProductForWeight, parseFloat(weightInput));
+                                                setIsWeightModalOpen(false);
+                                            }
+                                        }}
+                                        placeholder="0"
+                                        className="text-[60px] h-24 font-bold border-2 border-primary/10 focus:border-primary shadow-inner text-center bg-muted/10 rounded-2xl transition-all leading-none p-0"
+                                        autoFocus
+                                        style={{ fontSize: '60px' }}
+                                    />
+                                    <div className="absolute right-6 top-1/2 -translate-y-1/2 text-xl font-black text-muted-foreground/20 pointer-events-none uppercase">
+                                        so'm
+                                    </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <DialogFooter className="p-4 pt-0 bg-background flex gap-2 sm:gap-2">
+                        <Button 
+                            variant="outline" 
+                            onClick={() => setIsWeightModalOpen(false)} 
+                            className="h-12 text-sm font-bold flex-1 rounded-xl"
+                        >
+                            Bekor qilish
+                        </Button>
+                        <Button 
+                            className="h-12 text-lg font-black flex-1 rounded-xl shadow-lg shadow-primary/20 uppercase tracking-tight"
+                            disabled={!weightInput || parseFloat(weightInput) <= 0}
+                            onClick={() => {
+                                addToCart(selectedProductForWeight, parseFloat(weightInput));
+                                setIsWeightModalOpen(false);
+                            }}
+                        >
+                            Savatga Qo'shish
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Shift Modal */}
+            <Dialog open={isShiftModalOpen} onOpenChange={setIsShiftModalOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>{activeShift ? "Smenani Yopish" : "Yangi Smena Ochish"}</DialogTitle>
+                        <DialogDescription>
+                            {activeShift 
+                                ? "Ish kuningizni yakunlash uchun kassadagi qoldiqni kiriting." 
+                                : "Savdoni boshlash uchun kassadagi boshlang'ich summani kiriting."}
+                        </DialogDescription>
+                    </DialogHeader>
+                        <div className="space-y-4 py-4">
+                            {activeShift && (
+                                <div className="bg-muted/50 p-4 rounded-lg space-y-2 mb-4">
+                                    <div className="flex justify-between text-sm">
+                                        <span>Boshlang'ich kassa:</span>
+                                        <span className="font-bold">{activeShift.opening_balance?.toLocaleString()} so'm</span>
+                                    </div>
+                                    <div className="flex justify-between text-sm text-emerald-600">
+                                        <span>Naqd savdo:</span>
+                                        <span className="font-bold">+{activeShift.total_cash?.toLocaleString() || 0} so'm</span>
+                                    </div>
+                                    <div className="flex justify-between text-sm text-blue-600">
+                                        <span>Karta (terminal):</span>
+                                        <span className="font-bold">{activeShift.total_card?.toLocaleString() || 0} so'm</span>
+                                    </div>
+                                    <div className="flex justify-between text-sm text-amber-600">
+                                        <span>Nasiya (qarz):</span>
+                                        <span className="font-bold">{activeShift.total_debt?.toLocaleString() || 0} so'm</span>
+                                    </div>
+                                    <div className="border-t pt-2 flex justify-between font-bold text-lg">
+                                        <span>Kassada bo'lishi kerak:</span>
+                                        <span>{(activeShift.opening_balance + (activeShift.total_cash || 0)).toLocaleString()} so'm</span>
+                                    </div>
+                                </div>
+                            )}
+                            <div className="space-y-2">
+                                <Label>{activeShift ? "Haqiqiy naqd pul (Kassadagi)" : "Boshlang'ich balans"}</Label>
+                                <Input 
+                                    type="number" 
+                                    value={shiftBalance} 
+                                    onChange={(e) => setShiftBalance(e.target.value)} 
+                                    placeholder="0"
+                                    autoFocus
+                                />
+                            </div>
+                        </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsShiftModalOpen(false)}>Bekor qilish</Button>
+                        <Button 
+                            onClick={() => {
+                                if (activeShift) {
+                                    closeShiftMutation.mutate({ closing_balance: Number(shiftBalance) || 0 });
+                                } else {
+                                    openShiftMutation.mutate({ opening_balance: Number(shiftBalance) || 0 });
+                                }
+                            }}
+                            disabled={openShiftMutation.isPending || closeShiftMutation.isPending}
+                        >
+                            {(openShiftMutation.isPending || closeShiftMutation.isPending) && <Loader2 className="mr-2 animate-spin h-4 w-4" />}
+                            {activeShift ? "Smenani Yakunlash" : "Smenani Boshlash"}
+                        </Button>
+                    </DialogFooter>
                 </DialogContent>
             </Dialog>
         </div>
