@@ -165,6 +165,10 @@ async def refund_sale(
     current_user: Employee = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    # Security: Only admin and manager can refund
+    if current_user.role not in ["admin", "manager"]:
+        raise HTTPException(status_code=403, detail="Faqat administrator yoki menejer savdoni qaytara oladi")
+
     # 1. Fetch the sale with items
     result = await db.execute(
         select(Sale)
