@@ -285,7 +285,7 @@ async def get_profit_chart(
         cost_result = await db.execute(cost_query)
         cogs = cost_result.scalar() or 0
         
-        if current_user.role == "manager":
+        if current_user.role in ["manager", "cashier"]:
             display_expenses = expenses # Only store expenses
             display_profit = 0
         else:
