@@ -13,21 +13,34 @@ load_dotenv()
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite+aiosqlite:///{os.path.join(BASE_DIR, 'market.db')}")
 
+# Render/Heroku postgres:// URLs require +asyncpg for SQLAlchemy async engine
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+asyncpg://", 1)
+elif DATABASE_URL.startswith("postgresql://"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
+
 from sqlalchemy import event
 
-engine = create_async_engine(
-    DATABASE_URL, 
-    echo=False,
-    connect_args={"check_same_thread": False},
-    pool_pre_ping=True
-)
+# SQLite setup differs from PostgreSQL
+is_sqlite = DATABASE_URL.startswith("sqlite")
 
-@event.listens_for(engine.sync_engine, "connect")
-def set_sqlite_pragma(dbapi_connection, connection_record):
-    cursor = dbapi_connection.cursor()
-    cursor.execute("PRAGMA journal_mode=WAL")
-    cursor.execute("PRAGMA synchronous=NORMAL")
-    cursor.close()
+engine_args = {
+    "echo": False,
+    "pool_pre_ping": True
+}
+
+if is_sqlite:
+    engine_args["connect_args"] = {"check_same_thread": False}
+
+engine = create_async_engine(DATABASE_URL, **engine_args)
+
+if is_sqlite:
+    @event.listens_for(engine.sync_engine, "connect")
+    def set_sqlite_pragma(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.close()
 
 SessionLocal = sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
 Base = declarative_base()
