@@ -104,7 +104,7 @@ const Inventory = () => {
         }
     });
 
-    const { data: supplies = [] } = useQuery({
+    const { data: supplies = [], isLoading: historyLoading } = useQuery({
         queryKey: ['supplies'],
         queryFn: async () => {
             const res = await api.get('/inventory/supplies');
