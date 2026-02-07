@@ -31,7 +31,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select"
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/utils.js";
 import { toast } from "sonner";
 import {
     Dialog,
@@ -58,6 +58,7 @@ const POS = () => {
     const [selectedProductForWeight, setSelectedProductForWeight] = useState(null);
     const [weightInput, setWeightInput] = useState('');
     const [amountInput, setAmountInput] = useState('');
+    const [bonusSpent, setBonusSpent] = useState(0);
     const searchInputRef = useRef(null);
     const role = localStorage.getItem('role');
 
@@ -140,6 +141,15 @@ const POS = () => {
         }
     });
 
+    // Fetch Settings
+    const { data: settings } = useQuery({
+        queryKey: ['settings'],
+        queryFn: async () => {
+            const res = await api.get('/settings');
+            return res.data;
+        }
+    });
+
     // Sale Mutation
     const saleMutation = useMutation({
         mutationFn: (data) => api.post('/sales/', data),
@@ -148,6 +158,7 @@ const POS = () => {
             setCart([]);
             setIsPaymentModalOpen(false);
             setPaymentAmounts({ cash: '', card: '', perevod: '', qarz: '' });
+            setBonusSpent(0);
             queryClient.invalidateQueries({ queryKey: ['products'] }); 
             queryClient.invalidateQueries({ queryKey: ['sales-history'] });
             queryClient.invalidateQueries({ queryKey: ['finance-stats'] });
@@ -240,24 +251,23 @@ const POS = () => {
     };
 
     const cartTotal = Math.round(cart.reduce((sum, item) => sum + (item.price * item.quantity), 0));
-    const totalPaid = Number(paymentAmounts.cash) + Number(paymentAmounts.card) + Number(paymentAmounts.perevod) + Number(paymentAmounts.qarz);
+    const bonusBalance = clients.find(c => c.id === selectedClient)?.bonus_balance || 0;
+    const bonusEarned = Math.floor((cartTotal - (Number(paymentAmounts.qarz) || 0)) * (settings?.bonus_percentage || 1) / 100);
+    const totalPaid = Number(paymentAmounts.cash) + Number(paymentAmounts.card) + Number(paymentAmounts.perevod) + Number(paymentAmounts.qarz) + Number(bonusSpent);
 
     const handlePayment = () => {
         if (!activeShift) {
-            setShiftBalance('');
-            setIsShiftModalOpen(true);
             toast.info("Savdo qilish uchun avval smena oching");
             return;
         }
         setPaymentAmounts({ cash: '', card: '', perevod: '', qarz: '' });
+        setBonusSpent(0);
         setIsPaymentModalOpen(true);
     };
 
     const handleFillRemaining = (method) => {
-        // Calculate remaining amount needed
-        const currentTotal = Number(paymentAmounts.cash) + Number(paymentAmounts.card) + Number(paymentAmounts.perevod) + Number(paymentAmounts.qarz);
         // Exclude the current field we are clicking
-        const otherTotal = currentTotal - Number(paymentAmounts[method]);
+        const otherTotal = Number(paymentAmounts.cash) + Number(paymentAmounts.card) + Number(paymentAmounts.perevod) + Number(paymentAmounts.qarz) + Number(bonusSpent) - Number(paymentAmounts[method]);
         const remaining = Math.max(0, cartTotal - otherTotal);
         
         setPaymentAmounts(prev => ({
@@ -292,7 +302,8 @@ const POS = () => {
             cash_amount: Number(paymentAmounts.cash) || 0,
             card_amount: Number(paymentAmounts.card) || 0,
             transfer_amount: Number(paymentAmounts.perevod) || 0,
-            debt_amount: Number(paymentAmounts.qarz) || 0
+            debt_amount: Number(paymentAmounts.qarz) || 0,
+            bonus_spent: Number(bonusSpent) || 0
         };
         saleMutation.mutate(saleData);
     };
@@ -607,6 +618,41 @@ const POS = () => {
                                 </Button>
                             </div>
 
+                            {/* Bonus Selection (New) */}
+                            {selectedClient && bonusBalance > 0 && (
+                                <div className="flex items-center gap-3 animate-in fade-in slide-in-from-left-2">
+                                    <div className="h-12 w-12 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center shrink-0 border border-orange-200">
+                                        <Star className="w-6 h-6 fill-orange-500" />
+                                    </div>
+                                    <div className="flex-1 space-y-1">
+                                        <Label className="text-xs text-muted-foreground font-bold uppercase tracking-wide">Bonuslatish (Mavjud: {bonusBalance})</Label>
+                                        <Input 
+                                            type="number" 
+                                            placeholder="0" 
+                                            max={bonusBalance}
+                                            className="h-10 border-slate-200 text-lg font-bold focus-visible:ring-orange-500" 
+                                            value={bonusSpent}
+                                            onChange={(e) => {
+                                                const val = Math.min(bonusBalance, parseFloat(e.target.value) || 0);
+                                                setBonusSpent(val);
+                                            }}
+                                        />
+                                    </div>
+                                    <Button 
+                                        size="sm" 
+                                        variant="outline" 
+                                        className="h-10 px-3 bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100 hover:text-orange-800 font-semibold self-end" 
+                                        onClick={() => {
+                                            const otherTotal = Number(paymentAmounts.cash) + Number(paymentAmounts.card) + Number(paymentAmounts.perevod) + Number(paymentAmounts.qarz);
+                                            const needed = Math.max(0, cartTotal - otherTotal);
+                                            setBonusSpent(Math.min(bonusBalance, needed));
+                                        }}
+                                    >
+                                        Jami
+                                    </Button>
+                                </div>
+                            )}
+
                             {/* Debt */}
                             <div className="flex items-center gap-3">
                                 <div className="h-12 w-12 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center shrink-0 border border-amber-200">
@@ -633,18 +679,26 @@ const POS = () => {
                             </div>
                         </div>
 
-                        {/* Client Select for Debt */}
-                        {Number(paymentAmounts.qarz) > 0 && (
-                            <div className="animate-in fade-in zoom-in-95 duration-200 p-4 bg-amber-50 rounded-xl border border-amber-100">
-                                <Label className="text-sm font-medium text-amber-900 mb-2 block">Mijozni tanlang (Qarz uchun)</Label>
+                        {/* Client & Bonus Selection Area */}
+                        <div className="space-y-4">
+                            <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
+                                <div className="flex justify-between items-center mb-2">
+                                    <Label className="text-sm font-medium text-slate-900">Mijozni tanlang</Label>
+                                    {selectedClient && selectedClient !== "null" && (
+                <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 text-sm font-bold px-3 py-1">
+                    Bonus: {bonusBalance?.toLocaleString()}
+                </Badge>
+            )}
+                                </div>
                                 <Select
                                     value={selectedClient?.toString()}
-                                    onValueChange={(val) => setSelectedClient(parseInt(val))}
+                                    onValueChange={(val) => setSelectedClient(val === "null" ? null : parseInt(val))}
                                 >
-                                    <SelectTrigger className="h-11 bg-white border-amber-200 text-amber-900">
-                                        <SelectValue placeholder="Mijozni qidirish..." />
+                                    <SelectTrigger className="h-11 bg-white border-slate-200">
+                                        <SelectValue placeholder="Mijoz tanlash (Keshbek va Qarz uchun)" />
                                     </SelectTrigger>
                                     <SelectContent>
+                                        <SelectItem value="null">Tanlanmagan</SelectItem>
                                         {clients.map(c => (
                                             <SelectItem key={c.id} value={c.id.toString()}>
                                                 {c.name} {c.phone ? `(${c.phone})` : ''}
@@ -652,8 +706,16 @@ const POS = () => {
                                         ))}
                                     </SelectContent>
                                 </Select>
+                                
+                                {selectedClient && selectedClient !== "null" && (
+                                    <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground uppercase tracking-tight font-bold">
+                <Star className="w-4 h-4 text-orange-500 fill-orange-500" />
+                <span>Ushbu xariddan bonus: </span>
+                <span className="text-orange-600 text-base">+{bonusEarned?.toLocaleString()}</span>
+            </div>
+                                )}
                             </div>
-                        )}
+                        </div>
 
                         {/* Summary & Actions */}
                         <div className="pt-4 border-t border-slate-100 space-y-4">

@@ -12,7 +12,8 @@ import {
     Image as ImageIcon,
     ShieldCheck,
     DownloadCloud,
-    History
+    History,
+    Star
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -30,7 +31,9 @@ const Settings = () => {
         header_text: '',
         footer_text: '',
         logo_url: '',
-        low_stock_threshold: 5
+        low_stock_threshold: 5,
+        bonus_percentage: 1,
+        debt_reminder_days: 30
     });
 
     const { data: settings, isLoading } = useQuery({
@@ -50,7 +53,9 @@ const Settings = () => {
                 header_text: settings.header_text || '',
                 footer_text: settings.footer_text || '',
                 logo_url: settings.logo_url || '',
-                low_stock_threshold: settings.low_stock_threshold || 5
+                low_stock_threshold: settings.low_stock_threshold || 5,
+                bonus_percentage: settings.bonus_percentage || 1,
+                debt_reminder_days: settings.debt_reminder_days || 30
             });
         }
     }, [settings]);
@@ -138,18 +143,67 @@ const Settings = () => {
                                 </div>
                             </div>
                             <div className="space-y-2 pt-2">
-                                <Label htmlFor="threshold">Kam Qolgan Mahsulotlar Chegarasi (Threshold)</Label>
-                                <div className="flex items-center gap-4">
+                                <Label htmlFor="threshold" className="text-primary font-bold">Kam Qolgan Mahsulotlar</Label>
+                                <div className="flex items-center gap-4 bg-muted/20 p-3 rounded-lg border border-dashed">
                                     <Input 
                                         id="threshold" 
                                         type="number"
                                         value={formData.low_stock_threshold} 
                                         onChange={e => setFormData({...formData, low_stock_threshold: parseInt(e.target.value) || 0})}
-                                        className="w-24"
+                                        className="w-28 h-12 text-xl font-bold text-primary"
                                     />
-                                    <span className="text-sm text-muted-foreground">
-                                        Mahsulot soni shundan kam bo'lsa, dashboardda va botda ogohlantirish chiqadi.
+                                    <span className="text-xs text-muted-foreground">
+                                        Mahsulot soni shundan kam bo'lsa, dashboardda ogohlantirish chiqadi.
                                     </span>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="border-none shadow-md bg-background/60 backdrop-blur-xl">
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <Star className="w-5 h-5 text-orange-500" />
+                                Marketing va Sodiqlik
+                            </CardTitle>
+                            <CardDescription>Mijozlarni jalb qilish va keshbek tizimi</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                            <div className="space-y-3">
+                                <Label htmlFor="bonus" className="text-orange-700 font-bold">Keshbek (Bonus) Foizi</Label>
+                                <div className="flex items-center gap-4 bg-orange-50/50 p-4 rounded-xl border border-orange-100">
+                                    <div className="relative w-32">
+                                        <Input 
+                                            id="bonus" 
+                                            type="number"
+                                            value={formData.bonus_percentage} 
+                                            onChange={e => setFormData({...formData, bonus_percentage: parseFloat(e.target.value) || 0})}
+                                            className="h-14 pr-10 text-2xl font-black border-orange-200 focus-visible:ring-orange-500 text-orange-700 bg-white"
+                                        />
+                                        <span className="absolute right-3 top-3.5 text-orange-600 font-bold text-xl">%</span>
+                                    </div>
+                                    <p className="text-sm text-orange-900/70 leading-relaxed font-medium">
+                                        Mijoz xarid qilganda, ushbu foiz miqdorida uning balansiga bonus yoziladi.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="space-y-3">
+                                <Label htmlFor="debt_days" className="text-rose-700 font-bold text-base">Qarzni Qaytarish Muddati</Label>
+                                <div className="flex items-center gap-4 bg-rose-50/50 p-4 rounded-xl border border-rose-100">
+                                    <div className="relative w-32">
+                                        <Input 
+                                            id="debt_days" 
+                                            type="number"
+                                            value={formData.debt_reminder_days} 
+                                            onChange={e => setFormData({...formData, debt_reminder_days: parseInt(e.target.value) || 0})}
+                                            className="h-14 pr-12 text-2xl font-black border-rose-200 focus-visible:ring-rose-500 text-rose-700 bg-white"
+                                        />
+                                        <span className="absolute right-3 top-4.5 text-rose-600 font-bold text-xs">KUN</span>
+                                    </div>
+                                    <p className="text-sm text-rose-900/70 leading-relaxed font-medium">
+                                        Nasiya savdo muddati tugashi uchun belgilangan kun.
+                                    </p>
                                 </div>
                             </div>
                         </CardContent>

@@ -56,7 +56,7 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/utils.js";
 
 const Inventory = () => {
     const [searchTerm, setSearchTerm] = useState('');
@@ -86,6 +86,7 @@ const Inventory = () => {
         buy_price: 0
     });
     const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+    const [isStockLogOpen, setIsStockLogOpen] = useState(false);
 
     const { data: products = [], isLoading } = useQuery({
         queryKey: ['products'],
@@ -103,13 +104,22 @@ const Inventory = () => {
         }
     });
 
-    const { data: supplies = [], isLoading: historyLoading } = useQuery({
+    const { data: supplies = [] } = useQuery({
         queryKey: ['supplies'],
         queryFn: async () => {
             const res = await api.get('/inventory/supplies');
             return res.data;
         },
         enabled: isHistoryOpen
+    });
+
+    const { data: stockLogs = [], isLoading: logsLoading } = useQuery({
+        queryKey: ['stock-logs'],
+        queryFn: async () => {
+            const res = await api.get('/inventory/logs');
+            return res.data;
+        },
+        enabled: isStockLogOpen
     });
 
     const { data: settings } = useQuery({
@@ -311,7 +321,7 @@ const Inventory = () => {
                     <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
                         <DialogTrigger asChild>
                             <Button variant="ghost" className="gap-2 ml-2">
-                                <History className="w-4 h-4" /> Tarix
+                                <Truck className="w-4 h-4" /> Kirimlar
                             </Button>
                         </DialogTrigger>
                         <DialogContent className="sm:max-w-[700px] max-h-[80vh] flex flex-col">
@@ -363,6 +373,88 @@ const Inventory = () => {
                                                 </TableRow>
                                             );
                                         })}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                        </DialogContent>
+                    </Dialog>
+
+                    <Dialog open={isStockLogOpen} onOpenChange={setIsStockLogOpen}>
+                        <DialogTrigger asChild>
+                            <Button variant="ghost" className="gap-2 ml-2">
+                                <History className="w-4 h-4" /> Loglar
+                            </Button>
+                        </DialogTrigger>
+                        <DialogContent className="sm:max-w-[800px] max-h-[85vh] flex flex-col">
+                            <DialogHeader>
+                                <DialogTitle>Ombor Harakati Tarixi</DialogTitle>
+                                <DialogDescription>
+                                    Barcha mahsulotlarning kirim-chiqim va o'zgarishlar tarixi.
+                                </DialogDescription>
+                            </DialogHeader>
+                            <div className="flex-1 overflow-auto py-4">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Sana</TableHead>
+                                            <TableHead>Mahsulot</TableHead>
+                                            <TableHead>Turi</TableHead>
+                                            <TableHead>Miqdor</TableHead>
+                                            <TableHead>Sabab / Izoh</TableHead>
+                                            <TableHead>Xodim</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {logsLoading ? (
+                                            [1, 2, 3, 4, 5].map(i => (
+                                                <TableRow key={i}>
+                                                    <TableCell colSpan={6} className="h-12 animate-pulse bg-muted/30" />
+                                                </TableRow>
+                                            ))
+                                        ) : stockLogs.length === 0 ? (
+                                            <TableRow>
+                                                <TableCell colSpan={6} className="text-center text-muted-foreground h-24">
+                                                    Hozircha harakatlar yo'q
+                                                </TableCell>
+                                            </TableRow>
+                                        ) : stockLogs.map(log => (
+                                            <TableRow key={log.id} className="text-sm">
+                                                <TableCell className="text-xs text-muted-foreground">
+                                                    {format(new Date(log.created_at), 'dd.MM HH:mm')}
+                                                </TableCell>
+                                                <TableCell className="font-medium">
+                                                    {log.product?.name || `#${log.product_id}`}
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Badge 
+                                                        variant="outline" 
+                                                        className={cn(
+                                                            "capitalize font-normal",
+                                                            log.type === 'sale' && "text-blue-500 border-blue-500/20 bg-blue-500/5",
+                                                            log.type === 'restock' && "text-emerald-500 border-emerald-500/20 bg-emerald-500/5",
+                                                            log.type === 'refund' && "text-orange-500 border-orange-500/20 bg-orange-500/5",
+                                                            log.type === 'adjustment' && "text-purple-500 border-purple-500/20 bg-purple-500/5"
+                                                        )}
+                                                    >
+                                                        {log.type === 'sale' ? 'Sotuv' : 
+                                                         log.type === 'restock' ? 'Kirim' :
+                                                         log.type === 'refund' ? 'Vozvrat' : 'To\'g\'rilash'}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell className={cn(
+                                                    "font-black text-base",
+                                                    log.quantity > 0 ? "text-emerald-600" : "text-rose-600"
+                                                )}>
+                                                    {log.quantity > 0 ? `+${log.quantity?.toLocaleString()}` : log.quantity?.toLocaleString()}
+                                                </TableCell>
+                                                <TableCell className="max-w-[150px] truncate text-xs" title={log.reason}>
+                                                    {log.reason || '-'}
+                                                </TableCell>
+                                                <TableCell className="text-xs">
+                                                    {log.user?.username || '-'}
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
                                     </TableBody>
                                 </Table>
                             </div>
