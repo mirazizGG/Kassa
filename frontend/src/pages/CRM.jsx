@@ -10,8 +10,11 @@ import {
     CreditCard,
     MoreHorizontal,
     HandCoins,
-    Loader2
+    Loader2,
+    Star,
+    Calendar
 } from 'lucide-react';
+import { format, isPast } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,7 +36,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/utils.js";
 
 const CRM = () => {
     const [searchTerm, setSearchTerm] = useState('');
@@ -109,9 +112,10 @@ const CRM = () => {
                     <Table>
                         <TableHeader className="bg-muted/30">
                             <TableRow>
-                                <TableHead className="pl-8">Mijoz Ismi</TableHead>
+                                <TableHead>Mijoz Ismi</TableHead>
                                 <TableHead>Telefon</TableHead>
-                                <TableHead>Balans (Qarz)</TableHead>
+                                <TableHead>Bonus</TableHead>
+                                <TableHead>Balans / Muddat</TableHead>
                                 <TableHead>Status</TableHead>
                                 <TableHead className="text-right pr-8">Amallar</TableHead>
                             </TableRow>
@@ -127,21 +131,38 @@ const CRM = () => {
                                 </TableRow>
                             ) : filteredClients.map((client) => (
                                 <TableRow key={client.id} className="group hover:bg-muted/50 transition-colors">
-                                    <TableCell className="pl-8 font-semibold">{client.name}</TableCell>
+                                    <TableCell className="pl-8">
+                                        <div className="font-semibold">{client.name}</div>
+                                    </TableCell>
                                     <TableCell className="text-muted-foreground">
                                          {client.phone ? (
                                              <div className="flex items-center gap-2">
-                                                 <Phone className="w-3 h-3" /> {client.phone}
+                                                 <Phone className="w-3 h-3 text-primary/60" /> {client.phone}
                                              </div>
                                          ) : '-'}
                                     </TableCell>
                                     <TableCell>
-                                        <div className={cn("font-bold", client.balance < 0 ? "text-destructive" : "text-emerald-600")}>
-                                            {client.balance.toLocaleString()} <span className="text-[10px] text-muted-foreground">so'm</span>
+                                        <div className="flex items-center gap-2 font-black text-lg text-orange-600">
+                                            <Star className="w-5 h-5 fill-orange-500" />
+                                            {client.bonus_balance?.toLocaleString() || 0}
                                         </div>
                                     </TableCell>
                                     <TableCell>
-                                        <Badge variant={client.balance < 0 ? "destructive" : "secondary"}>
+                                        <div className={cn("font-black text-lg", client.balance < 0 ? "text-destructive" : "text-emerald-600")}>
+                                            {client.balance.toLocaleString()} <span className="text-[10px] text-muted-foreground uppercase">so'm</span>
+                                        </div>
+                                        {client.balance < 0 && client.debt_due_date && (
+                                            <div className={cn(
+                                                "text-[10px] flex items-center gap-1 mt-1 font-medium",
+                                                isPast(new Date(client.debt_due_date)) ? "text-rose-600 animate-pulse" : "text-slate-500"
+                                            )}>
+                                                <Calendar className="w-3 h-3" />
+                                                {format(new Date(client.debt_due_date), 'dd.MM.yyyy')}
+                                            </div>
+                                        )}
+                                    </TableCell>
+                                    <TableCell>
+                                        <Badge variant={client.balance < 0 ? "destructive" : "secondary"} className="font-normal">
                                             {client.balance < 0 ? "Qarzdor" : "Aktiv"}
                                         </Badge>
                                     </TableCell>

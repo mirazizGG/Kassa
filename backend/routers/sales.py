@@ -4,7 +4,7 @@ from sqlalchemy import select, update
 from typing import List, Optional
 from datetime import datetime
 
-from database import get_db, Product, Sale, SaleItem, Employee, Client, StoreSetting
+from database import get_db, Product, Sale, SaleItem, Employee, Client, StoreSetting, StockMove
 from schemas import SaleCreate, SaleOut
 from core import get_current_user
 
@@ -46,11 +46,11 @@ async def create_sale(
         if not product:
             raise HTTPException(status_code=404, detail=f"Product {item.product_id} not found")
         
-        # if product.stock < item.quantity:
-        #     raise HTTPException(status_code=400, detail=f"Not enough stock for {product.name}. Available: {product.stock}")
+        if product.stock < item.quantity:
+            raise HTTPException(status_code=400, detail=f"Mahsulot yetarli emas: {product.name}. Mavjud: {product.stock}")
         
         # Deduct stock
-        # product.stock -= item.quantity
+        product.stock -= item.quantity
         total_amount_check += item.quantity * item.price
         
         # Prepare item data for DB
@@ -75,17 +75,50 @@ async def create_sale(
     db.add(db_sale)
     await db.flush() # Get ID
 
-    # 4. Create Sale Items
+    # 4. Create Sale Items and Stock Logs
     for sale_item in sale_items_data:
         sale_item.sale_id = db_sale.id
         db.add(sale_item)
+        
+        # Log Stock Movement (Negative for sale)
+        db_move = StockMove(
+            product_id=sale_item.product_id,
+            quantity=-sale_item.quantity,
+            type="sale",
+            reason=f"Sotuv (Chek ID: {db_sale.id})",
+            created_by=current_user.id
+        )
+        db.add(db_move)
 
-    # 5. Handle Client Balance (if any debt amount)
-    if sale.debt_amount > 0 and sale.client_id:
+    # 5. Handle Client Balance and Bonuses
+    if sale.client_id:
         result = await db.execute(select(Client).where(Client.id == sale.client_id))
         client = result.scalars().first()
         if client:
-            client.balance -= sale.debt_amount # Increase debt by specific debt amount
+            # Handle Debt
+            if sale.debt_amount > 0:
+                client.balance -= sale.debt_amount
+            
+            # 5.1 Handle Bonuses
+            # Get bonus setting
+            settings_res = await db.execute(select(StoreSetting))
+            settings = settings_res.scalars().first()
+            bonus_percent = settings.bonus_percentage if settings else 1.0
+            
+            # Calculate earned bonus (from the amount actually paid or total?) 
+            # Usually from total non-debt amount or just total? Let's do from (total - debt)
+            paid_amount = db_sale.total_amount - db_sale.debt_amount
+            if paid_amount > 0:
+                earned = (paid_amount * bonus_percent) / 100
+                db_sale.bonus_earned = earned
+                client.bonus_balance += earned
+            
+            # Handle spent bonus
+            if sale.bonus_spent > 0:
+                if client.bonus_balance < sale.bonus_spent:
+                    raise HTTPException(status_code=400, detail="Bonus balansi yetarli emas")
+                client.bonus_balance -= sale.bonus_spent
+                db_sale.bonus_spent = sale.bonus_spent
     
     await db.commit()
     
@@ -186,14 +219,29 @@ async def refund_sale(
     if db_sale.status == "refunded":
         raise HTTPException(status_code=400, detail="Sale already refunded")
 
-    # 2. Restore stock for each item
+    # 2. Restore stock for each item and Log
     for item in db_sale.items:
         if item.product:
             item.product.stock += item.quantity
+            
+            # Log Stock Movement (Positive for refund)
+            db_move = StockMove(
+                product_id=item.product_id,
+                quantity=item.quantity,
+                type="refund",
+                reason=f"Vozvrat (Chek ID: {db_sale.id})",
+                created_by=current_user.id
+            )
+            db.add(db_move)
     
-    # 3. Handle Client Balance (if it was a debt)
-    if db_sale.debt_amount > 0 and db_sale.client:
-        db_sale.client.balance += db_sale.debt_amount # Reduce debt (balance is typically negative in this system based on create_sale)
+    # 3. Handle Client Balance and Bonuses (Deduct earned bonuses)
+    if db_sale.client:
+        if db_sale.debt_amount > 0:
+            db_sale.client.balance += db_sale.debt_amount 
+        
+        # Deduct earned bonus
+        if db_sale.bonus_earned > 0:
+            db_sale.client.bonus_balance -= db_sale.bonus_earned
 
     # 4. Update Sale Status
     db_sale.status = "refunded"

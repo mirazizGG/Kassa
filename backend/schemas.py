@@ -72,6 +72,19 @@ class ProductOut(ProductBase):
     id: int
     model_config = ConfigDict(from_attributes=True)
 
+class StockMoveBase(BaseModel):
+    product_id: int
+    quantity: float
+    type: str
+    reason: Optional[str] = None
+
+class StockMoveOut(StockMoveBase):
+    id: int
+    created_at: datetime
+    created_by: Optional[int] = None
+    product: Optional[ProductOut] = None
+    model_config = ConfigDict(from_attributes=True)
+
 class SupplyBase(BaseModel):
     product_id: int
     quantity: float
@@ -91,6 +104,7 @@ class ClientBase(BaseModel):
     phone: Optional[str] = None
     telegram_id: Optional[int] = None
     balance: float = 0
+    bonus_balance: float = 0
     debt_due_date: Optional[datetime] = None
 
 class ClientCreate(ClientBase):
@@ -123,6 +137,7 @@ class SaleCreate(BaseModel):
     card_amount: Optional[float] = 0
     transfer_amount: Optional[float] = 0
     debt_amount: Optional[float] = 0
+    bonus_spent: Optional[float] = 0
 
 class SaleOut(BaseModel):
     id: int
@@ -138,6 +153,8 @@ class SaleOut(BaseModel):
     card_amount: float = 0
     transfer_amount: float = 0
     debt_amount: float = 0
+    bonus_earned: float = 0
+    bonus_spent: float = 0
     items: List[SaleItemOut] = []
     model_config = ConfigDict(from_attributes=True)
 
@@ -219,6 +236,8 @@ class StoreSettingBase(BaseModel):
     footer_text: Optional[str] = None
     logo_url: Optional[str] = None
     low_stock_threshold: Optional[int] = 5
+    bonus_percentage: Optional[float] = 1.0
+    debt_reminder_days: Optional[int] = 3
 
 class StoreSettingOut(StoreSettingBase):
     id: int

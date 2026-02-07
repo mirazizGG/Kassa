@@ -3,8 +3,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, delete
 from typing import List, Optional
 
-from database import get_db, Product, Category, Employee, Supply
-from schemas import ProductCreate, ProductOut, CategoryCreate, CategoryOut, SupplyCreate, SupplyOut
+from database import get_db, Product, Category, Employee, Supply, StockMove
+from schemas import ProductCreate, ProductOut, CategoryCreate, CategoryOut, SupplyCreate, SupplyOut, StockMoveOut
 from core import get_current_user
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
@@ -37,6 +37,16 @@ async def create_supply(
     product.stock += supply.quantity
     product.buy_price = supply.buy_price # Oxirgi kelgan narxni o'rnatamiz (yoki o'rtacha hisoblash ham mumkin)
 
+    # 4. Stock Movement Log
+    db_move = StockMove(
+        product_id=product.id,
+        quantity=supply.quantity,
+        type="restock",
+        reason=f"Yangi kirim (ID: {db_supply.id})",
+        created_by=current_user.id
+    )
+    db.add(db_move)
+
     await db.commit()
     await db.refresh(db_supply)
     return db_supply
@@ -50,6 +60,22 @@ async def get_supplies(
     if product_id:
         stmt = stmt.where(Supply.product_id == product_id)
     
+    result = await db.execute(stmt)
+    return result.scalars().all()
+
+@router.get("/logs", response_model=List[StockMoveOut])
+async def get_stock_logs(
+    product_id: Optional[int] = None,
+    current_user: Employee = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    if current_user.role not in ["admin", "manager"]:
+        raise HTTPException(status_code=403, detail="Ruxsat berilmagan")
+        
+    stmt = select(StockMove).options(joinedload(StockMove.product), joinedload(StockMove.user)).order_by(StockMove.created_at.desc())
+    if product_id:
+        stmt = stmt.where(StockMove.product_id == product_id)
+        
     result = await db.execute(stmt)
     return result.scalars().all()
 
@@ -80,6 +106,18 @@ async def create_product(
 
     db_product = Product(**product.model_dump())
     db.add(db_product)
+    
+    # Stock Log if initial stock > 0
+    if db_product.stock > 0:
+        db_move = StockMove(
+            product_id=db_product.id,
+            quantity=db_product.stock,
+            type="adjustment",
+            reason="Dastlabki qoldiq (mahsulot yaratilganda)",
+            created_by=current_user.id
+        )
+        db.add(db_move)
+
     await db.commit()
     await db.refresh(db_product)
     return db_product
@@ -100,9 +138,24 @@ async def update_product(
     if not db_product:
         raise HTTPException(status_code=404, detail="Product not found")
 
+    old_stock = db_product.stock
+    new_stock = product.stock
+
     # Update product fields
     for key, value in product.model_dump().items():
         setattr(db_product, key, value)
+
+    # Stock Log if stock changed
+    if old_stock != new_stock:
+        diff = new_stock - old_stock
+        db_move = StockMove(
+            product_id=db_product.id,
+            quantity=diff,
+            type="adjustment",
+            reason="Ombor tahrirlandi (adjustment)",
+            created_by=current_user.id
+        )
+        db.add(db_move)
 
     await db.commit()
     await db.refresh(db_product)

@@ -86,6 +86,7 @@ class Client(Base):
     phone = Column(String, nullable=True)
     telegram_id = Column(Integer, unique=True, nullable=True, index=True)
     balance = Column(Float, default=0) # Nasiya yoki oldindan to'lov
+    bonus_balance = Column(Float, default=0) # Keshbek ballari
     debt_due_date = Column(DateTime, nullable=True) # Qarz qaytarish muddati
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
@@ -105,6 +106,10 @@ class Sale(Base):
     card_amount = Column(Float, default=0)
     transfer_amount = Column(Float, default=0)
     debt_amount = Column(Float, default=0)
+    
+    # Bonus Fields
+    bonus_earned = Column(Float, default=0) # Ushbu savdodan to'plangan bonus
+    bonus_spent = Column(Float, default=0) # Ushbu savdoda ishlatilgan bonus
     
     # Relationships
     items = relationship("SaleItem", back_populates="sale")
@@ -157,6 +162,19 @@ class Supply(Base):
     quantity = Column(Float)
     buy_price = Column(Float) # O'sha paytdagi kirim narxi
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+class StockMove(Base):
+    __tablename__ = "stock_moves"
+    id = Column(Integer, primary_key=True, index=True)
+    product_id = Column(Integer, ForeignKey("products.id"))
+    quantity = Column(Float) # Musbat (kirim) yoki manfiy (chiqim)
+    type = Column(String) # sale, restock, refund, adjustment, audit
+    reason = Column(String, nullable=True) # Izoh
+    created_by = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    product = relationship("Product")
+    user = relationship("Employee")
 
 # 7. Qarz To'lovlari (Payment History)
 class Payment(Base):
@@ -248,6 +266,10 @@ class StoreSetting(Base):
     footer_text = Column(String, nullable=True) # Check pastidagi yozuv
     logo_url = Column(String, nullable=True)
     low_stock_threshold = Column(Integer, default=5)
+    
+    # New V2 Settings
+    bonus_percentage = Column(Float, default=1.0) # Har bir xarid uchun necha % bonus (1% default)
+    debt_reminder_days = Column(Integer, default=3) # To'lov muddatidan necha kun oldin eslatish
 
 # Bazani yaratish funksiyasi
 async def init_db():
