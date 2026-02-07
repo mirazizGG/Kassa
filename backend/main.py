@@ -97,6 +97,8 @@ app.include_router(settings.router)
 app.include_router(suppliers.router)
 
 # Static files for invoices
+if not os.path.exists("uploads"):
+    os.makedirs("uploads")
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 @app.get('/favicon.ico', include_in_schema=False)
