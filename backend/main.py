@@ -76,9 +76,14 @@ async def global_exception_handler(request: Request, exc: Exception):
         content={"detail": "Ichki server xatoligi yuz berdi. Iltimos, administratorga murojaat qiling."},
     )
 
+# Configure CORS
+allowed_origins_raw = os.getenv("ALLOWED_ORIGINS", "*")
+allowed_origins = [origin.strip() for origin in allowed_origins_raw.split(",")]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.getenv("ALLOWED_ORIGINS", "*").split(","), # Change to specific origins in production
+    allow_origins=allowed_origins,
+    allow_origin_regex="https://.*\.vercel\.app", # Allow all Vercel subdomains
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
