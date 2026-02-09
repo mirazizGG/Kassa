@@ -60,6 +60,7 @@ import { cn } from "@/lib/utils.js";
 
 const Inventory = () => {
     const [searchTerm, setSearchTerm] = useState('');
+    const role = localStorage.getItem('role');
     const [selectedCategory, setSelectedCategory] = useState('all');
     const [sortBy, setSortBy] = useState('name-asc');
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -639,19 +640,23 @@ const Inventory = () => {
                                             <DropdownMenuContent align="end" className="w-40 backdrop-blur-lg bg-popover/90">
                                                 <DropdownMenuLabel>Amallar</DropdownMenuLabel>
                                                 <DropdownMenuSeparator />
-                                                <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => handleEdit(product)}>
-                                                    <Edit className="w-4 h-4" /> Tahrirlash
-                                                </DropdownMenuItem>
-                                                <DropdownMenuItem
-                                                    className="gap-2 cursor-pointer text-destructive focus:bg-destructive/10 focus:text-destructive"
-                                                    onClick={() => {
-                                                        if (confirm(`${product.name} mahsulotini o'chirib tashlamoqchimisiz?`)) {
-                                                            deleteMutation.mutate(product.id);
-                                                        }
-                                                    }}
-                                                >
-                                                    <Trash2 className="w-4 h-4" /> O'chirish
-                                                </DropdownMenuItem>
+                                                {(role === 'admin' || role === 'manager') && (
+                                                    <>
+                                                        <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => handleEdit(product)}>
+                                                            <Edit className="w-4 h-4" /> Tahrirlash
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem
+                                                            className="gap-2 cursor-pointer text-destructive focus:bg-destructive/10 focus:text-destructive"
+                                                            onClick={() => {
+                                                                if (confirm(`${product.name} mahsulotini o'chirib tashlamoqchimisiz?`)) {
+                                                                    deleteMutation.mutate(product.id);
+                                                                }
+                                                            }}
+                                                        >
+                                                            <Trash2 className="w-4 h-4" /> O'chirish
+                                                        </DropdownMenuItem>
+                                                    </>
+                                                )}
                                             </DropdownMenuContent>
                                         </DropdownMenu>
                                     </TableCell>

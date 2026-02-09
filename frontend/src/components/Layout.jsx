@@ -23,24 +23,30 @@ const Layout = () => {
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('role');
+    localStorage.removeItem('username');
+    localStorage.removeItem('userId');
+    localStorage.removeItem('permissions');
     navigate('/login');
   };
 
   const role = localStorage.getItem('role');
 
   const navItems = [
-    { path: '/', label: 'Asosiy', icon: LayoutDashboard },
-    { path: '/pos', label: 'Sotuv (POS)', icon: ShoppingCart },
+    ...(role !== 'warehouse' ? [{ path: '/', label: 'Asosiy', icon: LayoutDashboard }] : []),
+    ...(role !== 'warehouse' ? [{ path: '/pos', label: 'Sotuv (POS)', icon: ShoppingCart }] : []),
     { path: '/inventory', label: 'Ombor', icon: Package },
-    { path: '/crm', label: 'Mijozlar', icon: Users },
+    ...(role !== 'warehouse' ? [{ path: '/crm', label: 'Mijozlar', icon: Users }] : []),
     ...(role === 'admin' || role === 'manager' ? [{ path: '/finance', label: 'Moliya', icon: CreditCard }] : []),
-    { path: '/shifts', label: 'Smena Tarixi', icon: History },
-    { path: '/sales', label: 'Savdolar Tarixi', icon: ShoppingCart },
+    ...(role !== 'warehouse' ? [
+        { path: '/shifts', label: 'Smena Tarixi', icon: History },
+        { path: '/sales', label: 'Savdolar Tarixi', icon: ShoppingCart }
+    ] : []),
     ...(role === 'admin' ? [{ path: '/audit', label: 'Audit', icon: Activity }] : []),
     ...(role === 'admin' || role === 'manager' ? [
         { path: '/employees', label: 'Xodimlar', icon: UserCog },
-        { path: '/suppliers', label: 'Firmalar', icon: Package }
+        { path: '/attendance', label: 'Davomat', icon: Activity },
     ] : []),
+    { path: '/suppliers', label: 'Firmalar', icon: Package },
     ...(role === 'admin' ? [{ path: '/settings', label: 'Sozlamalar', icon: UserCog }] : []),
   ];
 

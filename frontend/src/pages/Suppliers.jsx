@@ -100,9 +100,7 @@ const Suppliers = () => {
     });
 
     const addSupplyMutation = useMutation({
-        mutationFn: (formData) => api.post('/suppliers/receipts', formData, {
-            headers: { 'Content-Type': 'multipart/form-data' }
-        }),
+        mutationFn: (formData) => api.post('/suppliers/receipts', formData),
         onSuccess: () => {
             queryClient.invalidateQueries(['suppliers']);
             queryClient.invalidateQueries(['supplier-history']);
@@ -113,9 +111,7 @@ const Suppliers = () => {
     });
 
     const addPaymentMutation = useMutation({
-        mutationFn: (formData) => api.post('/suppliers/payments', formData, {
-            headers: { 'Content-Type': 'multipart/form-data' }
-        }),
+        mutationFn: (formData) => api.post('/suppliers/payments', formData),
         onSuccess: () => {
             queryClient.invalidateQueries(['suppliers']);
             queryClient.invalidateQueries(['supplier-history']);
@@ -128,6 +124,9 @@ const Suppliers = () => {
     // Handlers
     const handleAddSupply = (e) => {
         e.preventDefault();
+        if (!newSupply.supplier_id) return toast.error("Firmani tanlang");
+        if (!newSupply.total_amount) return toast.error("Summani kiriting");
+
         const fd = new FormData();
         fd.append('supplier_id', newSupply.supplier_id);
         fd.append('total_amount', newSupply.total_amount);
@@ -138,6 +137,9 @@ const Suppliers = () => {
 
     const handleAddPayment = (e) => {
         e.preventDefault();
+        if (!newPayment.supplier_id) return toast.error("Firmani tanlang");
+        if (!newPayment.amount) return toast.error("Summani kiriting");
+
         const fd = new FormData();
         fd.append('supplier_id', newPayment.supplier_id);
         fd.append('amount', newPayment.amount);

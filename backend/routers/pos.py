@@ -10,6 +10,7 @@ from datetime import datetime, timezone, date, time
 from database import get_db, Sale, SaleItem, Product, Shift, Employee, Client
 from schemas import SaleCreate, SaleOut, ShiftOpen, ShiftClose, ShiftOut
 from core import get_current_user
+from routers.audit import log_action
 
 router = APIRouter(prefix="/pos", tags=["pos"])
 
@@ -103,6 +104,9 @@ async def open_shift(
         opened_at=datetime.now()
     )
     db.add(db_shift)
+    
+    await log_action(db, current_user.id, "SMENA_OCHILDI", f"Boshlang'ich balans: {shift_data.opening_balance:,.0f} so'm")
+    
     await db.commit()
     await db.refresh(db_shift)
     
@@ -129,6 +133,8 @@ async def close_shift(
     db_shift.closing_balance = shift_data.closing_balance
     db_shift.closed_at = datetime.now()
     db_shift.status = "closed"
+    
+    await log_action(db, current_user.id, "SMENA_YOPILDI", f"Yakuniy balans: {shift_data.closing_balance:,.0f} so'm")
     
     await db.commit()
     await db.refresh(db_shift)

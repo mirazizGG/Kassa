@@ -6,6 +6,7 @@ from typing import List, Optional
 from database import get_db, Client, Employee
 from schemas import ClientCreate, ClientOut
 from core import get_current_user
+from routers.audit import log_action
 
 router = APIRouter(prefix="/crm", tags=["crm"])
 
@@ -22,6 +23,9 @@ async def create_client(
 ):
     db_client = Client(**client.model_dump())
     db.add(db_client)
+    
+    await log_action(db, current_user.id, "YANGI_MIJOZ", f"Mijoz qo'shildi: {db_client.name} (Tel: {db_client.phone or '-'})")
+    
     await db.commit()
     await db.refresh(db_client)
     return db_client
@@ -70,6 +74,9 @@ async def pay_debt(
     )
     
     db.add(db_payment)
+    
+    await log_action(db, current_user.id, "MIJOZ_TOLOV", f"Mijoz: {client.name}. Summa: {payment_data.amount:,.0f} so'm. Usul: {payment_data.payment_method}")
+    
     await db.commit()
     await db.refresh(client)
     

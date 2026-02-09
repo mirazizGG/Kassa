@@ -7,6 +7,7 @@ from datetime import datetime
 from database import get_db, Product, Sale, SaleItem, Employee, Client, StoreSetting, StockMove
 from schemas import SaleCreate, SaleOut
 from core import get_current_user
+from routers.audit import log_action
 
 from sqlalchemy.orm import joinedload
 
@@ -119,6 +120,8 @@ async def create_sale(
                     raise HTTPException(status_code=400, detail="Bonus balansi yetarli emas")
                 client.bonus_balance -= sale.bonus_spent
                 db_sale.bonus_spent = sale.bonus_spent
+    
+    await log_action(db, current_user.id, "YANGI_SOTUV", f"Summa: {db_sale.total_amount:,.0f} so'm. Usul: {db_sale.payment_method}. Chek ID: {db_sale.id}")
     
     await db.commit()
     
@@ -245,6 +248,8 @@ async def refund_sale(
 
     # 4. Update Sale Status
     db_sale.status = "refunded"
+    
+    await log_action(db, current_user.id, "VOZVRAT", f"Savdo qaytarildi (Vozvrat). Chek ID: {sale_id}. Summa: {db_sale.total_amount:,.0f} so'm")
     
     await db.commit()
     

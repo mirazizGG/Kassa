@@ -123,20 +123,39 @@ const Employees = () => {
              toast.success("Xodim qo'shildi!");
         },
         onError: (err) => {
-             toast.error("Xatolik", { description: err.response?.data?.detail || "Xodim qo'shib bo'lmadi" });
+             const detail = err.response?.data?.detail;
+             const errorMessage = typeof detail === 'string' 
+                ? detail 
+                : (Array.isArray(detail) ? detail.map(d => d.msg).join(", ") : "Xodim qo'shib bo'lmadi");
+             toast.error("Xatolik", { description: errorMessage });
         }
     });
 
     const updateEmployeeMutation = useMutation({
         mutationFn: (data) => api.patch(`/auth/employees/${data.id}`, data),
-        onSuccess: () => {
+        onSuccess: (res) => {
+             const updatedEmp = res.data;
              queryClient.invalidateQueries(['employees']);
+             
+             // Agar o'zimizni tahrirlagan bo'lsak, localStorage ni ham yangilaymiz
+             if (updatedEmp.id === currentUserId) {
+                 localStorage.setItem('role', updatedEmp.role);
+                 localStorage.setItem('permissions', updatedEmp.permissions || '');
+                 // Sidebar va Router o'zgarishi uchun sahifani reload qilish tavsiya etiladi
+                 // yoki Layout.jsx bunga qarab ishlashi kerak. Eng osoni reload.
+                 window.location.reload();
+             }
+
              setIsEditModalOpen(false);
              setEditingEmployee(null);
              toast.success("Xodim ma'lumotlari yangilandi!");
         },
         onError: (err) => {
-             toast.error("Xatolik", { description: err.response?.data?.detail || "Xatolik yuz berdi" });
+             const detail = err.response?.data?.detail;
+             const errorMessage = typeof detail === 'string' 
+                ? detail 
+                : (Array.isArray(detail) ? detail.map(d => d.msg).join(", ") : "Xatolik yuz berdi");
+             toast.error("Xatolik", { description: errorMessage });
         }
     });
 
@@ -149,7 +168,11 @@ const Employees = () => {
              toast.success("Xodim tizimdan o'chirildi");
         },
         onError: (err) => {
-             toast.error("O'chirishda xatolik", { description: err.response?.data?.detail || "Xatolik yuz berdi" });
+             const detail = err.response?.data?.detail;
+             const errorMessage = typeof detail === 'string' 
+                ? detail 
+                : (Array.isArray(detail) ? detail.map(d => d.msg).join(", ") : "Xatolik yuz berdi");
+             toast.error("O'chirishda xatolik", { description: errorMessage });
         }
     });
 
@@ -163,16 +186,34 @@ const Employees = () => {
              toast.success("Vazifa yaratildi");
         },
         onError: (err) => {
-             toast.error("Xatolik", { description: err.response?.data?.detail || "Vazifa yaratib bo'lmadi" });
+             const detail = err.response?.data?.detail;
+             const errorMessage = typeof detail === 'string' 
+                ? detail 
+                : (Array.isArray(detail) ? detail.map(d => d.msg).join(", ") : "Vazifa yaratib bo'lmadi");
+             
+             toast.error("Xatolik", { description: errorMessage });
         }
     });
 
     const handleCreateTask = (e) => {
         e.preventDefault();
-        createTaskMutation.mutate({
-            ...newTask,
-            assigned_to: parseInt(newTask.assigned_to)
-        });
+        
+        if (!newTask.assigned_to) {
+            toast.error("Xodimni tanlang");
+            return;
+        }
+
+        const taskData = {
+            title: newTask.title,
+            description: newTask.description,
+            assigned_to: parseInt(newTask.assigned_to),
+        };
+
+        if (newTask.due_date) {
+            taskData.due_date = newTask.due_date;
+        }
+
+        createTaskMutation.mutate(taskData);
     };
 
     const handleCreateEmployee = (e) => {
@@ -182,9 +223,11 @@ const Employees = () => {
 
     const handleUpdateEmployee = (e) => {
         e.preventDefault();
+        
         // Don't send empty password
         const data = { ...editingEmployee };
         if (!data.password) delete data.password;
+        
         updateEmployeeMutation.mutate(data);
     };
 
@@ -262,7 +305,8 @@ const Employees = () => {
                                                 </SelectTrigger>
                                                 <SelectContent>
                                                     {role === 'admin' && <SelectItem value="admin">Admin</SelectItem>}
-                                                    {role === 'admin' && <SelectItem value="manager">Manager</SelectItem>}
+                                                    {(role === 'admin' || role === 'manager') && <SelectItem value="manager">Manager</SelectItem>}
+                                                    {(role === 'admin' || role === 'manager') && <SelectItem value="warehouse">Omborchi</SelectItem>}
                                                     <SelectItem value="cashier">Kassir</SelectItem>
                                                 </SelectContent>
                                             </Select>
@@ -565,6 +609,7 @@ const Employees = () => {
                                             <SelectContent>
                                                 <SelectItem value="admin">Admin</SelectItem>
                                                 <SelectItem value="manager">Manager</SelectItem>
+                                                <SelectItem value="warehouse">Omborchi</SelectItem>
                                                 <SelectItem value="cashier">Kassir</SelectItem>
                                             </SelectContent>
                                         </Select>

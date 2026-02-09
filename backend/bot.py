@@ -1,6 +1,8 @@
+from database import SessionLocal as AsyncSessionLocal, Client, Employee, Attendance
+from datetime import datetime, timezone
+import os
 import asyncio
 import logging
-import sys
 from aiogram import Bot, Dispatcher, F
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
@@ -9,11 +11,7 @@ from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, ReplyKey
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
-
-from sqlalchemy import select
-from database import SessionLocal as AsyncSessionLocal, Client, Employee
-from datetime import datetime
-import os
+from sqlalchemy import select, and_
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -25,22 +23,125 @@ class Registration(StatesGroup):
     waiting_for_contact = State()
     waiting_for_name = State()
 
+class Broadcast(StatesGroup):
+    waiting_for_content = State()
+
 dp = Dispatcher(storage=MemoryStorage())
 
 # --- MENU ---
 def get_main_menu(role="client"):
-    kb = [
-        [KeyboardButton(text="💰 Balansim")]
-    ]
-    if role == "admin":
-        kb.append([KeyboardButton(text="Ma'lumotlar 📦")])
+    kb = []
+    
+    if role == "client":
+        # Mijozlar uchun faqat shaxsiy hisob tugmalari
+        kb.append([KeyboardButton(text="💰 Balansim")])
+        kb.append([KeyboardButton(text="🎁 Bonuslarim")])
+    
+    elif role == "admin":
+        # Admin uchun nazorat va boshqaruv
+        kb.append([
+            KeyboardButton(text="🎬 Ishga kelish"),
+            KeyboardButton(text="🛑 Ishdan ketish")
+        ])
+        kb.append([KeyboardButton(text="📢 Reklama yuborish")])
+        kb.append([
+            KeyboardButton(text="👥 Kim ishda?"),
+            KeyboardButton(text="Ma'lumotlar 📦")
+        ])
+    
+    elif role in ["manager", "cashier", "warehouse"]:
+        # Oddiy ishchilar uchun FAQAT kelib-ketish tugmalari
+        kb.append([
+            KeyboardButton(text="🎬 Ishga kelish"),
+            KeyboardButton(text="🛑 Ishdan ketish")
+        ])
     
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
+
+@dp.message(F.text == "🎬 Ishga kelish")
+async def clock_in_handler(message: Message) -> None:
+    async with AsyncSessionLocal() as db:
+        res = await db.execute(select(Employee).where(Employee.telegram_id == message.from_user.id))
+        employee = res.scalars().first()
+        
+        if not employee:
+            await message.answer("Siz xodimlar ro'yxatida yo'qsiz!")
+            return
+            
+        # Oxirgi holatni tekshirish
+        stmt = select(Attendance).where(Attendance.employee_id == employee.id).order_by(Attendance.created_at.desc())
+        last_attres = await db.execute(stmt)
+        last_att = last_attres.scalars().first()
+        
+        if last_att and last_att.status == "in":
+            await message.answer("Siz allaqachon ishdasiz! 😅")
+            return
+            
+        new_att = Attendance(employee_id=employee.id, status="in")
+        db.add(new_att)
+        await db.commit()
+        await message.answer(f"Xush kelibsiz, {employee.username}! Ish boshlandi. 🚀\nVaqt: {datetime.now().strftime('%H:%M')}")
+
+@dp.message(F.text == "🛑 Ishdan ketish")
+async def clock_out_handler(message: Message) -> None:
+    async with AsyncSessionLocal() as db:
+        res = await db.execute(select(Employee).where(Employee.telegram_id == message.from_user.id))
+        employee = res.scalars().first()
+        
+        if not employee:
+            await message.answer("Siz xodimlar ro'yxatida yo'qsiz!")
+            return
+            
+        # Oxirgi holatni tekshirish
+        stmt = select(Attendance).where(Attendance.employee_id == employee.id).order_by(Attendance.created_at.desc())
+        last_attres = await db.execute(stmt)
+        last_att = last_attres.scalars().first()
+        
+        if not last_att or last_att.status == "out":
+            await message.answer("Siz hali ishga kelmagansiz-ku? 🤔")
+            return
+            
+        new_att = Attendance(employee_id=employee.id, status="out")
+        db.add(new_att)
+        await db.commit()
+        await message.answer(f"Yaxshi dam oling, {employee.username}! Ish yakunlandi. ✅\nVaqt: {datetime.now().strftime('%H:%M')}")
+
+@dp.message(F.text == "👥 Kim ishda?")
+async def who_is_working_handler(message: Message) -> None:
+    async with AsyncSessionLocal() as db:
+        # Adminlikni tekshirish
+        res = await db.execute(select(Employee).where(Employee.telegram_id == message.from_user.id, Employee.role == "admin"))
+        if not res.scalars().first():
+            return
+
+        # Hozirda ishda bo'lganlarni aniqlash
+        # Sodda yo'li: Har bir xodimning oxirgi statusi 'in' bo'lganlarni olish
+        stmt = select(Employee)
+        emp_res = await db.execute(stmt)
+        all_employees = emp_res.scalars().all()
+        
+        working_now = []
+        for emp in all_employees:
+            att_stmt = select(Attendance).where(Attendance.employee_id == emp.id).order_by(Attendance.created_at.desc()).limit(1)
+            att_res = await db.execute(att_stmt)
+            last_att = att_res.scalars().first()
+            if last_att and last_att.status == "in":
+                working_now.append(f"👤 {emp.username} ({last_att.created_at.strftime('%H:%M')} dan beri)")
+        
+        if working_now:
+            text = "👥 <b>Hozirda ishda:</b>\n\n" + "\n".join(working_now)
+        else:
+            text = "📭 Hozirda hech kim ishda emas."
+            
+        await message.answer(text, parse_mode=ParseMode.HTML)
+
 
 # --- COMMANDS ---
 @dp.message(CommandStart())
 async def command_start_handler(message: Message, state: FSMContext) -> None:
     telegram_id = message.from_user.id
+    await state.clear()
 
     # Mijoz tekshiruvi
     async with AsyncSessionLocal() as db:
@@ -54,10 +155,9 @@ async def command_start_handler(message: Message, state: FSMContext) -> None:
             role = employee.role if employee else "client"
             
             await message.answer(
-                f"Salom, {client.name}! 👋\nSiz avval ro'yxatdan o'tgansiz.",
+                f"Salom, {client.name}! 👋\nDo'konimizga xush kelibsiz.",
                 reply_markup=get_main_menu(role)
             )
-            await state.clear()
             return
 
     # Yangi foydalanuvchi - ro'yxatdan o'tkazish
@@ -96,32 +196,48 @@ async def name_handler(message: Message, state: FSMContext) -> None:
 
     data = await state.get_data()
     phone = data.get("phone")
+    telegram_id = message.from_user.id
 
     async with AsyncSessionLocal() as db:
-        # Telefon bo'yicha tekshirish
-        result = await db.execute(select(Client).where(Client.phone == phone))
-        existing_client = result.scalars().first()
+        # 1. Avval bu raqamli xodim bormi tekshiramiz
+        emp_result = await db.execute(select(Employee).where(Employee.phone == phone))
+        employee = emp_result.scalars().first()
 
-        if existing_client:
-            existing_client.name = full_name
-            existing_client.telegram_id = message.from_user.id
+        if employee:
+            # Xodim topildi! ID sini ulab qo'yamiz
+            employee.telegram_id = telegram_id
             await db.commit()
-            
-            # Get user role for menu
-            role_result = await db.execute(select(Employee).where(Employee.telegram_id == message.from_user.id))
-            employee = role_result.scalars().first()
-            role = employee.role if employee else "client"
-            
-            await message.answer(f"Siz avval ro'yxatdan o'tgansiz. Ma'lumotlaringiz yangilandi! ✅", reply_markup=get_main_menu(role))
+            await message.answer(
+                f"Siz tizimda xodim sifatida tanildingiz: <b>{employee.username}</b> ✅\nEndi bot orqali ish jadvalingizni boshqarishingiz mumkin.",
+                reply_markup=get_main_menu(employee.role),
+                parse_mode=ParseMode.HTML
+            )
+            await state.clear()
+            return
+
+        # 2. Agar xodim bo'lmasa, mijoz sifatida tekshiramiz
+        client_result = await db.execute(select(Client).where(Client.phone == phone))
+        client = client_result.scalars().first()
+
+        if client:
+            client.name = full_name
+            client.telegram_id = telegram_id
         else:
-            new_client = Client(name=full_name, phone=phone, telegram_id=message.from_user.id, balance=0)
+            new_client = Client(
+                name=full_name, 
+                phone=phone, 
+                telegram_id=telegram_id, 
+                balance=0, 
+                bonus_balance=0
+            )
             db.add(new_client)
-            await db.commit()
-            await message.answer(f"Tabriklaymiz! Siz muvaffaqiyatli ro'yxatdan o'tdingiz. ✅", reply_markup=get_main_menu())
+        
+        await db.commit()
+        await message.answer(f"Tabriklaymiz! Siz muvaffaqiyatli ro'yxatdan o'tdingiz. ✅", reply_markup=get_main_menu("client"))
 
     await state.clear()
 
-# --- BALANS ---
+# --- HANDLERS ---
 @dp.message(F.text == "💰 Balansim")
 async def balance_handler(message: Message) -> None:
     telegram_id = message.from_user.id
@@ -134,19 +250,73 @@ async def balance_handler(message: Message) -> None:
             text = f"👤 <b>{client.name}</b>\n\n💰 Sizning balansingiz: <b>{bal:,.0f} so'm</b>"
             if bal < 0:
                 text += "\n\n🔴 Sizda qarzdorlik bor!"
-                if client.debt_due_date:
-                    days_left = (client.debt_due_date - datetime.now()).days
-                    if days_left > 0:
-                        text += f"\n📅 To'lov muddati: {days_left} kun qoldi"
-                    elif days_left == 0:
-                        text += f"\n⚠️ To'lov muddati: BUGUN!"
-                    else:
-                        text += f"\n‼️ Muddat {abs(days_left)} kun o'tdi!"
             elif bal > 0:
                 text += "\n\n🟢 Sizda oldindan to'lov bor."
             await message.answer(text)
         else:
             await message.answer("Siz hali ro'yxatdan o'tmagansiz. /start ni bosing.")
+
+@dp.message(F.text == "🎁 Bonuslarim")
+async def bonus_handler(message: Message) -> None:
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(Client).where(Client.telegram_id == message.from_user.id))
+        client = result.scalars().first()
+        if client:
+            text = (
+                f"🎁 <b>Sizning bonuslaringiz</b>\n\n"
+                f"✨ Mavjud bonus: <b>{client.bonus_balance:,.0f} so'm</b>\n\n"
+                f"💡 <i>Har bir xaridingizdan bonuslar yig'iladi va ularni keyingi xaridlar uchun ishlatishingiz mumkin!</i>"
+            )
+            await message.answer(text)
+
+# --- ADMIN: BROADCAST ---
+@dp.message(F.text == "📢 Reklama yuborish")
+async def start_broadcast(message: Message, state: FSMContext) -> None:
+    async with AsyncSessionLocal() as db:
+        res = await db.execute(select(Employee).where(Employee.telegram_id == message.from_user.id, Employee.role == "admin"))
+        if not res.scalars().first():
+            await message.answer("Kechirasiz, bu bo'lim faqat adminlar uchun!")
+            return
+
+    await message.answer(
+        "📢 <b>Reklama xabari yuborish bo'limi</b>\n\n"
+        "Xabar matnini yuboring (rasm bilan yuborsangiz ham bo'ladi).\n"
+        "Yuborgan narsangiz barcha mijozlarga yetib boradi.\n\n"
+        "<i>Bekor qilish uchun /cancel deb yozing.</i>",
+        parse_mode=ParseMode.HTML,
+        reply_markup=ReplyKeyboardRemove()
+    )
+    await state.set_state(Broadcast.waiting_for_content)
+
+@dp.message(Broadcast.waiting_for_content)
+async def process_broadcast(message: Message, state: FSMContext) -> None:
+    if message.text == "/cancel":
+        await state.clear()
+        await message.answer("Bekor qilindi.", reply_markup=get_main_menu("admin"))
+        return
+
+    async with AsyncSessionLocal() as db:
+        res = await db.execute(select(Client).where(Client.telegram_id.isnot(None)))
+        clients = res.scalars().all()
+    
+    count = 0
+    await message.answer(f"Xabar yuborish boshlandi ({len(clients)} ta mijoz)... ⏳")
+    
+    for client in clients:
+        try:
+            if message.content_type == "text":
+                await bot.send_message(client.telegram_id, message.text)
+            elif message.content_type == "photo":
+                await bot.send_photo(client.telegram_id, message.photo[-1].file_id, caption=message.caption)
+            elif message.content_type == "video":
+                await bot.send_video(client.telegram_id, message.video.file_id, caption=message.caption)
+            count += 1
+            await asyncio.sleep(0.05)
+        except Exception:
+            pass
+
+    await message.answer(f"Tayyor! ✅\nXabar {count} ta mijozga yuborildi.", reply_markup=get_main_menu("admin"))
+    await state.clear()
 
 # --- ADMIN: MA'LUMOTLAR (BACKUP) ---
 @dp.message(F.text == "Ma'lumotlar 📦")
@@ -157,7 +327,6 @@ async def admin_backup_handler(message: Message) -> None:
         admin = result.scalars().first()
 
         if not admin:
-            await message.answer("Bu tugma faqat adminlar uchun!")
             return
 
         await message.answer("Tayyorlanmoqda... ⏳")

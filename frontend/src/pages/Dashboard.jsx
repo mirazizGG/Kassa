@@ -10,11 +10,17 @@ import {
     AlertTriangle,
     DollarSign,
     TrendingUp,
-    Briefcase
+    Briefcase,
+    Activity,
+    List,
+    Clock,
+    User
 } from 'lucide-react';
 import FilterBar from '../components/FilterBar';
 import SalesChart from '../components/SalesChart';
 import TopProducts from '../components/TopProducts';
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 const Dashboard = () => {
     const today = new Date().toISOString().split('T')[0];
@@ -23,6 +29,15 @@ const Dashboard = () => {
         employee_id: '',
         start_date: today,
         end_date: today
+    });
+
+    const { data: recentLogs } = useQuery({
+        queryKey: ['recent-audit-logs'],
+        queryFn: async () => {
+            const res = await api.get('/audit/logs', { params: { limit: 5 } });
+            return res.data;
+        },
+        enabled: role === 'admin'
     });
 
     const { data: stats, isLoading, error } = useQuery({
@@ -124,9 +139,108 @@ const Dashboard = () => {
                 ))}
             </div>
 
+            {/* Low Stock Alert Section */}
+            {stats?.lowStockItems?.length > 0 && (
+                <Card className="border-amber-200 bg-amber-50/50 dark:bg-amber-900/10 dark:border-amber-900/50">
+                    <CardHeader className="pb-3">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <div className="p-2 bg-amber-100 dark:bg-amber-900/50 rounded-lg">
+                                    <AlertTriangle className="h-5 w-5 text-amber-600" />
+                                </div>
+                                <div>
+                                    <CardTitle className="text-lg font-bold text-amber-900 dark:text-amber-100">
+                                        Kam qolgan mahsulotlar
+                                    </CardTitle>
+                                    <CardDescription className="text-amber-700/70 dark:text-amber-400/70">
+                                        Quyidagi mahsulotlar zaxirasi belgilangan limitdan kamayib ketgan
+                                    </CardDescription>
+                                </div>
+                            </div>
+                            <Link to="/inventory">
+                                <Button size="sm" variant="outline" className="h-8 border-amber-200 hover:bg-amber-100 text-amber-800">
+                                    Hammasini ko'rish
+                                </Button>
+                            </Link>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                            {stats.lowStockItems.slice(0, 6).map((item) => (
+                                <div key={item.id} className="flex items-center justify-between p-3 rounded-xl bg-background/50 border border-amber-100 dark:border-amber-900/30">
+                                    <div className="flex flex-col">
+                                        <span className="text-sm font-bold truncate max-w-[150px]">{item.name}</span>
+                                        <span className="text-[10px] text-muted-foreground uppercase font-medium">{item.unit}</span>
+                                    </div>
+                                    <Badge variant="destructive" className="bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-200 font-black px-2 py-0">
+                                        {item.stock} ta
+                                    </Badge>
+                                </div>
+                            ))}
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
+
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-                <SalesChart filters={filters} />
-                <TopProducts filters={filters} />
+                <div className="lg:col-span-5 space-y-4">
+                    <SalesChart filters={filters} />
+                    <TopProducts filters={filters} />
+                </div>
+                
+                <div className="lg:col-span-2 space-y-4">
+                    {role === 'admin' && (
+                        <Card className="h-full border-none shadow-xl bg-background/40 backdrop-blur-xl">
+                            <CardHeader className="pb-3 border-b border-border/50">
+                                <div className="flex items-center justify-between">
+                                    <CardTitle className="text-md flex items-center gap-2">
+                                        <Activity className="h-4 w-4 text-primary" />
+                                        Oxirgi harakatlar
+                                    </CardTitle>
+                                    <Link to="/audit">
+                                        <Button size="sm" variant="ghost" className="h-7 text-xs px-2">
+                                            Hammasi
+                                        </Button>
+                                    </Link>
+                                </div>
+                            </CardHeader>
+                            <CardContent className="pt-4 px-3">
+                                <div className="space-y-4">
+                                    {recentLogs?.map((log) => (
+                                        <div key={log.id} className="flex gap-3 animate-in fade-in slide-in-from-right-2 duration-300">
+                                            <div className="relative">
+                                                <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center ring-2 ring-background">
+                                                    <User className="w-4 h-4 text-muted-foreground" />
+                                                </div>
+                                                <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-primary border-2 border-background flex items-center justify-center">
+                                                    <Clock className="w-2 h-2 text-white" />
+                                                </div>
+                                            </div>
+                                            <div className="flex-1 space-y-1">
+                                                <div className="flex items-center justify-between">
+                                                    <p className="text-[12px] font-bold tracking-tight">
+                                                        {log.user?.username}
+                                                    </p>
+                                                    <span className="text-[10px] text-muted-foreground font-medium">
+                                                        {new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                    </span>
+                                                </div>
+                                                <p className="text-[11px] text-muted-foreground leading-tight italic line-clamp-2">
+                                                    {log.action}: {log.details}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {(!recentLogs || recentLogs.length === 0) && (
+                                        <div className="py-10 text-center opacity-30 italic text-sm">
+                                            Harakatlar yo'q
+                                        </div>
+                                    )}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
+                </div>
             </div>
 
             {/* Low Stock Section removed */}
@@ -140,42 +254,42 @@ const Dashboard = () => {
                     <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                          
                          {/* POS Link */}
-                         <Link to="/pos" className="group relative overflow-hidden rounded-2xl border bg-white p-6 shadow-sm transition-all hover:shadow-lg hover:-translate-y-1 hover:border-emerald-200">
+                         <Link to="/pos" className="group relative overflow-hidden rounded-2xl border bg-card p-6 shadow-sm transition-all hover:shadow-lg hover:-translate-y-1 hover:border-emerald-200">
                              <div className="absolute inset-0 bg-gradient-to-br from-emerald-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                              <div className="relative flex flex-col items-center gap-3 text-center">
-                                 <div className="p-4 rounded-2xl bg-emerald-100 text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-colors duration-300">
+                                 <div className="p-4 rounded-2xl bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-colors duration-300">
                                      <DollarSign className="h-8 w-8" />
                                  </div>
                                  <div className="space-y-1">
-                                     <h3 className="font-bold text-lg text-gray-900">Yangi Savdo</h3>
+                                     <h3 className="font-bold text-lg text-foreground">Yangi Savdo</h3>
                                      <p className="text-sm text-muted-foreground">Sotuv oynasini ochish</p>
                                  </div>
                              </div>
                          </Link>
 
                          {/* Inventory Link */}
-                         <Link to="/inventory" className="group relative overflow-hidden rounded-2xl border bg-white p-6 shadow-sm transition-all hover:shadow-lg hover:-translate-y-1 hover:border-blue-200">
+                         <Link to="/inventory" className="group relative overflow-hidden rounded-2xl border bg-card p-6 shadow-sm transition-all hover:shadow-lg hover:-translate-y-1 hover:border-blue-200">
                              <div className="absolute inset-0 bg-gradient-to-br from-blue-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                              <div className="relative flex flex-col items-center gap-3 text-center">
-                                 <div className="p-4 rounded-2xl bg-blue-100 text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300">
+                                 <div className="p-4 rounded-2xl bg-blue-100 dark:bg-blue-900/30 text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300">
                                      <Package className="h-8 w-8" />
                                  </div>
                                  <div className="space-y-1">
-                                     <h3 className="font-bold text-lg text-gray-900">Mahsulotlar</h3>
+                                     <h3 className="font-bold text-lg text-foreground">Mahsulotlar</h3>
                                      <p className="text-sm text-muted-foreground">Omborni boshqarish</p>
                                  </div>
                              </div>
                          </Link>
 
                          {/* CRM Link */}
-                         <Link to="/crm" className="group relative overflow-hidden rounded-2xl border bg-white p-6 shadow-sm transition-all hover:shadow-lg hover:-translate-y-1 hover:border-purple-200">
+                         <Link to="/crm" className="group relative overflow-hidden rounded-2xl border bg-card p-6 shadow-sm transition-all hover:shadow-lg hover:-translate-y-1 hover:border-purple-200">
                              <div className="absolute inset-0 bg-gradient-to-br from-purple-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                              <div className="relative flex flex-col items-center gap-3 text-center">
-                                 <div className="p-4 rounded-2xl bg-purple-100 text-purple-600 group-hover:bg-purple-600 group-hover:text-white transition-colors duration-300">
+                                 <div className="p-4 rounded-2xl bg-purple-100 dark:bg-purple-900/30 text-purple-600 group-hover:bg-purple-600 group-hover:text-white transition-colors duration-300">
                                      <Users className="h-8 w-8" />
                                  </div>
                                  <div className="space-y-1">
-                                     <h3 className="font-bold text-lg text-gray-900">Mijozlar</h3>
+                                     <h3 className="font-bold text-lg text-foreground">Mijozlar</h3>
                                      <p className="text-sm text-muted-foreground">Mijozlar bazasi</p>
                                  </div>
                              </div>
@@ -183,14 +297,14 @@ const Dashboard = () => {
 
                          {/* Finance Link */}
                          {(role === 'admin' || role === 'manager') && (
-                             <Link to="/finance" className="group relative overflow-hidden rounded-2xl border bg-white p-6 shadow-sm transition-all hover:shadow-lg hover:-translate-y-1 hover:border-amber-200">
+                             <Link to="/finance" className="group relative overflow-hidden rounded-2xl border bg-card p-6 shadow-sm transition-all hover:shadow-lg hover:-translate-y-1 hover:border-amber-200">
                                  <div className="absolute inset-0 bg-gradient-to-br from-amber-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                                  <div className="relative flex flex-col items-center gap-3 text-center">
-                                     <div className="p-4 rounded-2xl bg-amber-100 text-amber-600 group-hover:bg-amber-600 group-hover:text-white transition-colors duration-300">
+                                     <div className="p-4 rounded-2xl bg-amber-100 dark:bg-amber-900/30 text-amber-600 group-hover:bg-amber-600 group-hover:text-white transition-colors duration-300">
                                          <Briefcase className="h-8 w-8" />
                                      </div>
                                      <div className="space-y-1">
-                                         <h3 className="font-bold text-lg text-gray-900">Hisobotlar</h3>
+                                         <h3 className="font-bold text-lg text-foreground">Hisobotlar</h3>
                                          <p className="text-sm text-muted-foreground">Moliya va kirim-chiqim</p>
                                      </div>
                                  </div>

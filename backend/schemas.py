@@ -33,6 +33,7 @@ class EmployeeUpdate(BaseModel):
     username: Optional[str] = None
     password: Optional[str] = None
     role: Optional[str] = None
+    permissions: Optional[str] = None
     full_name: Optional[str] = None
     phone: Optional[str] = None
     address: Optional[str] = None
