@@ -9,6 +9,7 @@ from schemas import ExpenseCreate, ExpenseOut, PaymentCreate
 from core import get_current_user
 # from sqlalchemy import func # Already imported above
 from sqlalchemy.orm import joinedload
+from routers.audit import log_action
 import io
 
 router = APIRouter(prefix="/finance", tags=["finance"])
@@ -404,12 +405,7 @@ async def create_expense(
     )
     db.add(db_expense)
     
-    # Audit Log
-    try:
-        from routers.audit import log_action
-        await log_action(db, current_user.id, "CREATE_EXPENSE", f"Xarajat qo'shildi: {db_expense.amount:,.0f} so'm ({db_expense.category})")
-    except:
-        pass
+    await log_action(db, current_user.id, "YANGI_XARAJAT", f"Xarajat: {db_expense.amount:,.0f} so'm ({db_expense.category}). Izoh: {db_expense.reason}")
 
     await db.commit()
     await db.refresh(db_expense)
@@ -434,6 +430,8 @@ async def create_payment(
     client = result.scalars().first()
     if client:
         client.balance += payment.amount
+        
+    await log_action(db, current_user.id, "MIJOZ_TOLOV", f"Mijoz: {client.name if client else 'Nomalum'}. Summa: {payment.amount:,.0f} so'm. Usul: {payment.payment_method}")
         
     await db.commit()
     return {"status": "success", "message": "To'lov qabul qilindi"}

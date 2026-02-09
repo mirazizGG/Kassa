@@ -1,3 +1,4 @@
+import os
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -6,6 +7,9 @@ from typing import List
 from database import get_db, StoreSetting, Employee
 from schemas import StoreSettingBase, StoreSettingOut
 from core import get_current_user
+
+from core import get_current_user
+from routers.audit import log_action
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
@@ -47,6 +51,8 @@ async def update_settings(
     
     for key, value in data.model_dump().items():
         setattr(settings, key, value)
+        
+    await log_action(db, current_user.id, "SOZLAMALAR_OZGARDI", f"Do'kon sozlamalari yangilandi: {settings.name}")
         
     await db.commit()
     await db.refresh(settings)

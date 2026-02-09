@@ -11,6 +11,8 @@ from database import get_db, Supplier, SupplyReceipt, SupplierPayment, Employee
 from core import get_current_user
 from pydantic import BaseModel
 
+from routers.audit import log_action
+
 router = APIRouter(prefix="/suppliers", tags=["suppliers"])
 
 # --- Schemas ---
@@ -59,7 +61,7 @@ async def get_suppliers(
     current_user: Employee = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    if current_user.role not in ["admin", "manager"]:
+    if current_user.role not in ["admin", "manager", "warehouse"]:
         raise HTTPException(status_code=403, detail="Ruxsat berilmagan")
     result = await db.execute(select(Supplier).order_by(Supplier.name))
     return result.scalars().all()
@@ -70,12 +72,16 @@ async def create_supplier(
     current_user: Employee = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    if current_user.role not in ["admin", "manager"]:
+    if current_user.role not in ["admin", "manager", "warehouse"]:
         raise HTTPException(status_code=403, detail="Ruxsat berilmagan")
     db_supplier = Supplier(**supplier.model_dump())
     db.add(db_supplier)
     await db.commit()
     await db.refresh(db_supplier)
+    
+    await log_action(db, current_user.id, "YANGI_FIRMA", f"Firma qo'shildi: {db_supplier.name} (ID: {db_supplier.id})")
+    await db.commit() # Commit again to save log
+    
     return db_supplier
 
 @router.post("/receipts")
@@ -87,7 +93,7 @@ async def add_receipt(
     current_user: Employee = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    if current_user.role not in ["admin", "manager"]:
+    if current_user.role not in ["admin", "manager", "warehouse"]:
         raise HTTPException(status_code=403, detail="Ruxsat berilmagan")
     # Check if supplier exists
     res = await db.execute(select(Supplier).where(Supplier.id == supplier_id))
@@ -122,6 +128,8 @@ async def add_receipt(
     # Update supplier balance (Increase debt)
     supplier.balance += total_amount
     
+    await log_action(db, current_user.id, "FIRMA_KIRIM", f"Firma: {supplier.name}. Summa: {total_amount} so'm. Izoh: {note or '-'}")
+    
     await db.commit()
     return {"message": "Kirim muvaffaqiyatli saqlandi", "new_balance": supplier.balance}
 
@@ -134,7 +142,7 @@ async def add_payment(
     current_user: Employee = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    if current_user.role not in ["admin", "manager"]:
+    if current_user.role not in ["admin", "manager", "warehouse"]:
         raise HTTPException(status_code=403, detail="Ruxsat berilmagan")
     res = await db.execute(select(Supplier).where(Supplier.id == supplier_id))
     supplier = res.scalars().first()
@@ -152,6 +160,8 @@ async def add_payment(
     # Update supplier balance (Decrease debt)
     supplier.balance -= amount
     
+    await log_action(db, current_user.id, "FIRMA_TOLOV", f"Firma: {supplier.name}. Summa: {amount} so'm. Usul: {payment_method}. Izoh: {note or '-'}")
+    
     await db.commit()
     return {"message": "To'lov muvaffaqiyatli saqlandi", "new_balance": supplier.balance}
 
@@ -161,7 +171,7 @@ async def get_supplier_history(
     current_user: Employee = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    if current_user.role not in ["admin", "manager"]:
+    if current_user.role not in ["admin", "manager", "warehouse"]:
         raise HTTPException(status_code=403, detail="Ruxsat berilmagan")
     # Get receipts
     receipts_res = await db.execute(

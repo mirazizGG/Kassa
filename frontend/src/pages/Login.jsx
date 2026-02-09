@@ -33,17 +33,21 @@ const Login = () => {
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
             });
 
-            const { access_token, role, username: user, user_id } = response.data;
+            const { access_token, role, username: user, user_id, permissions } = response.data;
             localStorage.setItem('token', access_token);
             localStorage.setItem('role', role);
             localStorage.setItem('username', user);
             localStorage.setItem('userId', user_id);
+            localStorage.setItem('permissions', permissions || '');
 
             toast.success("Muvaffaqiyatli kirildi!", {
                 description: `Xush kelibsiz, ${user}`
             });
+
             if (role === 'cashier') {
                 navigate('/pos');
+            } else if (role === 'warehouse') {
+                navigate('/inventory');
             } else {
                 navigate('/');
             }

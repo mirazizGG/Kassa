@@ -220,6 +220,16 @@ class Shift(Base):
     # Relationships
     cashier = relationship("Employee")
 
+class Attendance(Base):
+    __tablename__ = "attendance"
+    id = Column(Integer, primary_key=True, index=True)
+    employee_id = Column(Integer, ForeignKey("employees.id"))
+    status = Column(String) # "in", "out"
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    note = Column(String, nullable=True)
+
+    employee = relationship("Employee")
+
 # 9. Vazifalar (Tasks for Employees)
 class Task(Base):
     __tablename__ = "tasks"

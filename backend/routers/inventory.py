@@ -7,6 +7,8 @@ from database import get_db, Product, Category, Employee, Supply, StockMove
 from schemas import ProductCreate, ProductOut, CategoryCreate, CategoryOut, SupplyCreate, SupplyOut, StockMoveOut
 from core import get_current_user
 
+from routers.audit import log_action
+
 router = APIRouter(prefix="/inventory", tags=["inventory"])
 
 # --- SUPPLIES ---
@@ -16,7 +18,7 @@ async def create_supply(
     current_user: Employee = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    if current_user.role not in ["admin", "manager"]:
+    if current_user.role not in ["admin", "manager", "warehouse"]:
         raise HTTPException(status_code=403, detail="Not enough permissions")
 
     # 1. Mahsulotni topish
@@ -47,6 +49,8 @@ async def create_supply(
     )
     db.add(db_move)
 
+    await log_action(db, current_user.id, "OMBOR_KIRIM", f"Mahsulot: {product.name}. Soni: {supply.quantity}. Narxi: {supply.buy_price}")
+
     await db.commit()
     await db.refresh(db_supply)
     return db_supply
@@ -69,7 +73,7 @@ async def get_stock_logs(
     current_user: Employee = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    if current_user.role not in ["admin", "manager"]:
+    if current_user.role not in ["admin", "manager", "warehouse"]:
         raise HTTPException(status_code=403, detail="Ruxsat berilmagan")
         
     stmt = select(StockMove).options(joinedload(StockMove.product), joinedload(StockMove.user)).order_by(StockMove.created_at.desc())
@@ -101,7 +105,7 @@ async def create_product(
     current_user: Employee = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    if current_user.role not in ["admin", "manager"]:
+    if current_user.role not in ["admin", "manager", "warehouse"]:
         raise HTTPException(status_code=403, detail="Not enough permissions")
 
     db_product = Product(**product.model_dump())
@@ -118,6 +122,8 @@ async def create_product(
         )
         db.add(db_move)
 
+    await log_action(db, current_user.id, "YANGI_MAHSULOT", f"Mahsulot: {db_product.name}. Sklad: {db_product.stock}. Narx: {db_product.sell_price}")
+
     await db.commit()
     await db.refresh(db_product)
     return db_product
@@ -129,7 +135,7 @@ async def update_product(
     current_user: Employee = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    if current_user.role not in ["admin", "manager"]:
+    if current_user.role not in ["admin", "manager", "warehouse"]:
         raise HTTPException(status_code=403, detail="Not enough permissions")
 
     result = await db.execute(select(Product).where(Product.id == product_id))
@@ -156,6 +162,8 @@ async def update_product(
             created_by=current_user.id
         )
         db.add(db_move)
+
+    await log_action(db, current_user.id, "MAHSULOT_TAHRIR", f"Mahsulot: {db_product.name} (ID: {product_id}). Sklad: {old_stock} -> {new_stock}")
 
     await db.commit()
     await db.refresh(db_product)
@@ -200,11 +208,12 @@ async def create_category(
     current_user: Employee = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    if current_user.role not in ["admin", "manager"]:
+    if current_user.role not in ["admin", "manager", "warehouse"]:
         raise HTTPException(status_code=403, detail="Not enough permissions")
     
     db_category = Category(name=category.name)
     db.add(db_category)
+    await log_action(db, current_user.id, "YANGI_KATEGORIYA", f"Kategoriya: {category.name}")
     await db.commit()
     await db.refresh(db_category)
     return db_category
@@ -214,7 +223,7 @@ async def toggle_favorite(
     current_user: Employee = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    if current_user.role not in ["admin", "manager"]:
+    if current_user.role not in ["admin", "manager", "warehouse"]:
         raise HTTPException(status_code=403, detail="Not enough permissions")
 
     result = await db.execute(select(Product).where(Product.id == product_id))

@@ -11,6 +11,7 @@ import Inventory from './pages/Inventory';
 import CRM from './pages/CRM';
 import Finance from './pages/Finance';
 import Employees from './pages/Employees';
+import Attendance from './pages/Attendance';
 import ShiftHistory from './pages/ShiftHistory';
 import SalesHistory from './pages/SalesHistory';
 import AuditLogs from './pages/AuditLogs';
@@ -47,13 +48,14 @@ function App() {
               <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
                 <Route index element={<Dashboard />} />
                 <Route path="pos" element={<POS />} />
-                <Route path="inventory" element={<Inventory />} />
+                <Route path="inventory" element={<RoleProtectedRoute allowedRoles={['admin', 'manager', 'warehouse']}><Inventory /></RoleProtectedRoute>} />
                 <Route path="crm" element={<CRM />} />
                 <Route path="finance" element={<RoleProtectedRoute allowedRoles={['admin', 'manager']}><Finance /></RoleProtectedRoute>} />
                 <Route path="employees" element={<RoleProtectedRoute allowedRoles={['admin', 'manager']}><Employees /></RoleProtectedRoute>} />
+                <Route path="attendance" element={<RoleProtectedRoute allowedRoles={['admin', 'manager']}><Attendance /></RoleProtectedRoute>} />
                 <Route path="shifts" element={<ShiftHistory />} />
                 <Route path="sales" element={<SalesHistory />} />
-                <Route path="suppliers" element={<RoleProtectedRoute allowedRoles={['admin', 'manager']}><Suppliers /></RoleProtectedRoute>} />
+                <Route path="suppliers" element={<RoleProtectedRoute allowedRoles={['admin', 'manager', 'warehouse']}><Suppliers /></RoleProtectedRoute>} />
                 <Route path="audit" element={<RoleProtectedRoute allowedRoles={['admin']}><AuditLogs /></RoleProtectedRoute>} />
                 <Route path="settings" element={<RoleProtectedRoute allowedRoles={['admin']}><Settings /></RoleProtectedRoute>} />
               </Route>
