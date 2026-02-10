@@ -16,7 +16,9 @@ import {
     TrendingUp,
     BarChart3,
     Ban,
-    UserCheck
+    UserCheck,
+    Eye,
+    EyeOff
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -56,6 +58,9 @@ const Employees = () => {
     const [isEmployeeModalOpen, setIsEmployeeModalOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+    
+    const [showPasswordNew, setShowPasswordNew] = useState(false);
+    const [showPasswordEdit, setShowPasswordEdit] = useState(false);
     
     const [editingEmployee, setEditingEmployee] = useState(null);
     const [deletingEmployee, setDeletingEmployee] = useState(null);
@@ -280,7 +285,26 @@ const Employees = () => {
                                             </div>
                                             <div className="grid gap-2">
                                                 <Label htmlFor="password">Parol</Label>
-                                                <Input id="password" type="password" value={newEmployee.password} onChange={e => setNewEmployee({...newEmployee, password: e.target.value})} required placeholder="••••••" />
+                                                <div className="relative">
+                                                    <Input 
+                                                        id="password" 
+                                                        type={showPasswordNew ? "text" : "password"} 
+                                                        value={newEmployee.password} 
+                                                        onChange={e => setNewEmployee({...newEmployee, password: e.target.value})} 
+                                                        required 
+                                                        placeholder="••••••" 
+                                                        className="pr-10"
+                                                    />
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="absolute right-0 top-0 h-full px-3 text-muted-foreground hover:bg-transparent"
+                                                        onClick={() => setShowPasswordNew(!showPasswordNew)}
+                                                    >
+                                                        {showPasswordNew ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                                    </Button>
+                                                </div>
                                             </div>
                                         </div>
                                         <div className="grid grid-cols-2 gap-4">
@@ -580,7 +604,25 @@ const Employees = () => {
                                     </div>
                                     <div className="grid gap-2">
                                         <Label htmlFor="edit-password">Yangi Parol (ixtiyoriy)</Label>
-                                        <Input id="edit-password" type="password" value={editingEmployee.password} onChange={e => setEditingEmployee({...editingEmployee, password: e.target.value})} placeholder="••••••" />
+                                        <div className="relative">
+                                            <Input 
+                                                id="edit-password" 
+                                                type={showPasswordEdit ? "text" : "password"} 
+                                                value={editingEmployee.password} 
+                                                onChange={e => setEditingEmployee({...editingEmployee, password: e.target.value})} 
+                                                placeholder="••••••" 
+                                                className="pr-10"
+                                            />
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                className="absolute right-0 top-0 h-full px-3 text-muted-foreground hover:bg-transparent"
+                                                onClick={() => setShowPasswordEdit(!showPasswordEdit)}
+                                            >
+                                                {showPasswordEdit ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                            </Button>
+                                        </div>
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
