@@ -365,7 +365,7 @@ const Employees = () => {
                                                                 </Button>
                                                             </DropdownMenuTrigger>
                                                             <DropdownMenuContent align="end">
-                                                                {((role === 'admin' && emp.id !== currentUserId) || (role === 'manager' && emp.role === 'cashier')) && (
+                                                                {((role === 'admin') || (role === 'manager' && emp.role === 'cashier')) && (
                                                                     <DropdownMenuItem onClick={() => {
                                                                         setEditingEmployee({ ...emp, password: '' });
                                                                         setIsEditModalOpen(true);
@@ -390,7 +390,7 @@ const Employees = () => {
                                                                         )}
                                                                     </DropdownMenuItem>
                                                                 )}
-                                                                {role === 'admin' && (
+                                                                {role === 'admin' && emp.id !== currentUserId && emp.username !== 'admin' && (
                                                                     <DropdownMenuItem 
                                                                         className="text-rose-500 focus:text-rose-500"
                                                                         onClick={() => {
