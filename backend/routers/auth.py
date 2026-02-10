@@ -118,20 +118,20 @@ async def update_employee(
     if "password" in update_data and update_data["password"]:
         update_data["hashed_password"] = get_password_hash(update_data.pop("password"))
     
-    if "is_active" in update_data and employee_id == current_user.id:
+    if "is_active" in update_data and employee_id == current_user.id and update_data["is_active"] is False:
         raise HTTPException(status_code=400, detail="O'zingizni o'zingiz bloklay olmaysiz")
     
-    if "is_active" in update_data and current_user.role == "manager" and db_user.role != "cashier":
+    if "is_active" in update_data and current_user.role == "manager" and db_user.role != "cashier" and db_user.id != current_user.id:
         raise HTTPException(status_code=403, detail="Menejer faqat kassirlarni bloklay oladi")
 
     if "role" in update_data and employee_id == current_user.id and update_data["role"] != db_user.role:
         raise HTTPException(status_code=400, detail="O'z rolingizni o'zingiz o'zgartira olmaysiz")
 
-    if current_user.role == "manager" and db_user.role != "cashier":
-         # If a manager tries to change ANYTHING on a non-cashier
+    if current_user.role == "manager" and db_user.role != "cashier" and db_user.id != current_user.id:
+         # If a manager tries to change ANYTHING on a non-cashier who is not themselves
          raise HTTPException(status_code=403, detail="Menejer faqat kassirlarni tahrirlay oladi")
 
-    if "role" in update_data and current_user.role == "manager" and update_data["role"] != "cashier":
+    if "role" in update_data and current_user.role == "manager" and update_data["role"] != "cashier" and db_user.id != current_user.id:
         raise HTTPException(status_code=403, detail="Menejer faqat kassir rolini bera oladi")
 
     # Ma'lumotlarni yangilash
