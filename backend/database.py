@@ -1,7 +1,7 @@
 # database.py
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker, declarative_base, relationship
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, Boolean
+from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, DateTime, JSON, Text, BigInteger
 from datetime import datetime, timezone
 
 import os
@@ -62,7 +62,7 @@ class Employee(Base):
     address = Column(String, nullable=True) # Manzil
     passport = Column(String, nullable=True) # Pasport seriyasi
     notes = Column(String, nullable=True) # Qo'shimcha izohlar
-    telegram_id = Column(Integer, unique=True, nullable=True, index=True) # Telegram bot uchun
+    telegram_id = Column(BigInteger, unique=True, nullable=True, index=True) # Telegram bot uchun
 
 class Category(Base):
     __tablename__ = "categories"
@@ -86,7 +86,7 @@ class Product(Base):
 class User(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True, index=True)
-    telegram_id = Column(Integer, unique=True, index=True)
+    telegram_id = Column(BigInteger, unique=True, index=True)
     full_name = Column(String)
     phone = Column(String)
     bonus_balance = Column(Float, default=0) # Keshbek
@@ -97,7 +97,7 @@ class Client(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True)
     phone = Column(String, nullable=True)
-    telegram_id = Column(Integer, unique=True, nullable=True, index=True)
+    telegram_id = Column(BigInteger, unique=True, nullable=True, index=True)
     balance = Column(Float, default=0) # Nasiya yoki oldindan to'lov
     bonus_balance = Column(Float, default=0) # Keshbek ballari
     debt_due_date = Column(DateTime, nullable=True) # Qarz qaytarish muddati

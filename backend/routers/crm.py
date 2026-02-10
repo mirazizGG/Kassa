@@ -4,7 +4,7 @@ from sqlalchemy import select
 from typing import List, Optional
 
 from database import get_db, Client, Employee
-from schemas import ClientCreate, ClientOut
+from schemas import ClientCreate, ClientOut, ClientUpdate
 from core import get_current_user
 from routers.audit import log_action
 
@@ -37,6 +37,53 @@ async def get_client(client_id: int, db: AsyncSession = Depends(get_db)):
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
     return client
+
+@router.patch("/clients/{client_id}", response_model=ClientOut)
+async def update_client(
+    client_id: int,
+    client_data: ClientUpdate,
+    current_user: Employee = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    if current_user.role not in ["admin", "manager"]:
+        raise HTTPException(status_code=403, detail="Ruxsat berilmagan")
+        
+    result = await db.execute(select(Client).where(Client.id == client_id))
+    db_client = result.scalars().first()
+    if not db_client:
+        raise HTTPException(status_code=404, detail="Client not found")
+        
+    update_data = client_data.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_client, key, value)
+        
+    await log_action(db, current_user.id, "MIJOZ_TAHRIR", f"Mijoz tahrirlandi: {db_client.name} (ID: {client_id})")
+    
+    await db.commit()
+    await db.refresh(db_client)
+    return db_client
+
+@router.delete("/clients/{client_id}")
+async def delete_client(
+    client_id: int,
+    current_user: Employee = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Faqat admin mijozlarni o'chira oladi")
+        
+    result = await db.execute(select(Client).where(Client.id == client_id))
+    db_client = result.scalars().first()
+    if not db_client:
+        raise HTTPException(status_code=404, detail="Client not found")
+        
+    if db_client.balance != 0:
+        raise HTTPException(status_code=400, detail="Qarzi yoki balansi bor mijozni o'chirib bo'lmaydi")
+        
+    await db.delete(db_client)
+    await log_action(db, current_user.id, "MIJOZ_OCHIRILDI", f"Mijoz o'chirildi: {db_client.name} (ID: {client_id})")
+    await db.commit()
+    return {"message": "Client deleted"}
 
 from schemas import PaymentCreate
 from database import Payment, Shift
