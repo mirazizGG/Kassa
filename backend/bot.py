@@ -43,10 +43,6 @@ def get_main_menu(role="client"):
     
     elif role == "admin":
         # Admin uchun nazorat va boshqaruv
-        kb.append([
-            KeyboardButton(text="🎬 Ishga kelish"),
-            KeyboardButton(text="🛑 Ishdan ketish")
-        ])
         kb.append([KeyboardButton(text="📢 Reklama yuborish")])
         kb.append([
             KeyboardButton(text="👥 Kim ishda?"),
