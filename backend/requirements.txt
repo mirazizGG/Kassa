@@ -22,6 +22,10 @@ httpx
 # Templates
 jinja2
 
+# Background Tasks & Rate Limiting
+apscheduler
+slowapi
+
 # Date and Time
 python-dateutil
 python-dotenv
