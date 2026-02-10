@@ -1,6 +1,12 @@
-from pydantic import BaseModel, ConfigDict
-from typing import Optional, List
+from pydantic import BaseModel, ConfigDict, Field
+from typing import Optional, List, Annotated
 from datetime import datetime
+import re
+
+# Lenient Regex for phone numbers to support any legacy data
+PHONE_REGEX = r"^(\+)?\d{3,20}$"
+# Barcode: lenient to support manual entries and various formats
+BARCODE_REGEX = r"^[a-zA-Z0-9-]{1,30}$"
 
 # --- AUTH SCHEMAS ---
 class Token(BaseModel):
@@ -20,7 +26,7 @@ class EmployeeBase(BaseModel):
     role: str
     permissions: str = "pos"
     full_name: Optional[str] = None
-    phone: Optional[str] = None
+    phone: Optional[str] = Field(None, pattern=PHONE_REGEX, description="Phone format: +998901234567")
     address: Optional[str] = None
     passport: Optional[str] = None
     notes: Optional[str] = None
@@ -58,7 +64,7 @@ class CategoryOut(CategoryBase):
 
 class ProductBase(BaseModel):
     name: str
-    barcode: Optional[str] = None
+    barcode: Optional[str] = Field(None, description="Standard barcode 8-14 digits")
     buy_price: float
     sell_price: float
     stock: float = 0
@@ -102,7 +108,7 @@ class SupplyOut(SupplyBase):
 # --- CRM SCHEMAS ---
 class ClientBase(BaseModel):
     name: str
-    phone: Optional[str] = None
+    phone: Optional[str] = Field(None, pattern=PHONE_REGEX)
     telegram_id: Optional[int] = None
     balance: float = 0
     bonus_balance: float = 0
@@ -110,6 +116,12 @@ class ClientBase(BaseModel):
 
 class ClientCreate(ClientBase):
     pass
+
+class ClientUpdate(BaseModel):
+    name: Optional[str] = None
+    phone: Optional[str] = Field(None, pattern=PHONE_REGEX)
+    telegram_id: Optional[int] = None
+    debt_due_date: Optional[datetime] = None
 
 class ClientOut(ClientBase):
     id: int

@@ -4,22 +4,37 @@ from contextlib import asynccontextmanager
 import asyncio
 from typing import Optional
 import os
+import logging
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 from database import init_db, engine, Base, SessionLocal, Employee
-from core import get_password_hash
+from core import get_password_hash, limiter
 from bot import bot, dp, check_debts
 from routers import auth, inventory, pos, crm, finance, tasks, sales, audit, settings, suppliers
 from fastapi.staticfiles import StaticFiles
+
+# Configure Rate Limiting - MOVED TO core.py
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("Startup: Initializing DB...")
     await init_db()
     
-    # Start Bot tasks and track them
-    print("Startup: Starting background tasks...")
+    # Start Scheduler for background tasks
+    print("Startup: Starting scheduler...")
+    scheduler = AsyncIOScheduler()
+    # Har kuni ertalab soat 9:00 da qarzni tekshirish
+    scheduler.add_job(check_debts, 'cron', hour=9, minute=0, args=[bot])
+    # Har soatda bazani backup qilish (ixtiyoriy)
+    # scheduler.add_job(create_backup, 'interval', hours=1)
+    scheduler.start()
+    
+    # Start Bot tasks
+    print("Startup: Starting bot polling...")
     bot_task = asyncio.create_task(dp.start_polling(bot))
-    debt_task = asyncio.create_task(check_debts(bot))
 
     # Create admin if not exists
     async with SessionLocal() as db:
@@ -41,24 +56,24 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
-        print("Shutdown: Stopping background tasks...")
-        # Stop polling explicitly if possible, or just cancel tasks
+        print("Shutdown: Stopping scheduler and bot...")
+        scheduler.shutdown()
         bot_task.cancel()
-        debt_task.cancel()
         
-        # Close bot session for clean exit
         await bot.session.close()
         
         try:
-            # Wait for tasks to finish with a short timeout
-            await asyncio.wait([bot_task, debt_task], timeout=2.0)
+            await asyncio.wait([bot_task], timeout=2.0)
         except Exception as e:
             print(f"Cleanup error: {e}")
         
         print("Shutdown: Complete.")
-    print("Shutdown: Application stopping...")
 
 app = FastAPI(lifespan=lifespan, title="Kassa API", version="2.0.0")
+
+# Add Rate Limiter to app
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 from fastapi import Request
 from fastapi.responses import JSONResponse

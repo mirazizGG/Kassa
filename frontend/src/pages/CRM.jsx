@@ -12,7 +12,9 @@ import {
     HandCoins,
     Loader2,
     Star,
-    Calendar
+    Calendar,
+    Pencil,
+    Trash2
 } from 'lucide-react';
 import { format, isPast } from "date-fns";
 import { Button } from "@/components/ui/button";
@@ -35,17 +37,30 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils.js";
 
 const CRM = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [selectedClient, setSelectedClient] = useState(null);
     const [paymentData, setPaymentData] = useState({
         amount: '',
         payment_method: 'cash',
         note: ''
+    });
+    const [editData, setEditData] = useState({
+        name: '',
+        phone: '',
+        telegram_id: '',
+        debt_due_date: ''
     });
 
     const { data: clients = [], isLoading } = useQuery({
@@ -68,6 +83,45 @@ const CRM = () => {
             toast.error("Xatolik!", { description: err.response?.data?.detail || "To'lovni amalga oshirib bo'lmadi" });
         }
     });
+
+    const updateMutation = useMutation({
+        mutationFn: (data) => api.patch(`/crm/clients/${selectedClient.id}`, data),
+        onSuccess: () => {
+            queryClient.invalidateQueries(['clients']);
+            setIsEditModalOpen(false);
+            toast.success("Mijoz ma'lumotlari yangilandi");
+        },
+        onError: (err) => {
+            toast.error("Xatolik", { description: err.response?.data?.detail || "Yangilab bo'lmadi" });
+        }
+    });
+
+    const deleteMutation = useMutation({
+        mutationFn: (clientId) => api.delete(`/crm/clients/${clientId}`),
+        onSuccess: () => {
+            queryClient.invalidateQueries(['clients']);
+            toast.success("Mijoz o'chirildi");
+        },
+        onError: (err) => {
+            toast.error("O'chirishda xatolik", { description: err.response?.data?.detail || "Mijozni o'chirib bo'lmadi" });
+        }
+    });
+
+    const handleUpdateSubmit = (e) => {
+        e.preventDefault();
+        updateMutation.mutate({
+            name: editData.name,
+            phone: editData.phone || null,
+            telegram_id: editData.telegram_id ? parseInt(editData.telegram_id) : null,
+            debt_due_date: editData.debt_due_date || null
+        });
+    };
+
+    const handleDeleteClient = (clientId) => {
+        if (window.confirm("Haqiqatan ham ushbu mijozni o'chirmoqchimisiz?")) {
+            deleteMutation.mutate(clientId);
+        }
+    };
 
     const handlePaymentSubmit = (e) => {
         e.preventDefault();
@@ -182,9 +236,34 @@ const CRM = () => {
                                                     <HandCoins className="w-4 h-4" /> To'lov
                                                 </Button>
                                             )}
-                                            <Button variant="ghost" size="icon">
-                                                <MoreHorizontal className="w-4 h-4" />
-                                            </Button>
+                                            
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="ghost" size="icon">
+                                                        <MoreHorizontal className="w-4 h-4" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                    <DropdownMenuItem onClick={() => {
+                                                        setSelectedClient(client);
+                                                        setEditData({
+                                                            name: client.name,
+                                                            phone: client.phone || '',
+                                                            telegram_id: client.telegram_id || '',
+                                                            debt_due_date: client.debt_due_date ? new Date(client.debt_due_date).toISOString().split('T')[0] : ''
+                                                        });
+                                                        setIsEditModalOpen(true);
+                                                    }}>
+                                                        <Pencil className="w-4 h-4 mr-2" /> Tahrirlash
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem 
+                                                        className="text-destructive focus:text-destructive"
+                                                        onClick={() => handleDeleteClient(client.id)}
+                                                    >
+                                                        <Trash2 className="w-4 h-4 mr-2" /> O'chirish
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
                                         </div>
                                     </TableCell>
                                 </TableRow>
@@ -244,6 +323,62 @@ const CRM = () => {
                             <Button type="submit" disabled={payMutation.isPending}>
                                 {payMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                                 To'lovni tasdiqlash
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
+            {/* Edit Client Modal */}
+            <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+                <DialogContent className="sm:max-w-[400px]">
+                    <DialogHeader>
+                        <DialogTitle>Mijozni Tahrirlash: {selectedClient?.name}</DialogTitle>
+                    </DialogHeader>
+                    <form onSubmit={handleUpdateSubmit}>
+                        <div className="grid gap-4 py-4">
+                            <div className="grid gap-2">
+                                <Label htmlFor="edit_name">Ism</Label>
+                                <Input 
+                                    id="edit_name" 
+                                    value={editData.name}
+                                    onChange={e => setEditData({ ...editData, name: e.target.value })}
+                                    required
+                                />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="edit_phone">Telefon raqam (+998XXXXXXXXX)</Label>
+                                <Input 
+                                    id="edit_phone" 
+                                    value={editData.phone}
+                                    onChange={e => setEditData({ ...editData, phone: e.target.value })}
+                                    placeholder="+998901234567"
+                                />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="edit_telegram">Telegram ID</Label>
+                                <Input 
+                                    id="edit_telegram" 
+                                    type="number"
+                                    value={editData.telegram_id}
+                                    onChange={e => setEditData({ ...editData, telegram_id: e.target.value })}
+                                />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="edit_due_date">Qarz qaytarish muddati</Label>
+                                <Input 
+                                    id="edit_due_date" 
+                                    type="date"
+                                    value={editData.debt_due_date}
+                                    onChange={e => setEditData({ ...editData, debt_due_date: e.target.value })}
+                                />
+                            </div>
+                        </div>
+                        <DialogFooter>
+                            <Button variant="outline" type="button" onClick={() => setIsEditModalOpen(false)}>Bekor qilish</Button>
+                            <Button type="submit" disabled={updateMutation.isPending}>
+                                {updateMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                Saqlash
                             </Button>
                         </DialogFooter>
                     </form>

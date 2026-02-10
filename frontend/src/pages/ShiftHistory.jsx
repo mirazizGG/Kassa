@@ -105,14 +105,14 @@ const ShiftHistory = () => {
                                         <TableCell className="text-xs">
                                             <div className="flex items-center gap-1">
                                                 <Clock className="w-3 h-3 opacity-50" />
-                                                {format(new Date(shift.opened_at), 'dd.MM.yyyy HH:mm')}
+                                                {format(new Date(shift.opened_at.endsWith('Z') ? shift.opened_at : shift.opened_at + 'Z'), 'dd.MM.yyyy HH:mm')}
                                             </div>
                                         </TableCell>
                                         <TableCell className="text-xs">
                                             {shift.closed_at ? (
                                                 <div className="flex items-center gap-1">
                                                     <Clock className="w-3 h-3 opacity-50" />
-                                                    {format(new Date(shift.closed_at), 'dd.MM.yyyy HH:mm')}
+                                                    {format(new Date(shift.closed_at.endsWith('Z') ? shift.closed_at : shift.closed_at + 'Z'), 'dd.MM.yyyy HH:mm')}
                                                 </div>
                                             ) : '-'}
                                         </TableCell>

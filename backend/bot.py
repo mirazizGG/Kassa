@@ -28,6 +28,10 @@ class Broadcast(StatesGroup):
 
 dp = Dispatcher(storage=MemoryStorage())
 
+def normalize_phone(phone: str) -> str:
+    """Raqamlardan boshqa hamma narsani olib tashlash"""
+    return "".join(filter(str.isdigit, str(phone)))
+
 # --- MENU ---
 def get_main_menu(role="client"):
     kb = []
@@ -61,9 +65,11 @@ def get_main_menu(role="client"):
 
 @dp.message(F.text == "🎬 Ishga kelish")
 async def clock_in_handler(message: Message) -> None:
+    logging.info(f"DEBUG: Clock-in from user_id={message.from_user.id}")
     async with AsyncSessionLocal() as db:
         res = await db.execute(select(Employee).where(Employee.telegram_id == message.from_user.id))
         employee = res.scalars().first()
+        logging.info(f"DEBUG: Found employee={employee.username if employee else 'None'}")
         
         if not employee:
             await message.answer("Siz xodimlar ro'yxatida yo'qsiz!")
@@ -81,13 +87,16 @@ async def clock_in_handler(message: Message) -> None:
         new_att = Attendance(employee_id=employee.id, status="in")
         db.add(new_att)
         await db.commit()
-        await message.answer(f"Xush kelibsiz, {employee.username}! Ish boshlandi. 🚀\nVaqt: {datetime.now().strftime('%H:%M')}")
+        name = employee.full_name or employee.username
+        await message.answer(f"Xush kelibsiz, {name}! Ish boshlandi. 🚀\nVaqt: {datetime.now().strftime('%H:%M')}")
 
 @dp.message(F.text == "🛑 Ishdan ketish")
 async def clock_out_handler(message: Message) -> None:
+    logging.info(f"DEBUG: Clock-out from user_id={message.from_user.id}")
     async with AsyncSessionLocal() as db:
         res = await db.execute(select(Employee).where(Employee.telegram_id == message.from_user.id))
         employee = res.scalars().first()
+        logging.info(f"DEBUG: Found employee={employee.username if employee else 'None'}")
         
         if not employee:
             await message.answer("Siz xodimlar ro'yxatida yo'qsiz!")
@@ -105,7 +114,8 @@ async def clock_out_handler(message: Message) -> None:
         new_att = Attendance(employee_id=employee.id, status="out")
         db.add(new_att)
         await db.commit()
-        await message.answer(f"Yaxshi dam oling, {employee.username}! Ish yakunlandi. ✅\nVaqt: {datetime.now().strftime('%H:%M')}")
+        name = employee.full_name or employee.username
+        await message.answer(f"Yaxshi dam oling, {name}! Ish yakunlandi. ✅\nVaqt: {datetime.now().strftime('%H:%M')}")
 
 @dp.message(F.text == "👥 Kim ishda?")
 async def who_is_working_handler(message: Message) -> None:
@@ -127,7 +137,8 @@ async def who_is_working_handler(message: Message) -> None:
             att_res = await db.execute(att_stmt)
             last_att = att_res.scalars().first()
             if last_att and last_att.status == "in":
-                working_now.append(f"👤 {emp.username} ({last_att.created_at.strftime('%H:%M')} dan beri)")
+                name = emp.full_name or emp.username
+                working_now.append(f"👤 {name} ({last_att.created_at.strftime('%H:%M')} dan beri)")
         
         if working_now:
             text = "👥 <b>Hozirda ishda:</b>\n\n" + "\n".join(working_now)
@@ -198,17 +209,31 @@ async def name_handler(message: Message, state: FSMContext) -> None:
     phone = data.get("phone")
     telegram_id = message.from_user.id
 
+    telegram_id = message.from_user.id
+    norm_user_phone = normalize_phone(phone)
+
     async with AsyncSessionLocal() as db:
-        # 1. Avval bu raqamli xodim bormi tekshiramiz
-        emp_result = await db.execute(select(Employee).where(Employee.phone == phone))
-        employee = emp_result.scalars().first()
+        # 1. Avval xodimlarni tekshiramiz (oxirgi 9 ta raqam bo'yicha)
+        emp_result = await db.execute(select(Employee))
+        employees = emp_result.scalars().all()
+        
+        employee = None
+        for e in employees:
+            if not e.phone: continue
+            norm_db_phone = normalize_phone(e.phone)
+            # Oxirgi 9 ta raqam mos kelsa
+            if norm_user_phone[-9:] == norm_db_phone[-9:]:
+                employee = e
+                break
 
         if employee:
-            # Xodim topildi! ID sini ulab qo'yamiz
+            logging.info(f"Linking telegram_id {telegram_id} to employee {employee.username}")
+            # Xodim topildi! ID va Ismni ulab qo'yamiz
             employee.telegram_id = telegram_id
+            employee.full_name = full_name
             await db.commit()
             await message.answer(
-                f"Siz tizimda xodim sifatida tanildingiz: <b>{employee.username}</b> ✅\nEndi bot orqali ish jadvalingizni boshqarishingiz mumkin.",
+                f"Siz tizimda xodim sifatida tanildingiz: <b>{full_name}</b> ✅\nEndi bot orqali ish jadvalingizni boshqarishingiz mumkin.",
                 reply_markup=get_main_menu(employee.role),
                 parse_mode=ParseMode.HTML
             )
@@ -338,49 +363,43 @@ async def admin_backup_handler(message: Message) -> None:
 
 # --- QARZ ESLATMALARI ---
 async def check_debts(bot: Bot):
-    """Qarz eslatmalarini tekshirish - har soatda, faqat ertalab 9:00 da yuborish"""
-    while True:
-        try:
-            now = datetime.now()
+    """Qarz eslatmalarini tekshirish funksiyasi"""
+    try:
+        now = datetime.now()
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(
+                select(Client).where(
+                    Client.debt_due_date.isnot(None),
+                    Client.telegram_id.isnot(None),
+                    Client.balance < 0
+                )
+            )
+            clients = result.scalars().all()
 
-            # Faqat ertalab 9:00 da yuborish
-            if now.hour == 9 and now.minute < 5:
-                async with AsyncSessionLocal() as db:
-                    result = await db.execute(
-                        select(Client).where(
-                            Client.debt_due_date.isnot(None),
-                            Client.telegram_id.isnot(None),
-                            Client.balance < 0
-                        )
-                    )
-                    clients = result.scalars().all()
+            for client in clients:
+                days_left = (client.debt_due_date - now).days
+                debt = abs(client.balance)
 
-                    for client in clients:
-                        days_left = (client.debt_due_date - now).days
-                        debt = abs(client.balance)
+                msg = None
+                if days_left == 3:
+                    msg = f"🔔 Eslatma: {client.name}, qarzingizni to'lashga 3 kun qoldi.\n💰 Summa: {debt:,.0f} so'm"
+                elif days_left == 2:
+                    msg = f"🔔 Eslatma: {client.name}, qarzingizni to'lashga 2 kun qoldi.\n💰 Summa: {debt:,.0f} so'm"
+                elif days_left == 1:
+                    msg = f"⚠️ Diqqat: {client.name}, ertaga qarzingizni to'lash muddati tugaydi!\n💰 Summa: {debt:,.0f} so'm"
+                elif days_left == 0:
+                    msg = f"🚨 {client.name}, bugun qarzingizni to'lash muddati!\n💰 Iltimos, {debt:,.0f} so'm to'lang."
+                elif days_left < 0:
+                    msg = f"‼️ {client.name}, siz qarzingizni kechiktirdingiz!\n💰 Qarzingiz: {debt:,.0f} so'm.\nIltimos, tezroq to'lang."
 
-                        msg = None
-                        if days_left == 3:
-                            msg = f"🔔 Eslatma: {client.name}, qarzingizni to'lashga 3 kun qoldi.\n💰 Summa: {debt:,.0f} so'm"
-                        elif days_left == 2:
-                            msg = f"🔔 Eslatma: {client.name}, qarzingizni to'lashga 2 kun qoldi.\n💰 Summa: {debt:,.0f} so'm"
-                        elif days_left == 1:
-                            msg = f"⚠️ Diqqat: {client.name}, ertaga qarzingizni to'lash muddati tugaydi!\n💰 Summa: {debt:,.0f} so'm"
-                        elif days_left == 0:
-                            msg = f"🚨 {client.name}, bugun qarzingizni to'lash muddati!\n💰 Iltimos, {debt:,.0f} so'm to'lang."
-                        elif days_left < 0:
-                            msg = f"‼️ {client.name}, siz qarzingizni kechiktirdingiz!\n💰 Qarzingiz: {debt:,.0f} so'm.\nIltimos, tezroq to'lang."
+                if msg:
+                    try:
+                        await bot.send_message(client.telegram_id, msg)
+                    except Exception as e:
+                        print(f"Xabar yuborishda xatolik ({client.name}): {e}")
 
-                        if msg:
-                            try:
-                                await bot.send_message(client.telegram_id, msg)
-                            except Exception as e:
-                                print(f"Xabar yuborishda xatolik ({client.name}): {e}")
-
-        except Exception as e:
-            print(f"Qarz tekshirishda xatolik: {e}")
-
-        await asyncio.sleep(3600)  # Har soatda tekshirish
+    except Exception as e:
+        print(f"Qarz tekshirishda xatolik: {e}")
 
 # Initialize Bot
 bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))

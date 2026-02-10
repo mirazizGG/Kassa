@@ -140,7 +140,7 @@ const SalesHistory = () => {
                                             {sale.client?.name || '-'}
                                         </TableCell>
                                         <TableCell className="text-xs">
-                                            {format(new Date(sale.created_at), 'dd.MM.yyyy HH:mm')}
+                                            {format(new Date(sale.created_at.endsWith('Z') ? sale.created_at : sale.created_at + 'Z'), 'dd.MM.yyyy HH:mm')}
                                         </TableCell>
                                         <TableCell className="font-bold">
                                             {sale.total_amount.toLocaleString()} so'm

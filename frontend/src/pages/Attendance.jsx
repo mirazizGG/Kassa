@@ -107,9 +107,16 @@ const Attendance = () => {
                                         <TableCell className="pl-6 font-medium">
                                             <div className="flex items-center gap-3">
                                                 <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xs">
-                                                    {log.employee?.username?.charAt(0).toUpperCase() || 'U'}
+                                                    {(log.employee?.full_name || log.employee?.username)?.charAt(0).toUpperCase() || 'U'}
                                                 </div>
-                                                <span>{log.employee?.username || "Noma'lum"}</span>
+                                                <div className="flex flex-col">
+                                                    <span className="font-semibold text-foreground">
+                                                        {log.employee?.full_name || log.employee?.username || "Noma'lum"}
+                                                    </span>
+                                                    {log.employee?.full_name && (
+                                                        <span className="text-xs text-muted-foreground">@{log.employee.username}</span>
+                                                    )}
+                                                </div>
                                             </div>
                                         </TableCell>
                                         <TableCell>
@@ -126,10 +133,10 @@ const Attendance = () => {
                                             )}
                                         </TableCell>
                                         <TableCell className="text-muted-foreground font-medium">
-                                            {format(new Date(log.created_at), 'dd.MM.yyyy')}
+                                            {format(new Date(log.created_at.endsWith('Z') ? log.created_at : log.created_at + 'Z'), 'dd.MM.yyyy')}
                                         </TableCell>
                                         <TableCell className="font-bold text-foreground">
-                                            {format(new Date(log.created_at), 'HH:mm')}
+                                            {format(new Date(log.created_at.endsWith('Z') ? log.created_at : log.created_at + 'Z'), 'HH:mm')}
                                         </TableCell>
                                         <TableCell className="pr-6 italic text-muted-foreground">
                                             {log.note || '-'}
