@@ -129,6 +129,10 @@ async def favicon():
 async def root():
     return {"message": "Kassa API is running", "version": "2.0.0"}
 
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

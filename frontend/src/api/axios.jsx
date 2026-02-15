@@ -2,8 +2,11 @@ import axios from 'axios';
 
 export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
+console.log(`[API Config] Connecting to: ${API_URL}`);
+
 const api = axios.create({
     baseURL: API_URL,
+    timeout: 60000, // Increase timeout to 60s to handle Render cold starts
 });
 
 // Add a request interceptor to include the auth token
