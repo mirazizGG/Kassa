@@ -2,8 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List, Optional
+from datetime import datetime, timezone
+from sqlalchemy.orm import joinedload
 
-from database import get_db, Client, Employee
+from database import get_db, Client, Employee, Payment, Sale, SaleItem
 from schemas import ClientCreate, ClientOut, ClientUpdate
 from core import get_current_user
 from routers.audit import log_action
@@ -11,7 +13,7 @@ from routers.audit import log_action
 router = APIRouter(prefix="/crm", tags=["crm"])
 
 @router.get("/clients", response_model=List[ClientOut])
-async def get_clients(db: AsyncSession = Depends(get_db)):
+async def get_clients(current_user: Employee = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Client))
     return result.scalars().all()
 
@@ -29,6 +31,99 @@ async def create_client(
     await db.commit()
     await db.refresh(db_client)
     return db_client
+
+@router.get("/clients/debts")
+async def get_debtors(
+    current_user: Employee = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return debtors with a UI-ready due-date status."""
+    result = await db.execute(select(Client).where(Client.balance < 0).order_by(Client.debt_due_date.asc()))
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    debtors = []
+
+    for client in result.scalars().all():
+        days_until_due = (client.debt_due_date.date() - now.date()).days if client.debt_due_date else None
+        status = "no_due_date"
+        if days_until_due is not None:
+            status = "overdue" if days_until_due < 0 else "due_today" if days_until_due == 0 else "due_soon" if days_until_due <= 3 else "upcoming"
+
+        debtors.append({
+            "id": client.id,
+            "name": client.name,
+            "phone": client.phone,
+            "debt_amount": abs(client.balance),
+            "due_date": client.debt_due_date,
+            "days_until_due": days_until_due,
+            "status": status,
+        })
+
+    return debtors
+
+
+@router.get("/clients/{client_id}/history")
+async def get_client_history(
+    client_id: int,
+    current_user: Employee = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return a customer's credit sales and debt-payment history."""
+    client_result = await db.execute(select(Client).where(Client.id == client_id))
+    client = client_result.scalars().first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Mijoz topilmadi")
+
+    sales_result = await db.execute(
+        select(Sale)
+        .options(joinedload(Sale.cashier), joinedload(Sale.items).joinedload(SaleItem.product))
+        .where(Sale.client_id == client_id)
+        .order_by(Sale.created_at.desc())
+    )
+    payments_result = await db.execute(
+        select(Payment)
+        .options(joinedload(Payment.employee))
+        .where(Payment.client_id == client_id)
+        .order_by(Payment.created_at.desc())
+    )
+
+    return {
+        "client": {
+            "id": client.id,
+            "name": client.name,
+            "balance": client.balance,
+            "debt_due_date": client.debt_due_date,
+        },
+        "sales": [
+            {
+                "id": sale.id,
+                "created_at": sale.created_at,
+                "total_amount": sale.total_amount,
+                "debt_amount": sale.debt_amount,
+                "status": sale.status,
+                "cashier": sale.cashier.username if sale.cashier else None,
+                "items": [
+                    {
+                        "name": item.product.name if item.product else "Mahsulot o'chirilgan",
+                        "quantity": item.quantity,
+                        "price": item.price,
+                    }
+                    for item in sale.items
+                ],
+            }
+            for sale in sales_result.unique().scalars().all()
+        ],
+        "payments": [
+            {
+                "id": payment.id,
+                "created_at": payment.created_at,
+                "amount": payment.amount,
+                "payment_method": payment.payment_method,
+                "note": payment.note,
+                "employee": payment.employee.username if payment.employee else None,
+            }
+            for payment in payments_result.unique().scalars().all()
+        ],
+    }
 
 @router.get("/clients/{client_id}", response_model=ClientOut)
 async def get_client(client_id: int, db: AsyncSession = Depends(get_db)):

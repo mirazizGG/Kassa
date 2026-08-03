@@ -28,8 +28,12 @@ async def lifespan(app: FastAPI):
     scheduler = AsyncIOScheduler()
     # Har kuni ertalab soat 9:00 da qarzni tekshirish
     scheduler.add_job(check_debts, 'cron', hour=9, minute=0, args=[bot])
-    # Har soatda bazani backup qilish (ixtiyoriy)
-    # scheduler.add_job(create_backup, 'interval', hours=1)
+
+    # SQLite backup runs daily unless explicitly disabled through the environment.
+    if os.getenv("BACKUP_ENABLED", "true").lower() in {"1", "true", "yes"}:
+        from utils.backup import create_backup
+        backup_hour = int(os.getenv("BACKUP_HOUR", "2"))
+        scheduler.add_job(create_backup, 'cron', hour=backup_hour, minute=0, id="daily_backup", replace_existing=True)
     scheduler.start()
     
     # Start Bot tasks
@@ -98,7 +102,6 @@ allowed_origins = [origin.strip() for origin in allowed_origins_raw.split(",")]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
-    allow_origin_regex="https://.*\.vercel\.app", # Allow all Vercel subdomains
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -30,3 +30,7 @@ slowapi
 python-dateutil
 python-dotenv
 pydantic>=2.0
+
+# Reporting exports
+pandas
+openpyxl

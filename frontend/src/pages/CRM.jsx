@@ -1,391 +1,520 @@
-import React, { useState } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
-import api from '../api/axios';
-import { queryClient } from '../api/queryClient';
+import React, { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import api from "../api/axios";
+import { queryClient } from "../api/queryClient";
 import {
-    Users,
-    Search,
-    Plus,
-    Phone,
-    CreditCard,
-    MoreHorizontal,
-    HandCoins,
-    Loader2,
-    Star,
-    Calendar,
-    Pencil,
-    Trash2
-} from 'lucide-react';
+  Users,
+  Search,
+  Phone,
+  MoreHorizontal,
+  HandCoins,
+  Loader2,
+  Star,
+  Calendar,
+  Pencil,
+  Trash2,
+  AlertTriangle,
+} from "lucide-react";
 import { format, isPast } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogFooter
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils.js";
 
 const CRM = () => {
-    const [searchTerm, setSearchTerm] = useState('');
-    const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-    const [selectedClient, setSelectedClient] = useState(null);
-    const [paymentData, setPaymentData] = useState({
-        amount: '',
-        payment_method: 'cash',
-        note: ''
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [selectedClient, setSelectedClient] = useState(null);
+  const [paymentData, setPaymentData] = useState({
+    amount: "",
+    payment_method: "cash",
+    note: "",
+  });
+  const [editData, setEditData] = useState({
+    name: "",
+    phone: "",
+    telegram_id: "",
+    debt_due_date: "",
+  });
+
+  const { data: clients = [], isLoading } = useQuery({
+    queryKey: ["clients"],
+    queryFn: async () => {
+      const res = await api.get("/crm/clients");
+      return res.data;
+    },
+  });
+
+  const payMutation = useMutation({
+    mutationFn: (data) =>
+      api.post(`/crm/clients/${selectedClient.id}/pay`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries(["clients"]);
+      setIsPaymentModalOpen(false);
+      setPaymentData({ amount: "", payment_method: "cash", note: "" });
+      toast.success("To'lov qabul qilindi!");
+    },
+    onError: (err) => {
+      toast.error("Xatolik!", {
+        description:
+          err.response?.data?.detail || "To'lovni amalga oshirib bo'lmadi",
+      });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: (data) => api.patch(`/crm/clients/${selectedClient.id}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries(["clients"]);
+      setIsEditModalOpen(false);
+      toast.success("Mijoz ma'lumotlari yangilandi");
+    },
+    onError: (err) => {
+      toast.error("Xatolik", {
+        description: err.response?.data?.detail || "Yangilab bo'lmadi",
+      });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (clientId) => api.delete(`/crm/clients/${clientId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries(["clients"]);
+      toast.success("Mijoz o'chirildi");
+    },
+    onError: (err) => {
+      toast.error("O'chirishda xatolik", {
+        description: err.response?.data?.detail || "Mijozni o'chirib bo'lmadi",
+      });
+    },
+  });
+
+  const handleUpdateSubmit = (e) => {
+    e.preventDefault();
+    updateMutation.mutate({
+      name: editData.name,
+      phone: editData.phone || null,
+      telegram_id: editData.telegram_id ? parseInt(editData.telegram_id) : null,
+      debt_due_date: editData.debt_due_date || null,
     });
-    const [editData, setEditData] = useState({
-        name: '',
-        phone: '',
-        telegram_id: '',
-        debt_due_date: ''
+  };
+
+  const handleDeleteClient = (clientId) => {
+    if (window.confirm("Haqiqatan ham ushbu mijozni o'chirmoqchimisiz?")) {
+      deleteMutation.mutate(clientId);
+    }
+  };
+
+  const handlePaymentSubmit = (e) => {
+    e.preventDefault();
+    payMutation.mutate({
+      amount: parseFloat(paymentData.amount),
+      payment_method: paymentData.payment_method,
+      note: paymentData.note,
+      client_id: selectedClient.id,
     });
+  };
 
-    const { data: clients = [], isLoading } = useQuery({
-        queryKey: ['clients'],
-        queryFn: async () => {
-            const res = await api.get('/crm/clients');
-            return res.data;
-        }
-    });
+  const filteredClients = clients.filter(
+    (client) =>
+      client.name.toLowerCase().startsWith(searchTerm.toLowerCase()) ||
+      client.phone?.startsWith(searchTerm),
+  );
+  const debtors = clients.filter((client) => client.balance < 0);
+  const overdueDebtors = debtors.filter(
+    (client) => client.debt_due_date && isPast(new Date(client.debt_due_date)),
+  );
+  const totalDebt = debtors.reduce(
+    (sum, client) => sum + Math.abs(client.balance || 0),
+    0,
+  );
 
-    const payMutation = useMutation({
-        mutationFn: (data) => api.post(`/crm/clients/${selectedClient.id}/pay`, data),
-        onSuccess: () => {
-            queryClient.invalidateQueries(['clients']);
-            setIsPaymentModalOpen(false);
-            setPaymentData({ amount: '', payment_method: 'cash', note: '' });
-            toast.success("To'lov qabul qilindi!");
-        },
-        onError: (err) => {
-            toast.error("Xatolik!", { description: err.response?.data?.detail || "To'lovni amalga oshirib bo'lmadi" });
-        }
-    });
-
-    const updateMutation = useMutation({
-        mutationFn: (data) => api.patch(`/crm/clients/${selectedClient.id}`, data),
-        onSuccess: () => {
-            queryClient.invalidateQueries(['clients']);
-            setIsEditModalOpen(false);
-            toast.success("Mijoz ma'lumotlari yangilandi");
-        },
-        onError: (err) => {
-            toast.error("Xatolik", { description: err.response?.data?.detail || "Yangilab bo'lmadi" });
-        }
-    });
-
-    const deleteMutation = useMutation({
-        mutationFn: (clientId) => api.delete(`/crm/clients/${clientId}`),
-        onSuccess: () => {
-            queryClient.invalidateQueries(['clients']);
-            toast.success("Mijoz o'chirildi");
-        },
-        onError: (err) => {
-            toast.error("O'chirishda xatolik", { description: err.response?.data?.detail || "Mijozni o'chirib bo'lmadi" });
-        }
-    });
-
-    const handleUpdateSubmit = (e) => {
-        e.preventDefault();
-        updateMutation.mutate({
-            name: editData.name,
-            phone: editData.phone || null,
-            telegram_id: editData.telegram_id ? parseInt(editData.telegram_id) : null,
-            debt_due_date: editData.debt_due_date || null
-        });
-    };
-
-    const handleDeleteClient = (clientId) => {
-        if (window.confirm("Haqiqatan ham ushbu mijozni o'chirmoqchimisiz?")) {
-            deleteMutation.mutate(clientId);
-        }
-    };
-
-    const handlePaymentSubmit = (e) => {
-        e.preventDefault();
-        payMutation.mutate({
-            amount: parseFloat(paymentData.amount),
-            payment_method: paymentData.payment_method,
-            note: paymentData.note,
-            client_id: selectedClient.id
-        });
-    };
-
-    const filteredClients = clients.filter(client =>
-        client.name.toLowerCase().startsWith(searchTerm.toLowerCase()) ||
-        client.phone?.startsWith(searchTerm)
-    );
-
-    return (
-        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Mijozlar (CRM)</h1>
-                    <p className="text-muted-foreground">Doimiy mijozlar bazasi va qarzlar nazorati</p>
-                </div>
-                <Button className="gap-2 shadow-lg shadow-primary/20">
-                    <Plus className="w-4 h-4" /> Yangi Mijoz
-                </Button>
+  return (
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <section className="rounded-2xl border bg-gradient-to-br from-primary/15 via-background to-background p-5 md:p-7">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">
+              Mijozlar (CRM)
+            </h1>
+            <p className="text-muted-foreground">
+              Doimiy mijozlar bazasi va qarzlar nazorati
+            </p>
+          </div>
+          <div className="grid grid-cols-3 gap-4 text-right">
+            <div>
+              <p className="text-xs text-muted-foreground">Mijozlar</p>
+              <p className="text-xl font-bold">{clients.length}</p>
             </div>
-
-            <Card className="border-none shadow-md overflow-hidden bg-background/60 backdrop-blur-xl">
-                <CardHeader className="p-6 pb-0">
-                    <div className="relative flex-1 max-w-sm">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                        <Input
-                            placeholder="Ism yoki telefon orqali qidiruv..."
-                            className="pl-10"
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                        />
-                    </div>
-                </CardHeader>
-                <CardContent className="p-0 mt-6">
-                    <Table>
-                        <TableHeader className="bg-muted/30">
-                            <TableRow>
-                                <TableHead>Mijoz Ismi</TableHead>
-                                <TableHead>Telefon</TableHead>
-                                <TableHead>Bonus</TableHead>
-                                <TableHead>Balans / Muddat</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead className="text-right pr-8">Amallar</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {isLoading ? (
-                                <TableRow>
-                                    <TableCell colSpan={5} className="h-24 text-center">Yuklanmoqda...</TableCell>
-                                </TableRow>
-                            ) : filteredClients.length === 0 ? (
-                                <TableRow>
-                                    <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">Mijozlar topilmadi</TableCell>
-                                </TableRow>
-                            ) : filteredClients.map((client) => (
-                                <TableRow key={client.id} className="group hover:bg-muted/50 transition-colors">
-                                    <TableCell className="pl-8">
-                                        <div className="font-semibold">{client.name}</div>
-                                    </TableCell>
-                                    <TableCell className="text-muted-foreground">
-                                         {client.phone ? (
-                                             <div className="flex items-center gap-2">
-                                                 <Phone className="w-3 h-3 text-primary/60" /> {client.phone}
-                                             </div>
-                                         ) : '-'}
-                                    </TableCell>
-                                    <TableCell>
-                                        <div className="flex items-center gap-2 font-black text-lg text-orange-600">
-                                            <Star className="w-5 h-5 fill-orange-500" />
-                                            {client.bonus_balance?.toLocaleString() || 0}
-                                        </div>
-                                    </TableCell>
-                                    <TableCell>
-                                        <div className={cn("font-black text-lg", client.balance < 0 ? "text-destructive" : "text-emerald-600")}>
-                                            {client.balance.toLocaleString()} <span className="text-[10px] text-muted-foreground uppercase">so'm</span>
-                                        </div>
-                                        {client.balance < 0 && client.debt_due_date && (
-                                            <div className={cn(
-                                                "text-[10px] flex items-center gap-1 mt-1 font-medium",
-                                                isPast(new Date(client.debt_due_date)) ? "text-rose-600 animate-pulse" : "text-slate-500"
-                                            )}>
-                                                <Calendar className="w-3 h-3" />
-                                                {format(new Date(client.debt_due_date), 'dd.MM.yyyy')}
-                                            </div>
-                                        )}
-                                    </TableCell>
-                                    <TableCell>
-                                        <Badge variant={client.balance < 0 ? "destructive" : "secondary"} className="font-normal">
-                                            {client.balance < 0 ? "Qarzdor" : "Aktiv"}
-                                        </Badge>
-                                    </TableCell>
-                                    <TableCell className="text-right pr-8">
-                                        <div className="flex justify-end gap-2">
-                                            {client.balance < 0 && (
-                                                <Button 
-                                                    size="sm" 
-                                                    variant="outline" 
-                                                    className="gap-2 text-emerald-600 border-emerald-200 hover:bg-emerald-50"
-                                                    onClick={() => {
-                                                        setSelectedClient(client);
-                                                        setPaymentData(prev => ({ ...prev, amount: Math.abs(client.balance).toString() }));
-                                                        setIsPaymentModalOpen(true);
-                                                    }}
-                                                >
-                                                    <HandCoins className="w-4 h-4" /> To'lov
-                                                </Button>
-                                            )}
-                                            
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button variant="ghost" size="icon">
-                                                        <MoreHorizontal className="w-4 h-4" />
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end">
-                                                    <DropdownMenuItem onClick={() => {
-                                                        setSelectedClient(client);
-                                                        setEditData({
-                                                            name: client.name,
-                                                            phone: client.phone || '',
-                                                            telegram_id: client.telegram_id || '',
-                                                            debt_due_date: client.debt_due_date ? new Date(client.debt_due_date).toISOString().split('T')[0] : ''
-                                                        });
-                                                        setIsEditModalOpen(true);
-                                                    }}>
-                                                        <Pencil className="w-4 h-4 mr-2" /> Tahrirlash
-                                                    </DropdownMenuItem>
-                                                    <DropdownMenuItem 
-                                                        className="text-destructive focus:text-destructive"
-                                                        onClick={() => handleDeleteClient(client.id)}
-                                                    >
-                                                        <Trash2 className="w-4 h-4 mr-2" /> O'chirish
-                                                    </DropdownMenuItem>
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
-                                        </div>
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                </CardContent>
-            </Card>
-
-            {/* Client Payment Modal */}
-            <Dialog open={isPaymentModalOpen} onOpenChange={setIsPaymentModalOpen}>
-                <DialogContent className="sm:max-w-[400px]">
-                    <DialogHeader>
-                        <DialogTitle>Qarz To'lovi: {selectedClient?.name}</DialogTitle>
-                    </DialogHeader>
-                    <form onSubmit={handlePaymentSubmit}>
-                        <div className="grid gap-4 py-4">
-                            <div className="grid gap-2">
-                                <Label htmlFor="amount">To'lov Summasi</Label>
-                                <Input 
-                                    id="amount" 
-                                    type="number" 
-                                    value={paymentData.amount}
-                                    onChange={e => setPaymentData({ ...paymentData, amount: e.target.value })}
-                                    required
-                                    autoFocus
-                                />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="method">To'lov Usuli</Label>
-                                <Select 
-                                    value={paymentData.payment_method} 
-                                    onValueChange={val => setPaymentData({...paymentData, payment_method: val})}
-                                >
-                                    <SelectTrigger id="method">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="cash">Naqd</SelectItem>
-                                        <SelectItem value="card">Plastik Karta</SelectItem>
-                                        <SelectItem value="transfer">Perevod</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="note">Izoh (ixtiyoriy)</Label>
-                                <Input 
-                                    id="note" 
-                                    value={paymentData.note}
-                                    onChange={e => setPaymentData({ ...paymentData, note: e.target.value })}
-                                    placeholder="Masalan: Qarzning bir qismi"
-                                />
-                            </div>
-                        </div>
-                        <DialogFooter>
-                            <Button variant="outline" type="button" onClick={() => setIsPaymentModalOpen(false)}>Bekor qilish</Button>
-                            <Button type="submit" disabled={payMutation.isPending}>
-                                {payMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                To'lovni tasdiqlash
-                            </Button>
-                        </DialogFooter>
-                    </form>
-                </DialogContent>
-            </Dialog>
-
-            {/* Edit Client Modal */}
-            <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-                <DialogContent className="sm:max-w-[400px]">
-                    <DialogHeader>
-                        <DialogTitle>Mijozni Tahrirlash: {selectedClient?.name}</DialogTitle>
-                    </DialogHeader>
-                    <form onSubmit={handleUpdateSubmit}>
-                        <div className="grid gap-4 py-4">
-                            <div className="grid gap-2">
-                                <Label htmlFor="edit_name">Ism</Label>
-                                <Input 
-                                    id="edit_name" 
-                                    value={editData.name}
-                                    onChange={e => setEditData({ ...editData, name: e.target.value })}
-                                    required
-                                />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="edit_phone">Telefon raqam (+998XXXXXXXXX)</Label>
-                                <Input 
-                                    id="edit_phone" 
-                                    value={editData.phone}
-                                    onChange={e => setEditData({ ...editData, phone: e.target.value })}
-                                    placeholder="+998901234567"
-                                />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="edit_telegram">Telegram ID</Label>
-                                <Input 
-                                    id="edit_telegram" 
-                                    type="number"
-                                    value={editData.telegram_id}
-                                    onChange={e => setEditData({ ...editData, telegram_id: e.target.value })}
-                                />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="edit_due_date">Qarz qaytarish muddati</Label>
-                                <Input 
-                                    id="edit_due_date" 
-                                    type="date"
-                                    value={editData.debt_due_date}
-                                    onChange={e => setEditData({ ...editData, debt_due_date: e.target.value })}
-                                />
-                            </div>
-                        </div>
-                        <DialogFooter>
-                            <Button variant="outline" type="button" onClick={() => setIsEditModalOpen(false)}>Bekor qilish</Button>
-                            <Button type="submit" disabled={updateMutation.isPending}>
-                                {updateMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                Saqlash
-                            </Button>
-                        </DialogFooter>
-                    </form>
-                </DialogContent>
-            </Dialog>
+            <div>
+              <p className="text-xs text-muted-foreground">Qarzdorlar</p>
+              <p className="text-xl font-bold text-rose-600">
+                {debtors.length}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Jami qarz</p>
+              <p className="text-xl font-bold">{totalDebt.toLocaleString()}</p>
+            </div>
+          </div>
         </div>
-    );
+      </section>
+
+      {overdueDebtors.length > 0 && (
+        <div className="flex items-center gap-3 rounded-xl border border-rose-200 bg-rose-50/50 p-4 text-rose-900 dark:border-rose-900/50 dark:bg-rose-950/20 dark:text-rose-100">
+          <AlertTriangle className="h-5 w-5 shrink-0 text-rose-600" />
+          <p className="text-sm font-medium">
+            <span className="font-bold">{overdueDebtors.length} mijoz</span>ning
+            qarz to'lov muddati o'tgan.
+          </p>
+        </div>
+      )}
+
+      <Card className="overflow-hidden border shadow-sm bg-card/70 backdrop-blur-sm">
+        <CardHeader className="border-b bg-muted/10 p-4">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Ism yoki telefon orqali qidiruv..."
+              className="pl-10"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader className="bg-muted/30">
+              <TableRow>
+                <TableHead>Mijoz Ismi</TableHead>
+                <TableHead>Telefon</TableHead>
+                <TableHead>Bonus</TableHead>
+                <TableHead>Balans / Muddat</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right pr-8">Amallar</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="h-24 text-center">
+                    Yuklanmoqda...
+                  </TableCell>
+                </TableRow>
+              ) : filteredClients.length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={5}
+                    className="h-24 text-center text-muted-foreground"
+                  >
+                    Mijozlar topilmadi
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredClients.map((client) => (
+                  <TableRow
+                    key={client.id}
+                    className="group hover:bg-muted/50 transition-colors"
+                  >
+                    <TableCell className="pl-8">
+                      <div className="font-semibold">{client.name}</div>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {client.phone ? (
+                        <div className="flex items-center gap-2">
+                          <Phone className="w-3 h-3 text-primary/60" />{" "}
+                          {client.phone}
+                        </div>
+                      ) : (
+                        "-"
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2 font-black text-lg text-orange-600">
+                        <Star className="w-5 h-5 fill-orange-500" />
+                        {client.bonus_balance?.toLocaleString() || 0}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div
+                        className={cn(
+                          "font-black text-lg",
+                          client.balance < 0
+                            ? "text-destructive"
+                            : "text-emerald-600",
+                        )}
+                      >
+                        {client.balance.toLocaleString()}{" "}
+                        <span className="text-[10px] text-muted-foreground uppercase">
+                          so'm
+                        </span>
+                      </div>
+                      {client.balance < 0 && client.debt_due_date && (
+                        <div
+                          className={cn(
+                            "text-[10px] flex items-center gap-1 mt-1 font-medium",
+                            isPast(new Date(client.debt_due_date))
+                              ? "text-rose-600 animate-pulse"
+                              : "text-slate-500",
+                          )}
+                        >
+                          <Calendar className="w-3 h-3" />
+                          {format(new Date(client.debt_due_date), "dd.MM.yyyy")}
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={
+                          client.balance < 0 ? "destructive" : "secondary"
+                        }
+                        className="font-normal"
+                      >
+                        {client.balance < 0 ? "Qarzdor" : "Aktiv"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right pr-8">
+                      <div className="flex justify-end gap-2">
+                        {client.balance < 0 && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-2 text-emerald-600 border-emerald-200 hover:bg-emerald-50"
+                            onClick={() => {
+                              setSelectedClient(client);
+                              setPaymentData((prev) => ({
+                                ...prev,
+                                amount: Math.abs(client.balance).toString(),
+                              }));
+                              setIsPaymentModalOpen(true);
+                            }}
+                          >
+                            <HandCoins className="w-4 h-4" /> To'lov
+                          </Button>
+                        )}
+
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                              <MoreHorizontal className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setSelectedClient(client);
+                                setEditData({
+                                  name: client.name,
+                                  phone: client.phone || "",
+                                  telegram_id: client.telegram_id || "",
+                                  debt_due_date: client.debt_due_date
+                                    ? new Date(client.debt_due_date)
+                                        .toISOString()
+                                        .split("T")[0]
+                                    : "",
+                                });
+                                setIsEditModalOpen(true);
+                              }}
+                            >
+                              <Pencil className="w-4 h-4 mr-2" /> Tahrirlash
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="text-destructive focus:text-destructive"
+                              onClick={() => handleDeleteClient(client.id)}
+                            >
+                              <Trash2 className="w-4 h-4 mr-2" /> O'chirish
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {/* Client Payment Modal */}
+      <Dialog open={isPaymentModalOpen} onOpenChange={setIsPaymentModalOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Qarz To'lovi: {selectedClient?.name}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handlePaymentSubmit}>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="amount">To'lov Summasi</Label>
+                <Input
+                  id="amount"
+                  type="number"
+                  value={paymentData.amount}
+                  onChange={(e) =>
+                    setPaymentData({ ...paymentData, amount: e.target.value })
+                  }
+                  required
+                  autoFocus
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="method">To'lov Usuli</Label>
+                <Select
+                  value={paymentData.payment_method}
+                  onValueChange={(val) =>
+                    setPaymentData({ ...paymentData, payment_method: val })
+                  }
+                >
+                  <SelectTrigger id="method">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cash">Naqd</SelectItem>
+                    <SelectItem value="card">Plastik Karta</SelectItem>
+                    <SelectItem value="transfer">Perevod</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="note">Izoh (ixtiyoriy)</Label>
+                <Input
+                  id="note"
+                  value={paymentData.note}
+                  onChange={(e) =>
+                    setPaymentData({ ...paymentData, note: e.target.value })
+                  }
+                  placeholder="Masalan: Qarzning bir qismi"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                type="button"
+                onClick={() => setIsPaymentModalOpen(false)}
+              >
+                Bekor qilish
+              </Button>
+              <Button type="submit" disabled={payMutation.isPending}>
+                {payMutation.isPending && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                To'lovni tasdiqlash
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Client Modal */}
+      <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>
+              Mijozni Tahrirlash: {selectedClient?.name}
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleUpdateSubmit}>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="edit_name">Ism</Label>
+                <Input
+                  id="edit_name"
+                  value={editData.name}
+                  onChange={(e) =>
+                    setEditData({ ...editData, name: e.target.value })
+                  }
+                  required
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit_phone">
+                  Telefon raqam (+998XXXXXXXXX)
+                </Label>
+                <Input
+                  id="edit_phone"
+                  value={editData.phone}
+                  onChange={(e) =>
+                    setEditData({ ...editData, phone: e.target.value })
+                  }
+                  placeholder="+998901234567"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit_telegram">Telegram ID</Label>
+                <Input
+                  id="edit_telegram"
+                  type="number"
+                  value={editData.telegram_id}
+                  onChange={(e) =>
+                    setEditData({ ...editData, telegram_id: e.target.value })
+                  }
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit_due_date">Qarz qaytarish muddati</Label>
+                <Input
+                  id="edit_due_date"
+                  type="date"
+                  value={editData.debt_due_date}
+                  onChange={(e) =>
+                    setEditData({ ...editData, debt_due_date: e.target.value })
+                  }
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                type="button"
+                onClick={() => setIsEditModalOpen(false)}
+              >
+                Bekor qilish
+              </Button>
+              <Button type="submit" disabled={updateMutation.isPending}>
+                {updateMutation.isPending && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                Saqlash
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
 };
 
 export default CRM;

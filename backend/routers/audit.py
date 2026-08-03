@@ -8,9 +8,16 @@ from database import get_db, AuditLog, Employee
 from schemas import EmployeeOut # For reference if needed
 from core import get_current_user
 from pydantic import BaseModel, ConfigDict
-from datetime import datetime, date, time
+from zoneinfo import ZoneInfo
+from datetime import datetime, date, time, timezone
 
 router = APIRouter(prefix="/audit", tags=["audit"])
+TASHKENT_TZ = ZoneInfo("Asia/Tashkent")
+
+
+def local_day_boundary(value: date, is_end: bool) -> datetime:
+    local_value = datetime.combine(value, time.max if is_end else time.min).replace(tzinfo=TASHKENT_TZ)
+    return local_value.astimezone(timezone.utc).replace(tzinfo=None)
 
 class AuditLogOut(BaseModel):
     id: int
@@ -47,10 +54,10 @@ async def get_audit_logs(
     if search:
         query = query.where(AuditLog.details.contains(search))
     if start_date:
-        start_dt = datetime.combine(start_date, time.min)
+        start_dt = local_day_boundary(start_date, is_end=False)
         query = query.where(AuditLog.created_at >= start_dt)
     if end_date:
-        end_dt = datetime.combine(end_date, time.max)
+        end_dt = local_day_boundary(end_date, is_end=True)
         query = query.where(AuditLog.created_at <= end_dt)
         
     result = await db.execute(
@@ -88,10 +95,10 @@ async def export_audit_excel(
     if search:
         query = query.where(AuditLog.details.contains(search))
     if start_date:
-        start_dt = datetime.combine(start_date, time.min)
+        start_dt = local_day_boundary(start_date, is_end=False)
         query = query.where(AuditLog.created_at >= start_dt)
     if end_date:
-        end_dt = datetime.combine(end_date, time.max)
+        end_dt = local_day_boundary(end_date, is_end=True)
         query = query.where(AuditLog.created_at <= end_dt)
 
     result = await db.execute(query.order_by(AuditLog.created_at.desc()))
@@ -101,7 +108,7 @@ async def export_audit_excel(
     for log in logs:
         data.append({
             "ID": log.id,
-            "Sana": log.created_at.strftime("%d.%m.%Y %H:%M:%S"),
+            "Sana": log.created_at.replace(tzinfo=timezone.utc).astimezone(TASHKENT_TZ).strftime("%d.%m.%Y %H:%M:%S"),
             "Xodim": log.user.username if log.user else f"ID: {log.user_id}",
             "Amal": log.action,
             "Tafsilotlar": log.details
