@@ -1,3 +1,0 @@
-# Deploy Trigger
-Updated: 2026-02-10
-Status: Manual trigger for Render/Vercel synchronization.

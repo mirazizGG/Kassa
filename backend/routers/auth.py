@@ -48,6 +48,14 @@ async def login_for_access_token(request: Request, form_data: OAuth2PasswordRequ
         "user_id": user.id
     }
 
+@router.post("/logout")
+async def logout(
+    current_user: Employee = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    await log_action(db, current_user.id, "LOGOUT", f"Tizimdan chiqdi: @{current_user.username}")
+    await db.commit()
+    return {"status": "success"}
 @router.post("/employees", response_model=EmployeeOut)
 async def create_employee(
     user: EmployeeCreate, 

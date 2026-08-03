@@ -9,7 +9,7 @@ class ErrorBoundary extends React.Component {
         this.state = { hasError: false, error: null, errorInfo: null };
     }
 
-    static getDerivedStateFromError(error) {
+    static getDerivedStateFromError() {
         return { hasError: true };
     }
 
@@ -56,7 +56,7 @@ class ErrorBoundary extends React.Component {
                                     {this.state.error && this.state.error.toString()}
                                 </p>
                             </div>
-                            {process.env.NODE_ENV === 'development' && this.state.errorInfo && (
+                            {import.meta.env.DEV && this.state.errorInfo && (
                                 <details className="cursor-pointer">
                                     <summary className="text-sm font-medium text-muted-foreground hover:text-foreground">
                                         Texnik ma'lumotlar (Development)

@@ -31,4 +31,6 @@ function Badge({
   return (<div className={cn(badgeVariants({ variant }), className)} {...props} />);
 }
 
+// adgeVariants is a shared styling utility, not a React component.
+// eslint-disable-next-line react-refresh/only-export-components
 export { Badge, badgeVariants }

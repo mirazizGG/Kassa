@@ -48,6 +48,8 @@ export function ThemeProvider({
     );
 }
 
+// The hook is intentionally exported with the provider for the shared theme context.
+// eslint-disable-next-line react-refresh/only-export-components
 export const useTheme = () => {
     const context = useContext(ThemeProviderContext);
 

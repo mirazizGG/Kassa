@@ -77,3 +77,8 @@ htmlcov/
 .mypy_cache/
 .dmypy.json
 dmypy.json
+
+# Local credentials
+LOGIN_PAROLLAR.txt
+*.db-wal
+*.db-shm

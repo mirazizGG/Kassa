@@ -53,4 +53,6 @@ const Button = React.forwardRef(({ className, variant, size, asChild = false, ..
 })
 Button.displayName = "Button"
 
+// uttonVariants is a shared styling utility, not a React component.
+// eslint-disable-next-line react-refresh/only-export-components
 export { Button, buttonVariants }

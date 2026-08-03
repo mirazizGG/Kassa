@@ -12,6 +12,7 @@ import {
   ArrowUpRight,
   Loader2,
   BarChart3,
+  FileDown,
 } from "lucide-react";
 import {
   PieChart as RePieChart,
@@ -64,23 +65,21 @@ import {
 } from "@/components/ui/table";
 import { toast } from "sonner";
 import { format } from "date-fns";
-
-const StatCard = ({ title, value, icon: Icon, type = "neutral" }) => (
+const StatCard = ({ title, value, icon, type = "neutral" }) => (
   <Card>
     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
       <CardTitle className="text-sm font-medium">{title}</CardTitle>
-      <Icon
-        className={`h-4 w-4 ${type === "positive" ? "text-emerald-500" : type === "negative" ? "text-rose-500" : "text-muted-foreground"}`}
-      />
+      {React.createElement(icon, {
+        className: `h-4 w-4 ${type === "positive" ? "text-emerald-500" : type === "negative" ? "text-rose-500" : "text-muted-foreground"}`,
+      })}
     </CardHeader>
     <CardContent>
       <div className="text-2xl font-bold">{value}</div>
     </CardContent>
   </Card>
 );
-
 const Finance = () => {
-  const role = localStorage.getItem('role');
+  const role = localStorage.getItem("role");
   const queryClient = useQueryClient();
   const today = new Date().toISOString().split("T")[0];
   const [filters, setFilters] = React.useState({
@@ -94,7 +93,6 @@ const Finance = () => {
     amount: "",
     category: "Boshqa",
   });
-
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ["finance-stats", filters],
     queryFn: async () => {
@@ -103,12 +101,10 @@ const Finance = () => {
         params.employee_id = filters.employee_id;
       if (filters.start_date) params.start_date = filters.start_date;
       if (filters.end_date) params.end_date = filters.end_date;
-
       const response = await api.get("/finance/stats", { params });
       return response.data;
     },
   });
-
   const { data: expenses = [], isLoading: expensesLoading } = useQuery({
     queryKey: ["expenses", filters],
     queryFn: async () => {
@@ -117,12 +113,10 @@ const Finance = () => {
         params.employee_id = filters.employee_id;
       if (filters.start_date) params.start_date = filters.start_date;
       if (filters.end_date) params.end_date = filters.end_date;
-
       const response = await api.get("/finance/expenses", { params });
       return response.data;
     },
   });
-
   const { data: categoryData = [], isLoading: categoryLoading } = useQuery({
     queryKey: ["expenses-by-category", filters],
     queryFn: async () => {
@@ -133,7 +127,6 @@ const Finance = () => {
       return res.data;
     },
   });
-
   const { data: profitData = [], isLoading: profitLoading } = useQuery({
     queryKey: ["profit-chart", filters],
     queryFn: async () => {
@@ -143,7 +136,6 @@ const Finance = () => {
       return res.data;
     },
   });
-
   const expenseMutation = useMutation({
     mutationFn: (data) => api.post("/finance/expenses", data),
     onSuccess: () => {
@@ -161,7 +153,6 @@ const Finance = () => {
       });
     },
   });
-
   const handleAddExpense = (e) => {
     e.preventDefault();
     if (!newExpense.reason || !newExpense.amount) {
@@ -173,13 +164,11 @@ const Finance = () => {
       amount: parseFloat(newExpense.amount),
     });
   };
-
   const handleExport = async () => {
     try {
       const params = {};
       if (filters.start_date) params.start_date = filters.start_date;
       if (filters.end_date) params.end_date = filters.end_date;
-
       const response = await api.get("/finance/export-sales", {
         params,
         responseType: "blob",
@@ -199,13 +188,11 @@ const Finance = () => {
       toast.error("Hisobotni yuklab olishda xatolik yuz berdi");
     }
   };
-
   const handleExportExcel = async () => {
     try {
       const params = {};
       if (filters.start_date) params.start_date = filters.start_date;
       if (filters.end_date) params.end_date = filters.end_date;
-
       const response = await api.get("/finance/export-sales-excel", {
         params,
         responseType: "blob",
@@ -215,7 +202,7 @@ const Finance = () => {
       link.href = url;
       link.setAttribute(
         "download",
-        `hisobot_${new Date().toISOString().split("T")[0]}.xlsx`
+        `hisobot_${new Date().toISOString().split("T")[0]}.xlsx`,
       );
       document.body.appendChild(link);
       link.click();
@@ -225,119 +212,128 @@ const Finance = () => {
       toast.error("Excel hisobotni yuklab olishda xatolik yuz berdi");
     }
   };
-
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">
-            Moliya va Hisobotlar
-          </h1>
-          <p className="text-muted-foreground">
-            Do'kon daromadi, xarajatlar va foyda tahlili
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <FilterBar filters={filters} onFilterChange={setFilters} />
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              className="shadow-sm"
-              onClick={handleExport}
-            >
-              Export CSV
-            </Button>
-            <Button
-              variant="outline"
-              className="shadow-sm border-emerald-200 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
-              onClick={handleExportExcel}
-            >
-              Export Excel
-            </Button>
+      <section className="rounded-2xl border bg-gradient-to-br from-primary/15 via-background to-background p-5 md:p-7">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">
+              Moliya va Hisobotlar
+            </h1>
+            <p className="text-muted-foreground">
+              Do'kon daromadi, xarajatlar va foyda tahlili
+            </p>
           </div>
-
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="gap-2 shadow-lg shadow-primary/20">
-                <Plus className="h-4 w-4" />
-                Xarajat Qo'shish
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="shadow-sm"
+                onClick={handleExport}
+              >
+                <FileDown className="h-4 w-4" /> CSV
               </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Yangi Xarajat Kiritish</DialogTitle>
-                <DialogDescription>
-                  Do'kon uchun qilingan chiqimni ro'yxatga oling.
-                </DialogDescription>
-              </DialogHeader>
-              <form onSubmit={handleAddExpense} className="space-y-4 pt-4">
-                <div className="space-y-2">
-                  <Label htmlFor="reason">Xarajat sababi</Label>
-                  <Input
-                    id="reason"
-                    placeholder="Masalan: Ijara to'lovi"
-                    value={newExpense.reason}
-                    onChange={(e) =>
-                      setNewExpense({ ...newExpense, reason: e.target.value })
-                    }
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
+              <Button
+                variant="outline"
+                className="shadow-sm border-emerald-200 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
+                onClick={handleExportExcel}
+              >
+                <FileDown className="h-4 w-4" /> Excel
+              </Button>
+            </div>
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <DialogTrigger asChild>
+                <Button className="gap-2 shadow-lg shadow-primary/20">
+                  <Plus className="h-4 w-4" /> Xarajat Qo'shish
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Yangi Xarajat Kiritish</DialogTitle>
+                  <DialogDescription>
+                    Do'kon uchun qilingan chiqimni ro'yxatga oling.
+                  </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleAddExpense} className="space-y-4 pt-4">
                   <div className="space-y-2">
-                    <Label htmlFor="amount">Summa (so'm)</Label>
+                    <Label htmlFor="reason">Xarajat sababi</Label>
                     <Input
-                      id="amount"
-                      type="number"
-                      placeholder="100000"
-                      value={newExpense.amount}
+                      id="reason"
+                      placeholder="Masalan: Ijara to'lovi"
+                      value={newExpense.reason}
                       onChange={(e) =>
-                        setNewExpense({ ...newExpense, amount: e.target.value })
+                        setNewExpense({ ...newExpense, reason: e.target.value })
                       }
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="category">Kategoriya</Label>
-                    <Select
-                      value={newExpense.category}
-                      onValueChange={(v) =>
-                        setNewExpense({ ...newExpense, category: v })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Boshqa">Boshqa</SelectItem>
-                        <SelectItem value="Ijara">Ijara</SelectItem>
-                        <SelectItem value="Ish haqi">Ish haqi</SelectItem>
-                        <SelectItem value="Oziq-ovqat">Oziq-ovqat</SelectItem>
-                        <SelectItem value="Logistika">Logistika</SelectItem>
-                        <SelectItem value="Soliq">Soliq</SelectItem>
-                        <SelectItem value="Kommunal">Kommunal</SelectItem>
-                      </SelectContent>
-                    </Select>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="amount">Summa (so'm)</Label>
+                      <Input
+                        id="amount"
+                        type="number"
+                        placeholder="100000"
+                        value={newExpense.amount}
+                        onChange={(e) =>
+                          setNewExpense({
+                            ...newExpense,
+                            amount: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="category">Kategoriya</Label>
+                      <Select
+                        value={newExpense.category}
+                        onValueChange={(v) =>
+                          setNewExpense({ ...newExpense, category: v })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Boshqa">Boshqa</SelectItem>
+                          <SelectItem value="Ijara">Ijara</SelectItem>
+                          <SelectItem value="Ish haqi">Ish haqi</SelectItem>
+                          <SelectItem value="Oziq-ovqat">Oziq-ovqat</SelectItem>
+                          <SelectItem value="Logistika">Logistika</SelectItem>
+                          <SelectItem value="Soliq">Soliq</SelectItem>
+                          <SelectItem value="Kommunal">Kommunal</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
-                </div>
-                <DialogFooter className="pt-4">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => setIsDialogOpen(false)}
-                  >
-                    Bekor qilish
-                  </Button>
-                  <Button type="submit" disabled={expenseMutation.isPending}>
-                    {expenseMutation.isPending && (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    )}
-                    Saqlash
-                  </Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
+                  <DialogFooter className="pt-4">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => setIsDialogOpen(false)}
+                    >
+                      Bekor qilish
+                    </Button>
+                    <Button type="submit" disabled={expenseMutation.isPending}>
+                      {expenseMutation.isPending && (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      )}
+                      Saqlash
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
-      </div>
+      </section>
+
+      <section className="rounded-2xl border bg-card/70 p-3 shadow-sm backdrop-blur-sm">
+        <FilterBar
+          filters={filters}
+          onFilterChange={setFilters}
+          showSearch={false}
+        />
+      </section>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
@@ -346,7 +342,7 @@ const Finance = () => {
           icon={DollarSign}
           type="positive"
         />
-        {role === 'admin' && (
+        {role === "admin" && (
           <StatCard
             title="Mahsulot Tannarxi"
             value={
@@ -368,7 +364,7 @@ const Finance = () => {
           icon={TrendingDown}
           type="negative"
         />
-        {role === 'admin' && (
+        {role === "admin" && (
           <Card className="bg-primary/5 border-primary/20">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Sof Foyda</CardTitle>
@@ -385,15 +381,13 @@ const Finance = () => {
           </Card>
         )}
       </div>
-
       <div className="grid gap-6 md:grid-cols-7">
         <Card className="md:col-span-4 border-none shadow-md overflow-hidden bg-background/60 backdrop-blur-xl">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle className="flex items-center gap-2">
-                  <Wallet className="w-5 h-5 text-primary" />
-                  Xarajatlar Tarixi
+                  <Wallet className="w-5 h-5 text-primary" /> Xarajatlar Tarixi
                 </CardTitle>
                 <CardDescription>
                   Oxirgi kiritilgan chiqimlar ro'yxati
@@ -460,12 +454,10 @@ const Finance = () => {
             </Table>
           </CardContent>
         </Card>
-
         <Card className="md:col-span-3 border-none shadow-md bg-background/60 backdrop-blur-xl">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-primary" />
-              Xarajatlar Tahlili
+              <BarChart3 className="w-5 h-5 text-primary" /> Xarajatlar Tahlili
             </CardTitle>
             <CardDescription>Kategoriyalar bo'yicha taqsimot</CardDescription>
           </CardHeader>
@@ -522,13 +514,12 @@ const Finance = () => {
             )}
           </CardContent>
         </Card>
-
-        {role === 'admin' && (
+        {role === "admin" && (
           <Card className="col-span-full border-none shadow-md bg-background/60 backdrop-blur-xl">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <TrendingUp className="w-5 h-5 text-primary" />
-                Foyda va Daromad Dinamikasi
+                <TrendingUp className="w-5 h-5 text-primary" /> Foyda va Daromad
+                Dinamikasi
               </CardTitle>
               <CardDescription>Oxirgi 7 kundagi ko'rsatkichlar</CardDescription>
             </CardHeader>
@@ -548,8 +539,16 @@ const Finance = () => {
                         x2="0"
                         y2="1"
                       >
-                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                        <stop
+                          offset="5%"
+                          stopColor="#10b981"
+                          stopOpacity={0.3}
+                        />
+                        <stop
+                          offset="95%"
+                          stopColor="#10b981"
+                          stopOpacity={0}
+                        />
                       </linearGradient>
                       <linearGradient
                         id="colorRevenue"
@@ -623,5 +622,4 @@ const Finance = () => {
     </div>
   );
 };
-
 export default Finance;
