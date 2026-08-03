@@ -82,3 +82,6 @@ dmypy.json
 LOGIN_PAROLLAR.txt
 *.db-wal
 *.db-shm
+
+# Local backend secrets
+backend/.env
