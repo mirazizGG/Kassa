@@ -73,6 +73,7 @@ const POS = () => {
   const [weightInput, setWeightInput] = useState("");
   const [amountInput, setAmountInput] = useState("");
   const [bonusSpent, setBonusSpent] = useState(0);
+  const posContainerRef = useRef(null);
   const searchInputRef = useRef(null);
   const role = localStorage.getItem("role");
 
@@ -96,7 +97,7 @@ const POS = () => {
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen();
+      posContainerRef.current?.requestFullscreen();
       setIsFullscreen(true);
     } else {
       if (document.exitFullscreen) {
@@ -455,7 +456,13 @@ const POS = () => {
   );
 
   return (
-    <div className="grid h-full w-full gap-4 overflow-hidden p-3 lg:grid-cols-[minmax(0,1fr)_400px] lg:p-4">
+    <div
+      ref={posContainerRef}
+      className={cn(
+        "grid h-full w-full gap-4 overflow-hidden p-3 lg:grid-cols-[minmax(0,1fr)_400px] lg:p-4",
+        isFullscreen && "h-screen bg-background p-4",
+      )}
+    >
       {/* Left Side - Products */}
       <div className="min-h-0 min-w-0 flex flex-col gap-3 overflow-hidden">
         <div className="flex items-center justify-between px-1">
