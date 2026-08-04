@@ -124,6 +124,14 @@ const Inventory = () => {
     },
   });
 
+  const { data: purchaseList = [] } = useQuery({
+    queryKey: ["purchase-list"],
+    queryFn: async () => {
+      const res = await api.get("/inventory/purchase-list");
+      return res.data;
+    },
+    enabled: ["admin", "manager", "warehouse"].includes(role),
+  });
   const threshold = settings?.low_stock_threshold ?? 5;
   const lowStockCount = products.filter(
     (product) => product.stock < threshold,
@@ -263,6 +271,61 @@ const Inventory = () => {
           </p>
           <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
             <Badge variant="outline">{products.length} mahsulot</Badge>
+            {purchaseList.length > 0 && (
+              <Card className="border-amber-200 bg-amber-50/50 shadow-sm dark:border-amber-900/50 dark:bg-amber-950/20">
+                <CardHeader className="flex flex-row items-start justify-between gap-4 pb-3">
+                  <div>
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <AlertCircle className="h-5 w-5 text-amber-600" />
+                      Avtomatik xarid ro'yxati
+                    </CardTitle>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Minimal qoldiqdan past mahsulotlar uchun tavsiya etilgan
+                      buyurtma.
+                    </p>
+                  </div>
+                  <Badge
+                    variant="outline"
+                    className="border-amber-300 text-amber-700 dark:border-amber-800 dark:text-amber-300"
+                  >
+                    {purchaseList.length} mahsulot
+                  </Badge>
+                </CardHeader>
+                <CardContent className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                  {purchaseList.map((item) => (
+                    <div
+                      key={item.product_id}
+                      className="rounded-lg border bg-background/70 p-3"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="font-semibold">{item.name}</p>
+                        <Badge
+                          variant={
+                            item.priority === "critical"
+                              ? "destructive"
+                              : "outline"
+                          }
+                        >
+                          {item.priority === "critical" ? "Tugagan" : "Kam"}
+                        </Badge>
+                      </div>
+                      <div className="mt-2 flex justify-between text-sm text-muted-foreground">
+                        <span>
+                          Qoldiq: {item.stock} {item.unit}
+                        </span>
+                        <span>
+                          Olish: {item.suggested_quantity} {item.unit}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-sm font-medium">
+                        Taxminiy xarid:{" "}
+                        {Math.round(item.estimated_cost).toLocaleString()} so'm
+                      </p>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
             {lowStockCount > 0 && (
               <Badge
                 variant="outline"
@@ -726,7 +789,7 @@ const Inventory = () => {
                 [1, 2, 3, 4, 5].map((i) => (
                   <TableRow key={i}>
                     <TableCell
-                      colSpan={7}
+                      colSpan={9}
                       className="h-12 animate-pulse bg-muted/30"
                     />
                   </TableRow>
@@ -789,13 +852,17 @@ const Inventory = () => {
                         {product.stock?.toLocaleString()} {product.unit}
                       </Badge>
                     </TableCell>
-                    <TableCell className="font-semibold text-foreground">
+                    <TableCell className="text-muted-foreground">
+                      {product.buy_price.toLocaleString()} so'm
+                    </TableCell>                    <TableCell className="font-semibold text-foreground">
                       {product.sell_price.toLocaleString()}{" "}
                       <span className="text-[10px] text-muted-foreground font-medium uppercase">
                         so'm
                       </span>
                     </TableCell>
-                    <TableCell className="text-muted-foreground">
+                    <TableCell className={cn("font-semibold", product.sell_price - product.buy_price >= 0 ? "text-emerald-600" : "text-rose-600")}>
+                      {(product.sell_price - product.buy_price).toLocaleString()} so'm
+                    </TableCell>                    <TableCell className="text-muted-foreground">
                       {product.unit}
                     </TableCell>
                     <TableCell className="pr-8 text-right">
@@ -849,7 +916,59 @@ const Inventory = () => {
           </Table>
         </CardContent>
       </Card>
-
+      {purchaseList.length > 0 && (
+        <Card className="border-amber-200 bg-amber-50/50 shadow-sm dark:border-amber-900/50 dark:bg-amber-950/20">
+          <CardHeader className="flex flex-row items-start justify-between gap-4 pb-3">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <AlertCircle className="h-5 w-5 text-amber-600" />
+                Avtomatik xarid ro'yxati
+              </CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Minimal qoldiqdan past mahsulotlar uchun tavsiya etilgan
+                buyurtma.
+              </p>
+            </div>
+            <Badge
+              variant="outline"
+              className="border-amber-300 text-amber-700 dark:border-amber-800 dark:text-amber-300"
+            >
+              {purchaseList.length} mahsulot
+            </Badge>
+          </CardHeader>
+          <CardContent className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+            {purchaseList.map((item) => (
+              <div
+                key={item.product_id}
+                className="rounded-lg border bg-background/70 p-3"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <p className="font-semibold">{item.name}</p>
+                  <Badge
+                    variant={
+                      item.priority === "critical" ? "destructive" : "outline"
+                    }
+                  >
+                    {item.priority === "critical" ? "Tugagan" : "Kam"}
+                  </Badge>
+                </div>
+                <div className="mt-2 flex justify-between text-sm text-muted-foreground">
+                  <span>
+                    Qoldiq: {item.stock} {item.unit}
+                  </span>
+                  <span>
+                    Olish: {item.suggested_quantity} {item.unit}
+                  </span>
+                </div>
+                <p className="mt-2 text-sm font-medium">
+                  Taxminiy xarid:{" "}
+                  {Math.round(item.estimated_cost).toLocaleString()} so'm
+                </p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
       {lowStockCount > 0 && (
         <div className="bg-amber-500/10 dark:bg-amber-500/20 border border-amber-500/30 rounded-xl p-4 flex items-start gap-3 shadow-sm">
           <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-500 mt-0.5" />

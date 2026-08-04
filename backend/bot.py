@@ -1,4 +1,4 @@
-from database import SessionLocal as AsyncSessionLocal, Client, Employee, Attendance
+from database import SessionLocal as AsyncSessionLocal, Client, Employee, Attendance, StoreSetting
 from datetime import datetime, timezone
 import os
 import asyncio
@@ -358,51 +358,55 @@ async def admin_backup_handler(message: Message) -> None:
             await message.answer(f"Xatolik yuz berdi: {e}")
 
 # --- QARZ ESLATMALARI ---
-async def check_debts(bot: Bot):
-    """Qarz eslatmalarini tekshirish funksiyasi"""
+async def check_debts(bot: Bot | None = None):
+    """Send debt reminders only when the Telegram bot is configured."""
+    if not bot:
+        return
+
     try:
         now = datetime.now()
         async with AsyncSessionLocal() as db:
+            settings_result = await db.execute(select(StoreSetting))
+            settings = settings_result.scalars().first()
+            reminder_days = max(settings.debt_reminder_days if settings else 3, 0)
             result = await db.execute(
                 select(Client).where(
                     Client.debt_due_date.isnot(None),
                     Client.telegram_id.isnot(None),
-                    Client.balance < 0
+                    Client.balance < 0,
                 )
             )
-            clients = result.scalars().all()
 
-            for client in clients:
+            for client in result.scalars().all():
                 days_left = (client.debt_due_date - now).days
                 debt = abs(client.balance)
-
-                msg = None
-                if days_left == 3:
-                    msg = f"🔔 Eslatma: {client.name}, qarzingizni to'lashga 3 kun qoldi.\n💰 Summa: {debt:,.0f} so'm"
-                elif days_left == 2:
-                    msg = f"🔔 Eslatma: {client.name}, qarzingizni to'lashga 2 kun qoldi.\n💰 Summa: {debt:,.0f} so'm"
-                elif days_left == 1:
-                    msg = f"⚠️ Diqqat: {client.name}, ertaga qarzingizni to'lash muddati tugaydi!\n💰 Summa: {debt:,.0f} so'm"
+                if 0 < days_left <= reminder_days:
+                    msg = f"Eslatma: {client.name}, qarzingizni to'lashga {days_left} kun qoldi.\nSumma: {debt:,.0f} so'm"
                 elif days_left == 0:
-                    msg = f"🚨 {client.name}, bugun qarzingizni to'lash muddati!\n💰 Iltimos, {debt:,.0f} so'm to'lang."
+                    msg = f"Diqqat: {client.name}, qarzingizni to'lash muddati bugun.\nSumma: {debt:,.0f} so'm"
                 elif days_left < 0:
-                    msg = f"‼️ {client.name}, siz qarzingizni kechiktirdingiz!\n💰 Qarzingiz: {debt:,.0f} so'm.\nIltimos, tezroq to'lang."
+                    msg = f"Qarzingiz muddati o'tgan: {client.name}.\nSumma: {debt:,.0f} so'm"
+                else:
+                    continue
 
-                if msg:
-                    try:
-                        await bot.send_message(client.telegram_id, msg)
-                    except Exception as e:
-                        print(f"Xabar yuborishda xatolik ({client.name}): {e}")
+                try:
+                    await bot.send_message(client.telegram_id, msg)
+                except Exception as exc:
+                    print(f"Qarz eslatmasi yuborilmadi ({client.name}): {exc}")
+    except Exception as exc:
+        print(f"Qarz tekshirish xatosi: {exc}")
 
-    except Exception as e:
-        print(f"Qarz tekshirishda xatolik: {e}")
 
-# Initialize Bot
-bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML)) if TOKEN else None
+
 
 async def main() -> None:
+    if not bot:
+        logging.warning("TELEGRAM_BOT_TOKEN berilmagan: bot ishga tushmadi.")
+        return
     asyncio.create_task(check_debts(bot))
     await dp.start_polling(bot)
+
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, stream=sys.stdout)

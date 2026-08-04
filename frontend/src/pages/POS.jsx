@@ -18,6 +18,7 @@ import {
   HandCoins,
   Users,
   Star,
+  RotateCcw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -59,6 +60,13 @@ const POS = () => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isShiftModalOpen, setIsShiftModalOpen] = useState(false);
   const [shiftBalance, setShiftBalance] = useState("");
+  const [shiftNote, setShiftNote] = useState("");
+  const [isUnsoldReturnOpen, setIsUnsoldReturnOpen] = useState(false);
+  const [unsoldReturn, setUnsoldReturn] = useState({
+    product_id: "",
+    quantity: "",
+    reason: "",
+  });
   const [isWeightModalOpen, setIsWeightModalOpen] = useState(false);
   const [selectedProductForWeight, setSelectedProductForWeight] =
     useState(null);
@@ -98,6 +106,37 @@ const POS = () => {
     }
   };
 
+  const unsoldReturnMutation = useMutation({
+    mutationFn: ({ productId, quantity, reason }) =>
+      api.post(`/inventory/products/${productId}/return`, { quantity, reason }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["stock-logs"] });
+      setUnsoldReturn({ product_id: "", quantity: "", reason: "" });
+      setIsUnsoldReturnOpen(false);
+      toast.success("Mahsulot omborga qaytarildi");
+    },
+    onError: (error) =>
+      toast.error(error.response?.data?.detail || "Qaytarib bo'lmadi"),
+  });
+
+  const submitUnsoldReturn = () => {
+    const quantity = Number(unsoldReturn.quantity);
+    if (
+      !unsoldReturn.product_id ||
+      !Number.isFinite(quantity) ||
+      quantity <= 0 ||
+      unsoldReturn.reason.trim().length < 3
+    ) {
+      toast.error("Mahsulot, miqdor va sababni kiriting");
+      return;
+    }
+    unsoldReturnMutation.mutate({
+      productId: unsoldReturn.product_id,
+      quantity,
+      reason: unsoldReturn.reason.trim(),
+    });
+  };
   const openShiftMutation = useMutation({
     mutationFn: (data) => api.post("/pos/shifts/open", data),
     onSuccess: () => {
@@ -130,7 +169,16 @@ const POS = () => {
     }
 
     if (activeShift) {
-      closeShiftMutation.mutate({ closing_balance: amount });
+      const expectedCash =
+        activeShift.opening_balance + (activeShift.total_cash || 0);
+      if (Math.abs(amount - expectedCash) > 0.01 && !shiftNote.trim()) {
+        toast.error("Kassa farqi uchun sabab yozing");
+        return;
+      }
+      closeShiftMutation.mutate({
+        closing_balance: amount,
+        note: shiftNote.trim() || null,
+      });
     } else {
       openShiftMutation.mutate({ opening_balance: amount });
     }
@@ -412,12 +460,22 @@ const POS = () => {
               Qidirish uchun F2, to'lov uchun Enter
             </p>
           </div>
-          <div className="rounded-lg border bg-card px-3 py-2 text-right shadow-sm">
-            <div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-              Savatda
-            </div>
-            <div className="text-sm font-black">
-              {cart.reduce((sum, item) => sum + item.quantity, 0)} mahsulot
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={() => setIsUnsoldReturnOpen(true)}
+            >
+              <RotateCcw className="h-4 w-4" /> Omborga qaytarish
+            </Button>
+            <div className="rounded-lg border bg-card px-3 py-2 text-right shadow-sm">
+              <div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                Savatda
+              </div>
+              <div className="text-sm font-black">
+                {cart.reduce((sum, item) => sum + item.quantity, 0)} mahsulot
+              </div>
             </div>
           </div>
         </div>
@@ -1025,6 +1083,81 @@ const POS = () => {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={isUnsoldReturnOpen} onOpenChange={setIsUnsoldReturnOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Mahsulotni omborga qaytarish</DialogTitle>
+            <DialogDescription>
+              Savdo chekisiz qaytgan mahsulotni qoldiqqa qo'shadi. Sabab audit
+              jurnaliga yoziladi.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="grid gap-2">
+              <Label>Mahsulot</Label>
+              <Select
+                value={unsoldReturn.product_id}
+                onValueChange={(value) =>
+                  setUnsoldReturn({ ...unsoldReturn, product_id: value })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Mahsulotni tanlang" />
+                </SelectTrigger>
+                <SelectContent>
+                  {products.map((product) => (
+                    <SelectItem key={product.id} value={String(product.id)}>
+                      {product.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label>Miqdor</Label>
+              <Input
+                type="number"
+                min="0.001"
+                value={unsoldReturn.quantity}
+                onChange={(event) =>
+                  setUnsoldReturn({
+                    ...unsoldReturn,
+                    quantity: event.target.value,
+                  })
+                }
+                placeholder="1"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label>Sabab</Label>
+              <Input
+                value={unsoldReturn.reason}
+                onChange={(event) =>
+                  setUnsoldReturn({
+                    ...unsoldReturn,
+                    reason: event.target.value,
+                  })
+                }
+                placeholder="Masalan: xaridor olib kelib qaytardi"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsUnsoldReturnOpen(false)}
+            >
+              Bekor qilish
+            </Button>
+            <Button
+              onClick={submitUnsoldReturn}
+              disabled={unsoldReturnMutation.isPending}
+            >
+              Omborga qo'shish
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {/* Shift Modal */}
       <Dialog open={isShiftModalOpen} onOpenChange={setIsShiftModalOpen}>
         <DialogContent>
@@ -1090,7 +1223,23 @@ const POS = () => {
                 placeholder="0"
                 autoFocus
               />
-            </div>
+            </div>{" "}
+            {activeShift &&
+              shiftBalance !== "" &&
+              Math.abs(
+                Number(shiftBalance) -
+                  (activeShift.opening_balance + (activeShift.total_cash || 0)),
+              ) > 0.01 && (
+                <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/30">
+                  <Label htmlFor="shift-note">Farq sababi</Label>
+                  <Input
+                    id="shift-note"
+                    value={shiftNote}
+                    onChange={(e) => setShiftNote(e.target.value)}
+                    placeholder="Masalan: mayda xarajat yoki sanashdagi farq"
+                  />
+                </div>
+              )}
           </div>
           <DialogFooter>
             <Button

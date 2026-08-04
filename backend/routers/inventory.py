@@ -5,12 +5,45 @@ from sqlalchemy.orm import joinedload
 from typing import List, Optional
 
 from database import get_db, Product, Category, Employee, Supply, StockMove
-from schemas import ProductCreate, ProductOut, CategoryCreate, CategoryOut, SupplyCreate, SupplyOut, StockMoveOut
+from schemas import ProductCreate, ProductOut, CategoryCreate, CategoryOut, SupplyCreate, SupplyOut, StockMoveOut, StockReturn
 from core import get_current_user
 
 from routers.audit import log_action
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
+@router.get("/purchase-list")
+async def get_purchase_list(
+    current_user: Employee = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Build a live replenishment list from products below the store threshold."""
+    if current_user.role not in ["admin", "manager", "warehouse"]:
+        raise HTTPException(status_code=403, detail="Ruxsat berilmagan")
+
+    from database import StoreSetting
+
+    settings = (await db.execute(select(StoreSetting))).scalars().first()
+    threshold = max(settings.low_stock_threshold if settings else 5, 1)
+    products = (
+        await db.execute(
+            select(Product).where(Product.stock < threshold).order_by(Product.stock.asc())
+        )
+    ).scalars().all()
+
+    return [
+        {
+            "product_id": product.id,
+            "name": product.name,
+            "barcode": product.barcode,
+            "unit": product.unit,
+            "stock": product.stock,
+            "minimum_stock": threshold,
+            "suggested_quantity": max(threshold * 2 - product.stock, threshold - product.stock),
+            "estimated_cost": max(threshold * 2 - product.stock, threshold - product.stock) * product.buy_price,
+            "priority": "critical" if product.stock <= 0 else "low",
+        }
+        for product in products
+    ]
 
 # --- SUPPLIES ---
 @router.post("/supplies", response_model=SupplyOut)
@@ -84,6 +117,33 @@ async def get_stock_logs(
     result = await db.execute(stmt)
     return result.scalars().all()
 
+@router.post("/products/{product_id}/return", response_model=ProductOut)
+async def return_unsold_product(
+    product_id: int,
+    payload: StockReturn,
+    current_user: Employee = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return an unsold physical product to stock; cashiers may perform this with a reason."""
+    if current_user.role not in ["admin", "manager", "warehouse", "cashier"]:
+        raise HTTPException(status_code=403, detail="Ruxsat berilmagan")
+
+    product = await db.scalar(select(Product).where(Product.id == product_id))
+    if not product:
+        raise HTTPException(status_code=404, detail="Mahsulot topilmadi")
+
+    product.stock += payload.quantity
+    db.add(StockMove(
+        product_id=product.id,
+        quantity=payload.quantity,
+        type="return_unsold",
+        reason=f"Sotuvsiz qaytarish: {payload.reason}",
+        created_by=current_user.id,
+    ))
+    await log_action(db, current_user.id, "SOTUVSIZ_QAYTARISH", f"Mahsulot: {product.name}. Soni: {payload.quantity}. Sabab: {payload.reason}")
+    await db.commit()
+    await db.refresh(product)
+    return product
 # --- PRODUCTS ---
 @router.get("/products", response_model=List[ProductOut])
 async def get_products(

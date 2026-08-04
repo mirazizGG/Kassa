@@ -35,6 +35,8 @@ import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import FilterBar from "../components/FilterBar";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -56,6 +58,10 @@ const SalesHistory = () => {
   });
 
   const [expandedSale, setExpandedSale] = React.useState(null);
+  const [refundApproval, setRefundApproval] = React.useState({
+    manager_username: "",
+    manager_password: "",
+  });
   const queryClient = useQueryClient();
 
   const { data: sales = [], isLoading } = useQuery({
@@ -73,7 +79,8 @@ const SalesHistory = () => {
   });
 
   const refundMutation = useMutation({
-    mutationFn: (saleId) => api.post(`/sales/${saleId}/refund`),
+    mutationFn: ({ saleId, approval }) =>
+      api.post(`/sales/${saleId}/refund`, approval),
     onSuccess: () => {
       queryClient.invalidateQueries(["sales-history"]);
       queryClient.invalidateQueries(["finance-stats"]);
@@ -92,7 +99,14 @@ const SalesHistory = () => {
   });
 
   const handleRefund = (id) => {
-    refundMutation.mutate(id);
+    if (
+      !refundApproval.manager_username.trim() ||
+      !refundApproval.manager_password
+    ) {
+      toast.error("Menejer login va parolini kiriting");
+      return;
+    }
+    refundMutation.mutate({ saleId: id, approval: refundApproval });
   };
 
   const toggleExpand = (id) => {
@@ -243,6 +257,49 @@ const SalesHistory = () => {
                                       ayirib tashlaydi.
                                     </DialogDescription>
                                   </DialogHeader>
+                                  <div className="grid gap-3 rounded-lg border bg-muted/30 p-3">
+                                    <p className="text-sm font-medium">
+                                      Menejer tasdig'i kerak
+                                    </p>
+                                    <div className="grid gap-2">
+                                      <Label
+                                        htmlFor={`refund-manager-${sale.id}`}
+                                      >
+                                        Menejer login
+                                      </Label>
+                                      <Input
+                                        id={`refund-manager-${sale.id}`}
+                                        value={refundApproval.manager_username}
+                                        onChange={(event) =>
+                                          setRefundApproval({
+                                            ...refundApproval,
+                                            manager_username:
+                                              event.target.value,
+                                          })
+                                        }
+                                        placeholder="manager"
+                                      />
+                                    </div>
+                                    <div className="grid gap-2">
+                                      <Label
+                                        htmlFor={`refund-password-${sale.id}`}
+                                      >
+                                        Menejer paroli
+                                      </Label>
+                                      <Input
+                                        id={`refund-password-${sale.id}`}
+                                        type="password"
+                                        value={refundApproval.manager_password}
+                                        onChange={(event) =>
+                                          setRefundApproval({
+                                            ...refundApproval,
+                                            manager_password:
+                                              event.target.value,
+                                          })
+                                        }
+                                      />
+                                    </div>
+                                  </div>{" "}
                                   <DialogFooter>
                                     <DialogHeader className="w-full">
                                       {" "}

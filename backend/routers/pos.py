@@ -130,11 +130,25 @@ async def close_shift(
     if not db_shift:
         raise HTTPException(status_code=404, detail="Ochiq smena topilmadi")
 
+    from sqlalchemy import func
+    cash_total = await db.scalar(
+        select(func.coalesce(func.sum(Sale.cash_amount), 0)).where(
+            Sale.cashier_id == current_user.id,
+            Sale.created_at >= db_shift.opened_at,
+            Sale.status == "completed",
+        )
+    )
+    expected_cash = db_shift.opening_balance + (cash_total or 0)
+    cash_difference = shift_data.closing_balance - expected_cash
+    if abs(cash_difference) > 0.01 and not (shift_data.note or "").strip():
+        raise HTTPException(status_code=400, detail="Kassa farqi uchun sabab yozing")
+
     db_shift.closing_balance = shift_data.closing_balance
+    db_shift.note = (shift_data.note or "").strip() or None
     db_shift.closed_at = datetime.now()
     db_shift.status = "closed"
-    
-    await log_action(db, current_user.id, "SMENA_YOPILDI", f"Yakuniy balans: {shift_data.closing_balance:,.0f} so'm")
+
+    await log_action(db, current_user.id, "SMENA_YOPILDI", f"Kutilgan: {expected_cash:,.0f} so'm. Haqiqiy: {shift_data.closing_balance:,.0f} so'm. Farq: {cash_difference:,.0f} so'm. Sabab: {db_shift.note or '-'}")
     
     await db.commit()
     await db.refresh(db_shift)
