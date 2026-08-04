@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update
+from sqlalchemy import select, update, func
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
-from database import get_db, Product, Sale, SaleItem, Employee, Client, StoreSetting, StockMove
+from database import get_db, Product, Sale, SaleItem, Employee, Client, StoreSetting, StockMove, Shift
 from schemas import SaleCreate, SaleOut, RefundApproval
 from core import get_current_user, verify_password
 from routers.audit import log_action
@@ -34,19 +34,36 @@ async def create_sale(
     current_user: Employee = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    active_shift = await db.scalar(
+        select(Shift).where(Shift.cashier_id == current_user.id, Shift.status == "open")
+    )
+    if not active_shift:
+        raise HTTPException(status_code=400, detail="Savdo qilish uchun avval smenani oching")
     # 1. Start a transaction implicit in async session
     
     # 2. Check stock availability
     total_amount_check = 0
     sale_items_data = []
 
+    manager_approved = False
     for item in sale.items:
         result = await db.execute(select(Product).where(Product.id == item.product_id))
         product = result.scalars().first()
         
         if not product:
             raise HTTPException(status_code=404, detail=f"Product {item.product_id} not found")
-        
+
+        if item.price < product.sell_price:
+            if not manager_approved:
+                if not sale.manager_username or not sale.manager_password:
+                    raise HTTPException(status_code=403, detail="Chegirma uchun menejer tasdig'i kerak")
+                approver = await db.scalar(
+                    select(Employee).where(Employee.username == sale.manager_username, Employee.is_active == True)
+                )
+                if not approver or approver.role not in ["admin", "manager"] or not verify_password(sale.manager_password, approver.hashed_password):
+                    raise HTTPException(status_code=403, detail="Menejer tasdig'i noto'g'ri")
+                manager_approved = True
+
         if product.stock < item.quantity:
             raise HTTPException(status_code=400, detail=f"Mahsulot yetarli emas: {product.name}. Mavjud: {product.stock}")
         
@@ -61,6 +78,16 @@ async def create_sale(
             price=item.price
         ))
 
+    # Cash entered by the buyer can include change; persist only the net amount left in the drawer.
+    net_cash_amount = max(
+        0,
+        sale.total_amount
+        - sale.card_amount
+        - sale.transfer_amount
+        - sale.debt_amount
+        - sale.bonus_spent,
+    )
+
     # 3. Create Sale Record
     db_sale = Sale(
         total_amount=sale.total_amount, 
@@ -68,7 +95,7 @@ async def create_sale(
         cashier_id=current_user.id,
         client_id=sale.client_id,
         status="completed",
-        cash_amount=sale.cash_amount,
+        cash_amount=net_cash_amount,
         card_amount=sale.card_amount,
         transfer_amount=sale.transfer_amount,
         debt_amount=sale.debt_amount
@@ -145,6 +172,61 @@ async def create_sale(
     db_sale_full = result.unique().scalars().first()
     return db_sale_full
 
+@router.get("/top-products")
+async def get_top_products(
+    limit: int = 12,
+    current_user: Employee = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    rows = await db.execute(
+        select(
+            Product.id,
+            Product.name,
+            Product.barcode,
+            Product.sell_price,
+            Product.stock,
+            Product.unit,
+            func.sum(SaleItem.quantity).label("sold_quantity"),
+        )
+        .join(SaleItem, SaleItem.product_id == Product.id)
+        .join(Sale, Sale.id == SaleItem.sale_id)
+        .where(Sale.status == "completed")
+        .group_by(Product.id)
+        .order_by(func.sum(SaleItem.quantity).desc())
+        .limit(min(max(limit, 1), 20))
+    )
+    return [dict(row._mapping) for row in rows]
+
+
+@router.get("/my-daily-summary")
+async def get_my_daily_summary(
+    current_user: Employee = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from datetime import timedelta
+    from zoneinfo import ZoneInfo
+
+    now_local = datetime.now(ZoneInfo("Asia/Tashkent"))
+    start_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+    end_local = start_local + timedelta(days=1)
+    start = start_local.astimezone(timezone.utc).replace(tzinfo=None)
+    end = end_local.astimezone(timezone.utc).replace(tzinfo=None)
+    result = await db.execute(
+        select(
+            func.count(Sale.id).label("sales_count"),
+            func.coalesce(func.sum(Sale.total_amount), 0).label("total_amount"),
+            func.coalesce(func.sum(Sale.cash_amount), 0).label("cash_amount"),
+            func.coalesce(func.sum(Sale.card_amount), 0).label("card_amount"),
+            func.coalesce(func.sum(Sale.transfer_amount), 0).label("transfer_amount"),
+            func.coalesce(func.sum(Sale.debt_amount), 0).label("debt_amount"),
+        ).where(
+            Sale.cashier_id == current_user.id,
+            Sale.status == "completed",
+            Sale.created_at >= start,
+            Sale.created_at < end,
+        )
+    )
+    return dict(result.one()._mapping)
 @router.get("/", response_model=List[SaleOut])
 async def get_sales(
     skip: int = 0, 

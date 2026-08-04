@@ -66,5 +66,13 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Foydalanuvchi faol emas (bloklangan)"
         )
+
+    session_id = payload.get("sid")
+    if user.session_token and session_id != user.session_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Sessiya boshqa qurilmada yakunlangan. Qaytadan kiring.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
         
     return user

@@ -4,6 +4,7 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import joinedload
 from typing import List, Optional
 from datetime import datetime, timezone, date, time
+from zoneinfo import ZoneInfo
 
 
 # ... (imports)
@@ -13,6 +14,15 @@ from core import get_current_user
 from routers.audit import log_action
 
 router = APIRouter(prefix="/pos", tags=["pos"])
+
+
+def local_time_to_sale_timestamp(value: datetime) -> datetime:
+    """Match locally-recorded shift times with UTC-naive sale timestamps."""
+    return value.replace(tzinfo=ZoneInfo("Asia/Tashkent")).astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def sales_start_for_shift(shift: Shift) -> datetime:
+    return local_time_to_sale_timestamp(shift.opened_at)
 
 
 @router.get("/shifts/history", response_model=List[ShiftOut])
@@ -45,7 +55,33 @@ async def get_shifts_history(
         .limit(limit)
         .offset(offset)
     )
-    return result.scalars().all()
+    shifts = result.scalars().all()
+
+    from sqlalchemy import func
+    for shift in shifts:
+        sales_query = select(
+            func.coalesce(func.sum(Sale.total_amount - Sale.card_amount - Sale.transfer_amount - Sale.debt_amount - Sale.bonus_spent), 0).label("total_cash"),
+            func.coalesce(func.sum(Sale.card_amount), 0).label("total_card"),
+            func.coalesce(func.sum(Sale.transfer_amount), 0).label("total_transfer"),
+            func.coalesce(func.sum(Sale.debt_amount), 0).label("total_debt"),
+        ).where(
+            Sale.cashier_id == shift.cashier_id,
+            Sale.created_at >= sales_start_for_shift(shift),
+            Sale.status == "completed",
+        )
+        if shift.closed_at:
+            sales_query = sales_query.where(
+                Sale.created_at <= local_time_to_sale_timestamp(shift.closed_at)
+            )
+
+        totals = (await db.execute(sales_query)).one()
+        shift.total_cash = totals.total_cash or 0
+        shift.total_card = totals.total_card or 0
+        shift.total_transfer = totals.total_transfer or 0
+        shift.total_debt = totals.total_debt or 0
+        shift.expected_cash = shift.opening_balance + shift.total_cash
+
+    return shifts
 
 @router.get("/shifts/active", response_model=Optional[ShiftOut])
 async def get_active_shift(
@@ -65,12 +101,13 @@ async def get_active_shift(
     if shift:
         # Calculate totals from sales since the shift started
         sales_query = select(
-            func.sum(Sale.cash_amount).label("total_cash"),
-            func.sum(Sale.card_amount + Sale.transfer_amount).label("total_card"),
+            func.sum(Sale.total_amount - Sale.card_amount - Sale.transfer_amount - Sale.debt_amount - Sale.bonus_spent).label("total_cash"),
+            func.sum(Sale.card_amount).label("total_card"),
+            func.sum(Sale.transfer_amount).label("total_transfer"),
             func.sum(Sale.debt_amount).label("total_debt")
         ).where(
             Sale.cashier_id == current_user.id,
-            Sale.created_at >= shift.opened_at,
+            Sale.created_at >= sales_start_for_shift(shift),
             Sale.status == "completed"
         )
         
@@ -79,6 +116,7 @@ async def get_active_shift(
         
         shift.total_cash = totals.total_cash or 0
         shift.total_card = totals.total_card or 0
+        shift.total_transfer = totals.total_transfer or 0
         shift.total_debt = totals.total_debt or 0
         
     return shift
@@ -132,9 +170,9 @@ async def close_shift(
 
     from sqlalchemy import func
     cash_total = await db.scalar(
-        select(func.coalesce(func.sum(Sale.cash_amount), 0)).where(
+        select(func.coalesce(func.sum(Sale.total_amount - Sale.card_amount - Sale.transfer_amount - Sale.debt_amount - Sale.bonus_spent), 0)).where(
             Sale.cashier_id == current_user.id,
-            Sale.created_at >= db_shift.opened_at,
+            Sale.created_at >= sales_start_for_shift(db_shift),
             Sale.status == "completed",
         )
     )

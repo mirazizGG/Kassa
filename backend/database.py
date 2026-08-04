@@ -1,7 +1,7 @@
 # database.py
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker, declarative_base, relationship
-from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, DateTime, JSON, Text, BigInteger
+from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, DateTime, JSON, Text, BigInteger, inspect
 from datetime import datetime, timezone
 
 import os
@@ -63,6 +63,8 @@ class Employee(Base):
     passport = Column(String, nullable=True) # Pasport seriyasi
     notes = Column(String, nullable=True) # Qo'shimcha izohlar
     telegram_id = Column(BigInteger, unique=True, nullable=True, index=True) # Telegram bot uchun
+    session_token = Column(String, nullable=True)
+    session_expires_at = Column(DateTime, nullable=True)
 
 class Category(Base):
     __tablename__ = "categories"
@@ -295,9 +297,18 @@ class StoreSetting(Base):
     debt_reminder_days = Column(Integer, default=3) # To'lov muddatidan necha kun oldin eslatish
 
 # Bazani yaratish funksiyasi
+def ensure_employee_session_columns(sync_connection):
+    columns = {column["name"] for column in inspect(sync_connection).get_columns("employees")}
+    if "session_token" not in columns:
+        sync_connection.exec_driver_sql("ALTER TABLE employees ADD COLUMN session_token VARCHAR")
+    if "session_expires_at" not in columns:
+        sync_connection.exec_driver_sql("ALTER TABLE employees ADD COLUMN session_expires_at DATETIME")
+
+
 async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(ensure_employee_session_columns)
 
 async def get_db():
     async with SessionLocal() as db:

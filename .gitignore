@@ -85,3 +85,6 @@ LOGIN_PAROLLAR.txt
 
 # Local backend secrets
 backend/.env
+
+# Local uploaded files
+backend/uploads/

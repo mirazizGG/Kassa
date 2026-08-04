@@ -348,7 +348,7 @@ const Finance = () => {
             value={
               statsLoading
                 ? "..."
-                : `${stats?.totalCost?.toLocaleString() || 0} so'm`
+                : `${stats?.totalCost?.toLocaleString("de-DE") || 0} so'm`
             }
             icon={Receipt}
             type="negative"
@@ -359,7 +359,7 @@ const Finance = () => {
           value={
             statsLoading
               ? "..."
-              : `${stats?.totalExpenses?.toLocaleString() || 0} so'm`
+              : `${stats?.totalExpenses?.toLocaleString("de-DE") || 0} so'm`
           }
           icon={TrendingDown}
           type="negative"
@@ -433,7 +433,7 @@ const Finance = () => {
                         </div>
                       </TableCell>
                       <TableCell className="font-mono text-rose-500">
-                        -{exp.amount.toLocaleString()} so'm
+                        -{exp.amount.toLocaleString("de-DE")} so'm
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1 text-xs">
@@ -497,7 +497,7 @@ const Finance = () => {
                     ))}
                   </Pie>
                   <ReTooltip
-                    formatter={(value) => `${value.toLocaleString()} so'm`}
+                    formatter={(value) => `${value.toLocaleString("de-DE")} so'm`}
                     contentStyle={{
                       backgroundColor: "hsl(var(--card))",
                       borderRadius: "8px",
@@ -587,7 +587,7 @@ const Finance = () => {
                       tick={{ fontSize: 12 }}
                     />
                     <ReTooltip
-                      formatter={(v) => `${v.toLocaleString()} so'm`}
+                      formatter={(v) => `${v.toLocaleString("de-DE")} so'm`}
                       contentStyle={{
                         backgroundColor: "hsl(var(--card))",
                         borderRadius: "8px",

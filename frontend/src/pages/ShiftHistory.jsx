@@ -33,6 +33,8 @@ import { Button } from "@/components/ui/button";
 import FilterBar from "../components/FilterBar";
 
 const ShiftHistory = () => {
+  const role = localStorage.getItem("role");
+  const isCashier = role === "cashier";
   const today = new Date().toISOString().split("T")[0];
   const [filters, setFilters] = React.useState({
     employee_id: "",
@@ -60,30 +62,39 @@ const ShiftHistory = () => {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Smenalar Tarixi</h1>
           <p className="text-muted-foreground">
-            Barcha yopilgan va ochiq smenalar nazorati
+            {isCashier
+              ? "O'z smenalaringiz, naqd savdo va kassa farqlari"
+              : "Barcha yopilgan va ochiq smenalar nazorati"}
           </p>
         </div>{" "}
       </div>
 
       <div className="rounded-xl border bg-card p-4 shadow-sm">
-        <FilterBar filters={filters} onFilterChange={setFilters} />
+        <FilterBar
+          filters={filters}
+          onFilterChange={setFilters}
+          showSearch={false}
+          showEmployeeFilter={!isCashier}
+        />
       </div>
 
       <Card className="overflow-hidden border shadow-sm bg-card">
         <CardHeader className="bg-muted/30">
           <CardTitle className="flex items-center gap-2">
             <History className="w-5 h-5 text-primary" />
-            Smenalar Ro'yxati
+            {isCashier ? "Mening smenalarim" : "Smenalar ro'yxati"}
           </CardTitle>
           <CardDescription>
-            Kassirlarning kirish-chiqish va kassa qoldiqlari tarixi
+            {isCashier
+              ? "Faqat o'zingizning smenalaringiz va haqiqiy kassa farqi"
+              : "Kassirlarning kirish-chiqish va kassa qoldiqlari tarixi"}
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
             <TableHeader className="bg-muted/30">
               <TableRow>
-                <TableHead className="pl-6">Kassir</TableHead>
+                {!isCashier && <TableHead className="pl-6">Kassir</TableHead>}
                 <TableHead>Ochilgan</TableHead>
                 <TableHead>Yopilgan</TableHead>
                 <TableHead>Boshlang'ich</TableHead>
@@ -105,7 +116,7 @@ const ShiftHistory = () => {
               ) : shifts.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={8}
+                    colSpan={isCashier ? 7 : 8}
                     className="h-40 text-center text-muted-foreground"
                   >
                     Smenalar topilmadi
@@ -115,7 +126,7 @@ const ShiftHistory = () => {
                 shifts.map((shift) => {
                   const diff =
                     shift.closing_balance !== null
-                      ? shift.closing_balance - shift.opening_balance
+                      ? shift.closing_balance - (shift.expected_cash ?? shift.opening_balance)
                       : null;
 
                   return (
@@ -123,22 +134,24 @@ const ShiftHistory = () => {
                       key={shift.id}
                       className="hover:bg-muted/50 transition-colors"
                     >
-                      <TableCell className="pl-6 font-medium">
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs">
-                            {shift.cashier?.username.charAt(0).toUpperCase()}
-                          </div>
-                          <div>
+                      {!isCashier && (
+                        <TableCell className="pl-6 font-medium">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs">
+                              {shift.cashier?.username.charAt(0).toUpperCase()}
+                            </div>
                             <div>
-                              {shift.cashier?.full_name ||
-                                shift.cashier?.username}
-                            </div>
-                            <div className="text-[10px] text-muted-foreground uppercase">
-                              {shift.cashier?.role}
+                              <div>
+                                {shift.cashier?.full_name ||
+                                  shift.cashier?.username}
+                              </div>
+                              <div className="text-[10px] text-muted-foreground uppercase">
+                                {shift.cashier?.role}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      </TableCell>
+                        </TableCell>
+                      )}
                       <TableCell className="text-xs">
                         <div className="flex items-center gap-1">
                           <Clock className="w-3 h-3 opacity-50" />
@@ -170,11 +183,11 @@ const ShiftHistory = () => {
                         )}
                       </TableCell>
                       <TableCell className="font-mono text-sm">
-                        {shift.opening_balance.toLocaleString()}
+                        {shift.opening_balance.toLocaleString("de-DE")}
                       </TableCell>
                       <TableCell className="font-mono text-sm">
                         {shift.closing_balance !== null
-                          ? shift.closing_balance.toLocaleString()
+                          ? shift.closing_balance.toLocaleString("de-DE")
                           : "-"}
                       </TableCell>
                       <TableCell className="font-mono text-sm">
@@ -185,7 +198,7 @@ const ShiftHistory = () => {
                             }
                           >
                             {diff > 0 ? "+" : ""}
-                            {diff.toLocaleString()}
+                            {diff.toLocaleString("de-DE")}
                           </span>
                         ) : (
                           "-"

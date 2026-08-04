@@ -261,9 +261,9 @@ const Inventory = () => {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
             Ombor va Mahsulotlar
           </h1>
           <p className="text-muted-foreground">
@@ -271,61 +271,6 @@ const Inventory = () => {
           </p>
           <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
             <Badge variant="outline">{products.length} mahsulot</Badge>
-            {purchaseList.length > 0 && (
-              <Card className="border-amber-200 bg-amber-50/50 shadow-sm dark:border-amber-900/50 dark:bg-amber-950/20">
-                <CardHeader className="flex flex-row items-start justify-between gap-4 pb-3">
-                  <div>
-                    <CardTitle className="flex items-center gap-2 text-base">
-                      <AlertCircle className="h-5 w-5 text-amber-600" />
-                      Avtomatik xarid ro'yxati
-                    </CardTitle>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Minimal qoldiqdan past mahsulotlar uchun tavsiya etilgan
-                      buyurtma.
-                    </p>
-                  </div>
-                  <Badge
-                    variant="outline"
-                    className="border-amber-300 text-amber-700 dark:border-amber-800 dark:text-amber-300"
-                  >
-                    {purchaseList.length} mahsulot
-                  </Badge>
-                </CardHeader>
-                <CardContent className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-                  {purchaseList.map((item) => (
-                    <div
-                      key={item.product_id}
-                      className="rounded-lg border bg-background/70 p-3"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="font-semibold">{item.name}</p>
-                        <Badge
-                          variant={
-                            item.priority === "critical"
-                              ? "destructive"
-                              : "outline"
-                          }
-                        >
-                          {item.priority === "critical" ? "Tugagan" : "Kam"}
-                        </Badge>
-                      </div>
-                      <div className="mt-2 flex justify-between text-sm text-muted-foreground">
-                        <span>
-                          Qoldiq: {item.stock} {item.unit}
-                        </span>
-                        <span>
-                          Olish: {item.suggested_quantity} {item.unit}
-                        </span>
-                      </div>
-                      <p className="mt-2 text-sm font-medium">
-                        Taxminiy xarid:{" "}
-                        {Math.round(item.estimated_cost).toLocaleString()} so'm
-                      </p>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            )}
             {lowStockCount > 0 && (
               <Badge
                 variant="outline"
@@ -463,12 +408,12 @@ const Inventory = () => {
                             </TableCell>
                             <TableCell>{item.quantity}</TableCell>
                             <TableCell>
-                              {item.buy_price.toLocaleString()}
+                              {item.buy_price.toLocaleString("de-DE")}
                             </TableCell>
                             <TableCell className="text-right font-bold">
                               {(
                                 item.quantity * item.buy_price
-                              ).toLocaleString()}
+                              ).toLocaleString("de-DE")}
                             </TableCell>
                           </TableRow>
                         );
@@ -566,8 +511,8 @@ const Inventory = () => {
                             )}
                           >
                             {log.quantity > 0
-                              ? `+${log.quantity?.toLocaleString()}`
-                              : log.quantity?.toLocaleString()}
+                              ? `+${log.quantity?.toLocaleString("de-DE")}`
+                              : log.quantity?.toLocaleString("de-DE")}
                           </TableCell>
                           <TableCell
                             className="max-w-[150px] truncate text-xs"
@@ -819,13 +764,15 @@ const Inventory = () => {
           <Table>
             <TableHeader className="bg-muted/30">
               <TableRow className="hover:bg-transparent">
-                <TableHead className="pl-8 h-12">Mahsulot Nomi</TableHead>
-                <TableHead className="h-12">Shtrix Kod</TableHead>
+                <TableHead className="pl-4 h-12">Mahsulot nomi</TableHead>
+                <TableHead className="h-12">Shtrix kod</TableHead>
                 <TableHead className="h-12">Kategoriya</TableHead>
                 <TableHead className="h-12">Qoldiq</TableHead>
-                <TableHead className="h-12">Sotish Narxi</TableHead>
+                <TableHead className="h-12">Kelish narxi</TableHead>
+                <TableHead className="h-12">Sotish narxi</TableHead>
+                <TableHead className="h-12">Foyda</TableHead>
                 <TableHead className="h-12">Birlik</TableHead>
-                <TableHead className="pr-8 text-right h-12">Amallar</TableHead>
+                <TableHead className="pr-4 text-right h-12">Amallar</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -853,7 +800,7 @@ const Inventory = () => {
                     key={product.id}
                     className="group hover:bg-muted/50 transition-colors border-b-border/50 odd:bg-muted/10"
                   >
-                    <TableCell className="pl-8 font-medium text-foreground">
+                    <TableCell className="pl-4 font-medium text-foreground">
                       <div className="flex items-center gap-2">
                         <Button
                           variant="ghost"
@@ -893,14 +840,14 @@ const Inventory = () => {
                             : "bg-background/50",
                         )}
                       >
-                        {product.stock?.toLocaleString()} {product.unit}
+                        {product.stock?.toLocaleString("de-DE")} {product.unit}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
-                      {product.buy_price.toLocaleString()} so'm
+                      {product.buy_price.toLocaleString("de-DE")} so'm
                     </TableCell>{" "}
                     <TableCell className="font-semibold text-foreground">
-                      {product.sell_price.toLocaleString()}{" "}
+                      {product.sell_price.toLocaleString("de-DE")}{" "}
                       <span className="text-[10px] text-muted-foreground font-medium uppercase">
                         so'm
                       </span>
@@ -915,13 +862,13 @@ const Inventory = () => {
                     >
                       {(
                         product.sell_price - product.buy_price
-                      ).toLocaleString()}{" "}
+                      ).toLocaleString("de-DE")}{" "}
                       so'm
                     </TableCell>{" "}
                     <TableCell className="text-muted-foreground">
                       {product.unit}
                     </TableCell>
-                    <TableCell className="pr-8 text-right">
+                    <TableCell className="pr-4 text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button
@@ -938,7 +885,7 @@ const Inventory = () => {
                         >
                           <DropdownMenuLabel>Amallar</DropdownMenuLabel>
                           <DropdownMenuSeparator />
-                          {(role === "admin" || role === "manager") && (
+                          {(role === "admin" || role === "manager" || role === "warehouse") && (
                             <>
                               <DropdownMenuItem
                                 className="gap-2 cursor-pointer"
@@ -946,6 +893,7 @@ const Inventory = () => {
                               >
                                 <Edit className="w-4 h-4" /> Tahrirlash
                               </DropdownMenuItem>
+                              {(role === "admin" || role === "manager") && (
                               <DropdownMenuItem
                                 className="gap-2 cursor-pointer text-destructive focus:bg-destructive/10 focus:text-destructive"
                                 onClick={() => {
@@ -960,6 +908,7 @@ const Inventory = () => {
                               >
                                 <Trash2 className="w-4 h-4" /> O'chirish
                               </DropdownMenuItem>
+                              )}
                             </>
                           )}
                         </DropdownMenuContent>
@@ -1018,7 +967,7 @@ const Inventory = () => {
                 </div>
                 <p className="mt-2 text-sm font-medium">
                   Taxminiy xarid:{" "}
-                  {Math.round(item.estimated_cost).toLocaleString()} so'm
+                  {Math.round(item.estimated_cost).toLocaleString("de-DE")} so'm
                 </p>
               </div>
             ))}

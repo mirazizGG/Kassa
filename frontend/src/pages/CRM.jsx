@@ -186,7 +186,7 @@ const CRM = () => {
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Jami qarz</p>
-              <p className="text-xl font-bold">{totalDebt.toLocaleString()}</p>
+              <p className="text-xl font-bold">{totalDebt.toLocaleString("de-DE")}</p>
             </div>
           </div>
         </div>
@@ -264,7 +264,7 @@ const CRM = () => {
                     <TableCell>
                       <div className="flex items-center gap-2 font-black text-lg text-orange-600">
                         <Star className="w-5 h-5 fill-orange-500" />
-                        {client.bonus_balance?.toLocaleString() || 0}
+                        {client.bonus_balance?.toLocaleString("de-DE") || 0}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -276,7 +276,7 @@ const CRM = () => {
                             : "text-emerald-600",
                         )}
                       >
-                        {client.balance.toLocaleString()}{" "}
+                        {client.balance.toLocaleString("de-DE")}{" "}
                         <span className="text-[10px] text-muted-foreground uppercase">
                           so'm
                         </span>

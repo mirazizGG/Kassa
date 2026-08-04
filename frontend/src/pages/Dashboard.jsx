@@ -123,7 +123,7 @@ const Dashboard = () => {
       ? [
           {
             title: "Xarajatlar",
-            value: `${stats?.totalExpenses?.toLocaleString() || 0} so'm`,
+            value: `${stats?.totalExpenses?.toLocaleString("de-DE") || 0} so'm`,
             icon: Briefcase,
             description: "Jami chiqimlar",
             color: "text-amber-600 dark:text-amber-400",
@@ -280,7 +280,7 @@ const Dashboard = () => {
                   Jami qarz
                 </p>
                 <p className="font-bold text-rose-950 dark:text-rose-100">
-                  {totalDebt.toLocaleString()} so‘m
+                  {totalDebt.toLocaleString("de-DE")} so‘m
                 </p>
               </div>
               <Link to="/crm">
