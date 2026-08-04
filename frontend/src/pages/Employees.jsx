@@ -793,11 +793,11 @@ const Employees = () => {
                         </div>
                         <div
                           className="text-xl font-bold truncate"
-                          title={`${emp.sale_total.toLocaleString()} so'm`}
+                          title={`${emp.sale_total.toLocaleString("de-DE")} so'm`}
                         >
                           {emp.sale_total >= 1000000
                             ? `${(emp.sale_total / 1000000).toFixed(1)}M`
-                            : emp.sale_total.toLocaleString()}
+                            : emp.sale_total.toLocaleString("de-DE")}
                         </div>
                       </div>
                     </div>

@@ -17,6 +17,7 @@ const FilterBar = ({
   onFilterChange,
   showActionFilter = false,
   showSearch = true,
+  showEmployeeFilter = true,
 }) => {
   const { data: employees } = useQuery({
     queryKey: ["employees"],
@@ -73,30 +74,32 @@ const FilterBar = ({
         </div>
       )}
 
-      <div className="flex items-center gap-2 min-w-[180px]">
-        <Users className="h-4 w-4 text-muted-foreground" />
-        <Select
-          value={filters.employee_id?.toString() || "all"}
-          onValueChange={(val) =>
-            onFilterChange({
-              ...filters,
-              employee_id: val === "all" ? "" : val,
-            })
-          }
-        >
-          <SelectTrigger className="h-9">
-            <SelectValue placeholder="Xodim" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Barcha xodimlar</SelectItem>
-            {employees?.map((emp) => (
-              <SelectItem key={emp.id} value={emp.id.toString()}>
-                {emp.full_name || emp.username}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      {showEmployeeFilter && (
+        <div className="flex items-center gap-2 min-w-[180px]">
+          <Users className="h-4 w-4 text-muted-foreground" />
+          <Select
+            value={filters.employee_id?.toString() || "all"}
+            onValueChange={(val) =>
+              onFilterChange({
+                ...filters,
+                employee_id: val === "all" ? "" : val,
+              })
+            }
+          >
+            <SelectTrigger className="h-9">
+              <SelectValue placeholder="Xodim" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Barcha xodimlar</SelectItem>
+              {employees?.map((emp) => (
+                <SelectItem key={emp.id} value={emp.id.toString()}>
+                  {emp.full_name || emp.username}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       {showActionFilter && (
         <div className="flex items-center gap-2 min-w-[180px]">

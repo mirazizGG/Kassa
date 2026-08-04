@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { ModeToggle } from "@/components/mode-toggle";
 import api from "../api/axios";
+import { toast } from "sonner";
 
 const Layout = () => {
   const navigate = useNavigate();
@@ -24,17 +25,24 @@ const Layout = () => {
 
   const handleLogout = async () => {
     try {
+      const activeShift = await api.get("/pos/shifts/active");
+      if (activeShift.data) {
+        toast.error("Ochiq smena bor", {
+          description: "Tizimdan chiqishdan oldin smenani yoping.",
+        });
+        return;
+      }
       await api.post("/auth/logout");
     } catch (error) {
       console.warn("Logout audit log could not be saved.", error);
-    } finally {
-      localStorage.removeItem("token");
-      localStorage.removeItem("role");
-      localStorage.removeItem("username");
-      localStorage.removeItem("userId");
-      localStorage.removeItem("permissions");
-      navigate("/login");
     }
+
+    localStorage.removeItem("token");
+    localStorage.removeItem("role");
+    localStorage.removeItem("username");
+    localStorage.removeItem("userId");
+    localStorage.removeItem("permissions");
+    navigate("/login");
   };
 
   const role = localStorage.getItem("role");

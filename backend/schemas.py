@@ -151,6 +151,8 @@ class SaleCreate(BaseModel):
     transfer_amount: Optional[float] = 0
     debt_amount: Optional[float] = 0
     bonus_spent: Optional[float] = 0
+    manager_username: Optional[str] = None
+    manager_password: Optional[str] = None
 
 class RefundApproval(BaseModel):
     manager_username: str
@@ -200,7 +202,9 @@ class ShiftOut(BaseModel):
     note: Optional[str] = None
     total_cash: Optional[float] = 0
     total_card: Optional[float] = 0
+    total_transfer: Optional[float] = 0
     total_debt: Optional[float] = 0
+    expected_cash: Optional[float] = 0
     model_config = ConfigDict(from_attributes=True)
 
 # --- FINANCE SCHEMAS ---

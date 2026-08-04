@@ -14,6 +14,7 @@ import {
   RotateCcw,
   AlertCircle,
   Loader2,
+  Printer,
 } from "lucide-react";
 import {
   Card,
@@ -109,6 +110,18 @@ const SalesHistory = () => {
     refundMutation.mutate({ saleId: id, approval: refundApproval });
   };
 
+  const printReceipt = (sale) => {
+    const receipt = window.open("", "_blank", "width=420,height=700");
+    if (!receipt) {
+      toast.error("Chek oynasini ochishga ruxsat bering");
+      return;
+    }
+    const items = sale.items
+      .map((item) => `<tr><td>${item.product?.name || "Mahsulot"}</td><td>${item.quantity} × ${item.price.toLocaleString("de-DE")}</td><td>${(item.quantity * item.price).toLocaleString("de-DE")}</td></tr>`)
+      .join("");
+    receipt.document.write(`<!doctype html><html><head><title>Chek #${sale.id}</title><style>body{font:14px Arial;margin:16px;color:#111}h2,p{text-align:center;margin:5px}table{width:100%;border-collapse:collapse;margin-top:14px}td{padding:6px 0;border-bottom:1px dashed #aaa}td:last-child{text-align:right}.total{font-size:18px;font-weight:700;text-align:right;margin-top:14px}</style></head><body><h2>SmartKassa</h2><p>Chek #${sale.id}</p><p>${format(new Date(sale.created_at.endsWith("Z") ? sale.created_at : sale.created_at + "Z"), "dd.MM.yyyy HH:mm")}</p><table>${items}</table><p class="total">Jami: ${sale.total_amount.toLocaleString("de-DE")} so'm</p><p>Naqd: ${sale.cash_amount.toLocaleString("de-DE")} | Terminal: ${sale.card_amount.toLocaleString("de-DE")} | Perevod: ${sale.transfer_amount.toLocaleString("de-DE")}</p><script>window.print();window.onafterprint=()=>window.close();</script></body></html>`);
+    receipt.document.close();
+  };
   const toggleExpand = (id) => {
     setExpandedSale(expandedSale === id ? null : id);
   };
@@ -197,7 +210,7 @@ const SalesHistory = () => {
                         )}
                       </TableCell>
                       <TableCell className="font-bold">
-                        {sale.total_amount.toLocaleString()} so'm
+                        {sale.total_amount.toLocaleString("de-DE")} so'm
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline" className="capitalize">
@@ -233,6 +246,17 @@ const SalesHistory = () => {
                               Sotilgan Mahsulotlar
                             </h4>
 
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="gap-2 h-8"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                printReceipt(sale);
+                              }}
+                            >
+                              <Printer className="w-3.5 h-3.5" /> Chekni chop etish
+                            </Button>
                             {sale.status === "completed" && (
                               <Dialog>
                                 <DialogTrigger asChild>
@@ -335,10 +359,10 @@ const SalesHistory = () => {
                                 </span>
                                 <span className="text-muted-foreground">
                                   {item.quantity} x{" "}
-                                  {item.price.toLocaleString()} ={" "}
+                                  {item.price.toLocaleString("de-DE")} ={" "}
                                   {(
                                     item.quantity * item.price
-                                  ).toLocaleString()}
+                                  ).toLocaleString("de-DE")}
                                 </span>
                               </div>
                             ))}

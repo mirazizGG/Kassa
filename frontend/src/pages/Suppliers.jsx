@@ -314,7 +314,7 @@ const Suppliers = () => {
                         variant={s.balance > 0 ? "destructive" : "secondary"}
                         className="text-base font-bold px-3"
                       >
-                        {s.balance.toLocaleString()} so'm
+                        {s.balance.toLocaleString("de-DE")} so'm
                       </Badge>
                     </TableCell>
                     <TableCell className="pr-6 text-right">
@@ -349,7 +349,7 @@ const Suppliers = () => {
                 }
                 className="text-lg py-1 px-4"
               >
-                Jami Qarz: {selectedSupplier?.balance.toLocaleString()}
+                Jami Qarz: {selectedSupplier?.balance.toLocaleString("de-DE")}
               </Badge>
             </div>
           </DialogHeader>
@@ -402,7 +402,7 @@ const Suppliers = () => {
                           )}
                         >
                           {item.type === "receipt" ? "+" : "-"}
-                          {item.amount.toLocaleString()} so'm
+                          {item.amount.toLocaleString("de-DE")} so'm
                         </span>
                       </div>
                       <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
@@ -509,7 +509,7 @@ const Suppliers = () => {
                             }
                             className="text-[10px]"
                           >
-                            Qarz: {s.balance.toLocaleString()}
+                            Qarz: {s.balance.toLocaleString("de-DE")}
                           </Badge>
                         </div>
                       ))}
@@ -635,7 +635,7 @@ const Suppliers = () => {
                             }
                             className="text-[10px]"
                           >
-                            Qarz: {s.balance.toLocaleString()}
+                            Qarz: {s.balance.toLocaleString("de-DE")}
                           </Badge>
                         </div>
                       ))}

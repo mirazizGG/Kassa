@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
+import secrets
 from typing import List, Optional
 
 from database import get_db, Employee
@@ -31,9 +32,19 @@ async def login_for_access_token(request: Request, form_data: OAuth2PasswordRequ
             detail="Hisobingiz bloklangan. Iltimos, administratorga murojaat qiling."
         )
     
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    if user.session_token and user.session_expires_at and user.session_expires_at > now:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Bu foydalanuvchi boshqa qurilmada tizimga kirgan. Avval o'sha yerdan chiqish qiling.",
+        )
+
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    session_id = secrets.token_urlsafe(32)
+    user.session_token = session_id
+    user.session_expires_at = now + access_token_expires
     access_token = create_access_token(
-        data={"sub": user.username}, expires_delta=access_token_expires
+        data={"sub": user.username, "sid": session_id}, expires_delta=access_token_expires
     )
     
     await log_action(db, user.id, "LOGIN", f"Tizimga kirdi: @{user.username}")
@@ -53,6 +64,8 @@ async def logout(
     current_user: Employee = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    current_user.session_token = None
+    current_user.session_expires_at = None
     await log_action(db, current_user.id, "LOGOUT", f"Tizimdan chiqdi: @{current_user.username}")
     await db.commit()
     return {"status": "success"}
