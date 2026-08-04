@@ -638,6 +638,31 @@ const Inventory = () => {
                   </Select>
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="new-category" className="text-right">
+                    Yangi kategoriya
+                  </Label>
+                  <div className="col-span-3 flex gap-2">
+                    <Input
+                      id="new-category"
+                      value={newCategoryName}
+                      onChange={(e) => setNewCategoryName(e.target.value)}
+                      placeholder="Masalan: Ichimliklar"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() =>
+                        categoryMutation.mutate(newCategoryName.trim())
+                      }
+                      disabled={
+                        !newCategoryName.trim() || categoryMutation.isPending
+                      }
+                    >
+                      Qo'shish
+                    </Button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="barcode" className="text-right">
                     Shtrix Kod
                   </Label>
@@ -686,7 +711,26 @@ const Inventory = () => {
                     required
                   />
                 </div>
-                {/* Stock input removed */}
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="stock" className="text-right">
+                    Kirim soni
+                  </Label>
+                  <Input
+                    id="stock"
+                    type="number"
+                    min="0"
+                    step="0.001"
+                    className="col-span-3"
+                    value={formData.stock}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        stock: Number(e.target.value) || 0,
+                      })
+                    }
+                    required
+                  />
+                </div>
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="unit" className="text-right">
                     Birlik
@@ -854,15 +898,27 @@ const Inventory = () => {
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {product.buy_price.toLocaleString()} so'm
-                    </TableCell>                    <TableCell className="font-semibold text-foreground">
+                    </TableCell>{" "}
+                    <TableCell className="font-semibold text-foreground">
                       {product.sell_price.toLocaleString()}{" "}
                       <span className="text-[10px] text-muted-foreground font-medium uppercase">
                         so'm
                       </span>
                     </TableCell>
-                    <TableCell className={cn("font-semibold", product.sell_price - product.buy_price >= 0 ? "text-emerald-600" : "text-rose-600")}>
-                      {(product.sell_price - product.buy_price).toLocaleString()} so'm
-                    </TableCell>                    <TableCell className="text-muted-foreground">
+                    <TableCell
+                      className={cn(
+                        "font-semibold",
+                        product.sell_price - product.buy_price >= 0
+                          ? "text-emerald-600"
+                          : "text-rose-600",
+                      )}
+                    >
+                      {(
+                        product.sell_price - product.buy_price
+                      ).toLocaleString()}{" "}
+                      so'm
+                    </TableCell>{" "}
+                    <TableCell className="text-muted-foreground">
                       {product.unit}
                     </TableCell>
                     <TableCell className="pr-8 text-right">
