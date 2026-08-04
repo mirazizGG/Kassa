@@ -310,15 +310,19 @@ const POS = () => {
   };
 
   const handleSearchChange = (event) => {
-    const value = event.target.value;
-    const exactMatch = products.find((product) => product.barcode === value);
+    setSearchTerm(event.target.value);
+  };
 
-    if (exactMatch) {
-      addToCart(exactMatch);
-      return;
-    }
+  const handleSearchKeyDown = (event) => {
+    if (event.key !== "Enter") return;
 
-    setSearchTerm(value);
+    const barcode = searchTerm.trim();
+    const exactMatch = products.find((product) => product.barcode === barcode);
+    if (!exactMatch) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    addToCart(exactMatch);
   };
   const updateQuantity = (id, delta) => {
     setCart((prev) =>
@@ -444,6 +448,7 @@ const POS = () => {
   useHotkeys(
     "enter",
     () => {
+      if (document.activeElement === searchInputRef.current) return;
       if (cart.length > 0 && !isPaymentModalOpen) handlePayment();
     },
     { enableOnFormTags: ["INPUT"] },
@@ -489,6 +494,7 @@ const POS = () => {
                 className="pl-10 h-12 text-lg"
                 value={searchTerm}
                 onChange={handleSearchChange}
+                onKeyDown={handleSearchKeyDown}
                 autoFocus
               />
             </div>
