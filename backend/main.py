@@ -35,10 +35,13 @@ async def lifespan(app: FastAPI):
         backup_hour = int(os.getenv("BACKUP_HOUR", "2"))
         scheduler.add_job(create_backup, 'cron', hour=backup_hour, minute=0, id="daily_backup", replace_existing=True)
     scheduler.start()
-    
-    # Start Bot tasks
-    print("Startup: Starting bot polling...")
-    bot_task = asyncio.create_task(dp.start_polling(bot))
+    # Start Telegram only when a token is configured.
+    bot_task = None
+    if bot:
+        print("Startup: Starting bot polling...")
+        bot_task = asyncio.create_task(dp.start_polling(bot))
+    else:
+        print("Startup: Telegram bot is disabled (no token).")
 
     # Create admin if not exists
     async with SessionLocal() as db:
@@ -62,14 +65,14 @@ async def lifespan(app: FastAPI):
     finally:
         print("Shutdown: Stopping scheduler and bot...")
         scheduler.shutdown()
-        bot_task.cancel()
-        
-        await bot.session.close()
-        
-        try:
-            await asyncio.wait([bot_task], timeout=2.0)
-        except Exception as e:
-            print(f"Cleanup error: {e}")
+        if bot_task:
+            bot_task.cancel()
+            try:
+                await asyncio.wait([bot_task], timeout=2.0)
+            except Exception as e:
+                print(f"Cleanup error: {e}")
+        if bot:
+            await bot.session.close()
         
         print("Shutdown: Complete.")
 

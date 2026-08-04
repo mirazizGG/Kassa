@@ -5,8 +5,8 @@ from typing import List, Optional
 from datetime import datetime
 
 from database import get_db, Product, Sale, SaleItem, Employee, Client, StoreSetting, StockMove
-from schemas import SaleCreate, SaleOut
-from core import get_current_user
+from schemas import SaleCreate, SaleOut, RefundApproval
+from core import get_current_user, verify_password
 from routers.audit import log_action
 
 from sqlalchemy.orm import joinedload
@@ -201,9 +201,13 @@ async def refund_sale(
     current_user: Employee = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    # Security: Only admin and manager can refund
-    if current_user.role not in ["admin", "manager"]:
-        raise HTTPException(status_code=403, detail="Faqat administrator yoki menejer savdoni qaytara oladi")
+    # Every completed-sale refund requires a manager/admin credential confirmation.
+    approver_result = await db.execute(
+        select(Employee).where(Employee.username == approval.manager_username, Employee.is_active == True)
+    )
+    approver = approver_result.scalars().first()
+    if not approver or approver.role not in ["admin", "manager"] or not verify_password(approval.manager_password, approver.hashed_password):
+        raise HTTPException(status_code=403, detail="Menejer tasdig'i noto'g'ri")
 
     # 1. Fetch the sale with items
     result = await db.execute(
@@ -249,7 +253,7 @@ async def refund_sale(
     # 4. Update Sale Status
     db_sale.status = "refunded"
     
-    await log_action(db, current_user.id, "VOZVRAT", f"Savdo qaytarildi (Vozvrat). Chek ID: {sale_id}. Summa: {db_sale.total_amount:,.0f} so'm")
+    await log_action(db, current_user.id, "VOZVRAT", f"Savdo qaytarildi. Chek ID: {sale_id}. Summa: {db_sale.total_amount:,.0f} so'm. Tasdiqladi: @{approver.username}")
     
     await db.commit()
     

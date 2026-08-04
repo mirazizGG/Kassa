@@ -152,6 +152,15 @@ class SaleCreate(BaseModel):
     debt_amount: Optional[float] = 0
     bonus_spent: Optional[float] = 0
 
+class RefundApproval(BaseModel):
+    manager_username: str
+    manager_password: str
+
+
+class StockReturn(BaseModel):
+    quantity: float = Field(gt=0)
+    reason: str = Field(min_length=3, max_length=300)
+
 class SaleOut(BaseModel):
     id: int
     created_at: datetime
