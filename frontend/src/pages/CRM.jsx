@@ -50,7 +50,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils.js";
+import { cn, formatThousands, parseThousands } from "@/lib/utils.js";
 
 const CRM = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -222,7 +222,7 @@ const CRM = () => {
                 <TableHead>Telefon</TableHead>
                 <TableHead>Bonus</TableHead>
                 <TableHead>Balans / Muddat</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>Holat</TableHead>
                 <TableHead className="text-right pr-8">Amallar</TableHead>
               </TableRow>
             </TableHeader>
@@ -380,11 +380,16 @@ const CRM = () => {
                 <Label htmlFor="amount">To'lov Summasi</Label>
                 <Input
                   id="amount"
-                  type="number"
-                  value={paymentData.amount}
+                  type="text"
+                  inputMode="numeric"
+                  value={formatThousands(paymentData.amount)}
                   onChange={(e) =>
-                    setPaymentData({ ...paymentData, amount: e.target.value })
+                    setPaymentData({
+                      ...paymentData,
+                      amount: parseThousands(e.target.value),
+                    })
                   }
+                  onFocus={(e) => e.target.select()}
                   required
                   autoFocus
                 />

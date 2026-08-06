@@ -1,4 +1,4 @@
-from database import SessionLocal as AsyncSessionLocal, Client, Employee, Attendance, StoreSetting
+from database import SessionLocal as AsyncSessionLocal, Client, Employee, Attendance, StoreSetting, Product, Category, Supplier, Sale, SaleItem, Expense
 from datetime import datetime, timezone
 import os
 import asyncio
@@ -11,7 +11,8 @@ from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, ReplyKey
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, func
+from sqlalchemy.orm import joinedload
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -32,15 +33,21 @@ def normalize_phone(phone: str) -> str:
     """Raqamlardan boshqa hamma narsani olib tashlash"""
     return "".join(filter(str.isdigit, str(phone)))
 
+async def get_last_attendance_status(db, employee_id):
+    stmt = select(Attendance).where(Attendance.employee_id == employee_id).order_by(Attendance.created_at.desc())
+    res = await db.execute(stmt)
+    last_att = res.scalars().first()
+    return last_att.status if last_att else "out"
+
 # --- MENU ---
-def get_main_menu(role="client"):
+def get_main_menu(role="client", attendance_status="out"):
     kb = []
-    
+
     if role == "client":
         # Mijozlar uchun faqat shaxsiy hisob tugmalari
         kb.append([KeyboardButton(text="💰 Balansim")])
         kb.append([KeyboardButton(text="🎁 Bonuslarim")])
-    
+
     elif role == "admin":
         # Admin uchun nazorat va boshqaruv
         kb.append([KeyboardButton(text="📢 Reklama yuborish")])
@@ -48,14 +55,14 @@ def get_main_menu(role="client"):
             KeyboardButton(text="👥 Kim ishda?"),
             KeyboardButton(text="Ma'lumotlar 📦")
         ])
-    
-    elif role in ["manager", "cashier", "warehouse"]:
-        # Oddiy ishchilar uchun FAQAT kelib-ketish tugmalari
-        kb.append([
-            KeyboardButton(text="🎬 Ishga kelish"),
-            KeyboardButton(text="🛑 Ishdan ketish")
-        ])
-    
+
+    elif role in ["manager", "cashier", "warehouse", "sotuvchi"]:
+        # Oddiy ishchilar uchun FAQAT navbatdagi bitta amal: kelish yoki ketish
+        if attendance_status == "in":
+            kb.append([KeyboardButton(text="🛑 Ishdan ketish")])
+        else:
+            kb.append([KeyboardButton(text="🎬 Ishga kelish")])
+
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
 
@@ -77,14 +84,17 @@ async def clock_in_handler(message: Message) -> None:
         last_att = last_attres.scalars().first()
         
         if last_att and last_att.status == "in":
-            await message.answer("Siz allaqachon ishdasiz! 😅")
+            await message.answer("Siz allaqachon ishdasiz! 😅", reply_markup=get_main_menu(employee.role, "in"))
             return
             
         new_att = Attendance(employee_id=employee.id, status="in")
         db.add(new_att)
         await db.commit()
         name = employee.full_name or employee.username
-        await message.answer(f"Xush kelibsiz, {name}! Ish boshlandi. 🚀\nVaqt: {datetime.now().strftime('%H:%M')}")
+        await message.answer(
+            f"Xush kelibsiz, {name}! Ish boshlandi. 🚀\nVaqt: {datetime.now().strftime('%H:%M')}",
+            reply_markup=get_main_menu(employee.role, "in"),
+        )
 
 @dp.message(F.text == "🛑 Ishdan ketish")
 async def clock_out_handler(message: Message) -> None:
@@ -104,14 +114,17 @@ async def clock_out_handler(message: Message) -> None:
         last_att = last_attres.scalars().first()
         
         if not last_att or last_att.status == "out":
-            await message.answer("Siz hali ishga kelmagansiz-ku? 🤔")
+            await message.answer("Siz hali ishga kelmagansiz-ku? 🤔", reply_markup=get_main_menu(employee.role, "out"))
             return
             
         new_att = Attendance(employee_id=employee.id, status="out")
         db.add(new_att)
         await db.commit()
         name = employee.full_name or employee.username
-        await message.answer(f"Yaxshi dam oling, {name}! Ish yakunlandi. ✅\nVaqt: {datetime.now().strftime('%H:%M')}")
+        await message.answer(
+            f"Yaxshi dam oling, {name}! Ish yakunlandi. ✅\nVaqt: {datetime.now().strftime('%H:%M')}",
+            reply_markup=get_main_menu(employee.role, "out"),
+        )
 
 @dp.message(F.text == "👥 Kim ishda?")
 async def who_is_working_handler(message: Message) -> None:
@@ -150,20 +163,28 @@ async def command_start_handler(message: Message, state: FSMContext) -> None:
     telegram_id = message.from_user.id
     await state.clear()
 
-    # Mijoz tekshiruvi
     async with AsyncSessionLocal() as db:
+        # Avval xodim sifatida tanilganini tekshiramiz
+        emp_result = await db.execute(select(Employee).where(Employee.telegram_id == telegram_id))
+        employee = emp_result.scalars().first()
+
+        if employee:
+            name = employee.full_name or employee.username
+            status = await get_last_attendance_status(db, employee.id)
+            await message.answer(
+                f"Salom, {name}! 👋",
+                reply_markup=get_main_menu(employee.role, status),
+            )
+            return
+
+        # Mijoz tekshiruvi
         result = await db.execute(select(Client).where(Client.telegram_id == telegram_id))
         client = result.scalars().first()
 
         if client:
-            # Check if employee for role-based menu
-            role_result = await db.execute(select(Employee).where(Employee.telegram_id == telegram_id))
-            employee = role_result.scalars().first()
-            role = employee.role if employee else "client"
-            
             await message.answer(
                 f"Salom, {client.name}! 👋\nDo'konimizga xush kelibsiz.",
-                reply_markup=get_main_menu(role)
+                reply_markup=get_main_menu("client")
             )
             return
 
@@ -228,9 +249,10 @@ async def name_handler(message: Message, state: FSMContext) -> None:
             employee.telegram_id = telegram_id
             employee.full_name = full_name
             await db.commit()
+            status = await get_last_attendance_status(db, employee.id)
             await message.answer(
                 f"Siz tizimda xodim sifatida tanildingiz: <b>{full_name}</b> ✅\nEndi bot orqali ish jadvalingizni boshqarishingiz mumkin.",
-                reply_markup=get_main_menu(employee.role),
+                reply_markup=get_main_menu(employee.role, status),
                 parse_mode=ParseMode.HTML
             )
             await state.clear()
@@ -339,7 +361,7 @@ async def process_broadcast(message: Message, state: FSMContext) -> None:
     await message.answer(f"Tayyor! ✅\nXabar {count} ta mijozga yuborildi.", reply_markup=get_main_menu("admin"))
     await state.clear()
 
-# --- ADMIN: MA'LUMOTLAR (BACKUP) ---
+# --- ADMIN: MA'LUMOTLAR (EXCEL EXPORT) ---
 @dp.message(F.text == "Ma'lumotlar 📦")
 async def admin_backup_handler(message: Message) -> None:
     telegram_id = message.from_user.id
@@ -352,8 +374,169 @@ async def admin_backup_handler(message: Message) -> None:
 
         await message.answer("Tayyorlanmoqda... ⏳")
         try:
-            from utils.backup import send_backup_to_telegram
-            await send_backup_to_telegram(bot, telegram_id)
+            import io
+            import pandas as pd
+            from aiogram.types import BufferedInputFile
+
+            stamp = datetime.now().strftime("%Y%m%d_%H%M")
+
+            def make_excel_file(df: "pd.DataFrame", sheet_name: str, filename: str) -> BufferedInputFile:
+                buf = io.BytesIO()
+                with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+                    df.to_excel(writer, index=False, sheet_name=sheet_name)
+                buf.seek(0)
+                return BufferedInputFile(buf.read(), filename=filename)
+
+            # Ombor (mahsulotlar)
+            prod_res = await db.execute(select(Product))
+            products = prod_res.scalars().all()
+            cat_res = await db.execute(select(Category))
+            category_names = {c.id: c.name for c in cat_res.scalars().all()}
+            ombor_df = pd.DataFrame([
+                {
+                    "Nomi": p.name,
+                    "Shtrix kod": p.barcode or "-",
+                    "Kategoriya": category_names.get(p.category_id, "-"),
+                    "Kelish narxi": p.buy_price,
+                    "Sotish narxi": p.sell_price,
+                    "Qoldiq": p.stock,
+                    "Birlik": p.unit,
+                }
+                for p in products
+            ])
+            await bot.send_document(
+                telegram_id,
+                make_excel_file(ombor_df, "Ombor", f"ombor_{stamp}.xlsx"),
+                caption=f"📦 Ombor ({len(products)} ta mahsulot)",
+            )
+
+            # Firmalar
+            sup_res = await db.execute(select(Supplier))
+            suppliers = sup_res.scalars().all()
+            firma_df = pd.DataFrame([
+                {
+                    "Nomi": s.name,
+                    "Telefon": s.phone or "-",
+                    "Manzil": s.address or "-",
+                    "Balans (qarzimiz)": s.balance,
+                }
+                for s in suppliers
+            ])
+            await bot.send_document(
+                telegram_id,
+                make_excel_file(firma_df, "Firmalar", f"firmalar_{stamp}.xlsx"),
+                caption=f"🚚 Firmalar ({len(suppliers)} ta)",
+            )
+
+            # Mijozlar
+            cli_res = await db.execute(select(Client))
+            clients = cli_res.scalars().all()
+            mijoz_df = pd.DataFrame([
+                {
+                    "Ismi": c.name,
+                    "Telefon": c.phone or "-",
+                    "Balans": c.balance,
+                    "Bonus": c.bonus_balance,
+                    "Qarz muddati": c.debt_due_date.strftime("%d.%m.%Y") if c.debt_due_date else "-",
+                }
+                for c in clients
+            ])
+            await bot.send_document(
+                telegram_id,
+                make_excel_file(mijoz_df, "Mijozlar", f"mijozlar_{stamp}.xlsx"),
+                caption=f"👤 Mijozlar ({len(clients)} ta)",
+            )
+
+            # Bugungi kassirlar bo'yicha savdo taqsimoti (savdosi bo'lmaganlar ham 0 bilan chiqadi)
+            today = datetime.now().date()
+            start = datetime.combine(today, datetime.min.time())
+            end = datetime.combine(today, datetime.max.time())
+
+            per_cashier_res = await db.execute(
+                select(
+                    Employee.id,
+                    Employee.full_name,
+                    Employee.username,
+                    func.count(Sale.id),
+                    func.coalesce(func.sum(Sale.total_amount), 0),
+                )
+                .outerjoin(
+                    Sale,
+                    and_(
+                        Sale.cashier_id == Employee.id,
+                        Sale.created_at >= start,
+                        Sale.created_at <= end,
+                        Sale.status == "completed",
+                    ),
+                )
+                .where(Employee.role != "warehouse")
+                .group_by(Employee.id)
+                .order_by(func.coalesce(func.sum(Sale.total_amount), 0).desc())
+            )
+            cashier_rows = per_cashier_res.all()
+            cashier_df = pd.DataFrame([
+                {
+                    "Kassir": full_name or username,
+                    "Cheklar soni": count,
+                    "Jami summa (so'm)": total or 0,
+                }
+                for _, full_name, username, count, total in cashier_rows
+            ])
+
+            def sheet_name_for(label: str, used: set) -> str:
+                # Excel sheet names: max 31 chars, no []:*?/\\
+                safe = "".join(ch for ch in label if ch not in '[]:*?/\\')[:31] or "Kassir"
+                name = safe
+                i = 2
+                while name in used:
+                    suffix = f" ({i})"
+                    name = safe[: 31 - len(suffix)] + suffix
+                    i += 1
+                used.add(name)
+                return name
+
+            report_buf = io.BytesIO()
+            with pd.ExcelWriter(report_buf, engine="openpyxl") as writer:
+                cashier_df.to_excel(writer, index=False, sheet_name="Umumiy")
+                used_names = {"Umumiy"}
+                for emp_id, full_name, username, count, total in cashier_rows:
+                    if count == 0:
+                        continue
+                    label = full_name or username
+                    sales_res = await db.execute(
+                        select(Sale)
+                        .options(joinedload(Sale.items).joinedload(SaleItem.product), joinedload(Sale.client))
+                        .where(
+                            Sale.cashier_id == emp_id,
+                            Sale.created_at >= start,
+                            Sale.created_at <= end,
+                            Sale.status == "completed",
+                        )
+                        .order_by(Sale.created_at)
+                    )
+                    sales = sales_res.unique().scalars().all()
+                    detail_df = pd.DataFrame([
+                        {
+                            "Chek №": s.id,
+                            "Vaqt": s.created_at.strftime("%H:%M"),
+                            "Mijoz": s.client.name if s.client else "-",
+                            "Mahsulotlar": ", ".join(
+                                f"{item.product.name} ({item.quantity} {item.product.unit})"
+                                for item in s.items if item.product
+                            ),
+                            "Summa (so'm)": s.total_amount,
+                            "To'lov usuli": s.payment_method,
+                        }
+                        for s in sales
+                    ])
+                    detail_df.to_excel(writer, index=False, sheet_name=sheet_name_for(label, used_names))
+            report_buf.seek(0)
+
+            await bot.send_document(
+                telegram_id,
+                BufferedInputFile(report_buf.read(), filename=f"kassirlar_savdosi_{stamp}.xlsx"),
+                caption="🧾 Bugungi kassirlar bo'yicha savdolar (birinchi varaq — umumiy ro'yxat, keyingilari — har bir kassirning o'z cheklari)",
+            )
         except Exception as e:
             await message.answer(f"Xatolik yuz berdi: {e}")
 

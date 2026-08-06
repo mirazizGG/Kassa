@@ -89,7 +89,7 @@ const Attendance = () => {
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 <TableHead className="w-[200px] pl-6">Xodim</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>Holat</TableHead>
                 <TableHead>Sana</TableHead>
                 <TableHead>Vaqt</TableHead>
                 <TableHead className="pr-6">Izoh</TableHead>

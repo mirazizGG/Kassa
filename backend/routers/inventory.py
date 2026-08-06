@@ -284,7 +284,7 @@ async def toggle_favorite(
     current_user: Employee = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    if current_user.role not in ["admin", "manager", "warehouse"]:
+    if current_user.role not in ["admin", "manager", "warehouse", "cashier"]:
         raise HTTPException(status_code=403, detail="Not enough permissions")
 
     result = await db.execute(select(Product).where(Product.id == product_id))

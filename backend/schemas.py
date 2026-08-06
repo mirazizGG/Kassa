@@ -80,7 +80,7 @@ class ProductOut(ProductBase):
     model_config = ConfigDict(from_attributes=True)
 
 class StockMoveBase(BaseModel):
-    product_id: int
+    product_id: Optional[int] = None
     quantity: float
     type: str
     reason: Optional[str] = None

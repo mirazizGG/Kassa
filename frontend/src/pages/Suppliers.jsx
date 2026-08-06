@@ -51,7 +51,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils.js";
+import { cn, formatThousands, parseThousands } from "@/lib/utils.js";
 
 const Suppliers = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -79,6 +79,11 @@ const Suppliers = () => {
   // Search states for selection
   const [supplySearch, setSupplySearch] = useState("");
   const [paymentSearch, setPaymentSearch] = useState("");
+
+  // Confirmation (who actually performed the action)
+  const [confirmAction, setConfirmAction] = useState(null); // "supply" | "payment" | null
+  const [confirmUsername, setConfirmUsername] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   // Queries
   const { data: suppliers = [], isLoading } = useQuery({
@@ -109,6 +114,12 @@ const Suppliers = () => {
     },
   });
 
+  const closeConfirm = () => {
+    setConfirmAction(null);
+    setConfirmUsername("");
+    setConfirmPassword("");
+  };
+
   const addSupplyMutation = useMutation({
     mutationFn: (formData) => api.post("/suppliers/receipts", formData),
     onSuccess: () => {
@@ -121,7 +132,12 @@ const Suppliers = () => {
         note: "",
         image: null,
       });
+      closeConfirm();
       toast.success("Kirim muvaffaqiyatli qayd etildi");
+    },
+    onError: (err) => {
+      toast.error(err.response?.data?.detail || "Xatolik yuz berdi");
+      setConfirmPassword("");
     },
   });
 
@@ -137,7 +153,12 @@ const Suppliers = () => {
         payment_method: "cash",
         note: "",
       });
+      closeConfirm();
       toast.success("To'lov muvaffaqiyatli qayd etildi");
+    },
+    onError: (err) => {
+      toast.error(err.response?.data?.detail || "Xatolik yuz berdi");
+      setConfirmPassword("");
     },
   });
 
@@ -146,26 +167,42 @@ const Suppliers = () => {
     e.preventDefault();
     if (!newSupply.supplier_id) return toast.error("Firmani tanlang");
     if (!newSupply.total_amount) return toast.error("Summani kiriting");
-
-    const fd = new FormData();
-    fd.append("supplier_id", newSupply.supplier_id);
-    fd.append("total_amount", newSupply.total_amount);
-    fd.append("note", newSupply.note);
-    if (newSupply.image) fd.append("image", newSupply.image);
-    addSupplyMutation.mutate(fd);
+    if (!newSupply.image) return toast.error("Nakladnoy rasmini yuklang");
+    setConfirmAction("supply");
   };
 
   const handleAddPayment = (e) => {
     e.preventDefault();
     if (!newPayment.supplier_id) return toast.error("Firmani tanlang");
     if (!newPayment.amount) return toast.error("Summani kiriting");
+    setConfirmAction("payment");
+  };
+
+  const submitConfirmedAction = (e) => {
+    e.preventDefault();
+    if (!confirmUsername.trim() || !confirmPassword) {
+      toast.error("Login va parolni kiriting");
+      return;
+    }
 
     const fd = new FormData();
-    fd.append("supplier_id", newPayment.supplier_id);
-    fd.append("amount", newPayment.amount);
-    fd.append("payment_method", newPayment.payment_method);
-    fd.append("note", newPayment.note);
-    addPaymentMutation.mutate(fd);
+    if (confirmAction === "supply") {
+      fd.append("supplier_id", newSupply.supplier_id);
+      fd.append("total_amount", newSupply.total_amount);
+      fd.append("note", newSupply.note);
+      if (newSupply.image) fd.append("image", newSupply.image);
+      fd.append("confirm_username", confirmUsername.trim());
+      fd.append("confirm_password", confirmPassword);
+      addSupplyMutation.mutate(fd);
+    } else if (confirmAction === "payment") {
+      fd.append("supplier_id", newPayment.supplier_id);
+      fd.append("amount", newPayment.amount);
+      fd.append("payment_method", newPayment.payment_method);
+      fd.append("note", newPayment.note);
+      fd.append("confirm_username", confirmUsername.trim());
+      fd.append("confirm_password", confirmPassword);
+      addPaymentMutation.mutate(fd);
+    }
   };
 
   const filteredSuppliers = suppliers.filter(
@@ -526,11 +563,16 @@ const Suppliers = () => {
             <div className="space-y-2">
               <Label>Jami Summa (Nakladnoy summasi)</Label>
               <Input
-                type="number"
-                value={newSupply.total_amount}
+                type="text"
+                inputMode="numeric"
+                value={formatThousands(newSupply.total_amount)}
                 onChange={(e) =>
-                  setNewSupply({ ...newSupply, total_amount: e.target.value })
+                  setNewSupply({
+                    ...newSupply,
+                    total_amount: parseThousands(e.target.value),
+                  })
                 }
+                onFocus={(e) => e.target.select()}
                 required
               />
             </div>
@@ -545,7 +587,7 @@ const Suppliers = () => {
               />
             </div>
             <div className="space-y-2">
-              <Label>Nakladnoy Rasmi (ixtiyoriy)</Label>
+              <Label>Nakladnoy Rasmi</Label>
               <div className="flex items-center gap-2">
                 <Input
                   type="file"
@@ -652,11 +694,16 @@ const Suppliers = () => {
             <div className="space-y-2">
               <Label>To'lov Summasi</Label>
               <Input
-                type="number"
-                value={newPayment.amount}
+                type="text"
+                inputMode="numeric"
+                value={formatThousands(newPayment.amount)}
                 onChange={(e) =>
-                  setNewPayment({ ...newPayment, amount: e.target.value })
+                  setNewPayment({
+                    ...newPayment,
+                    amount: parseThousands(e.target.value),
+                  })
                 }
+                onFocus={(e) => e.target.select()}
                 required
               />
             </div>
@@ -698,6 +745,63 @@ const Suppliers = () => {
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 )}
                 To'lovni Saqlash
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirm Identity Modal */}
+      <Dialog
+        open={confirmAction !== null}
+        onOpenChange={(open) => !open && closeConfirm()}
+      >
+        <DialogContent className="sm:max-w-[380px]">
+          <DialogHeader>
+            <DialogTitle>Tasdiqlash</DialogTitle>
+            <DialogDescription>
+              Amalni kim bajarayotganini bilish uchun o'z login va
+              parolingizni kiriting.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={submitConfirmedAction}>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="confirm_username">Login</Label>
+                <Input
+                  id="confirm_username"
+                  value={confirmUsername}
+                  onChange={(e) => setConfirmUsername(e.target.value)}
+                  autoFocus
+                  required
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="confirm_password">Parol</Label>
+                <Input
+                  id="confirm_password"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={closeConfirm}>
+                Bekor qilish
+              </Button>
+              <Button
+                type="submit"
+                disabled={
+                  addSupplyMutation.isPending || addPaymentMutation.isPending
+                }
+              >
+                {(addSupplyMutation.isPending ||
+                  addPaymentMutation.isPending) && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                Tasdiqlash va Saqlash
               </Button>
             </DialogFooter>
           </form>

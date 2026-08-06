@@ -162,7 +162,9 @@ const Layout = () => {
                         ? "Administrator"
                         : role === "manager"
                           ? "Menejer"
-                          : "Kassir"}
+                          : role === "warehouse"
+                            ? "Omborchi"
+                            : "Kassir"}
                     </span>
                   </div>
                   <ModeToggle />

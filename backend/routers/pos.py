@@ -195,23 +195,4 @@ async def close_shift(
     result = await db.execute(select(Shift).where(Shift.id == db_shift.id).options(joinedload(Shift.cashier)))
     shift_final = result.scalars().first()
 
-    # Send Notification to Admin
-    try:
-        from bot import bot
-        admin_result = await db.execute(select(Employee).where(Employee.role == "admin", Employee.telegram_id.isnot(None)))
-        admins = admin_result.scalars().all()
-        
-        if admins and shift_final:
-            msg = (
-                f"📊 <b>Smena Yakunlandi</b>\n"
-                f"👤 Kassir: {shift_final.cashier.full_name}\n"
-                f"📅 Yopildi: {shift_final.closed_at.strftime('%d.%m.%Y %H:%M')}\n"
-                f"💰 Yakuniy balans: {shift_final.closing_balance:,.0f} so'm"
-            )
-            for admin in admins:
-                await bot.send_message(admin.telegram_id, msg)
-
-    except Exception as e:
-        print(f"Shift notification error: {e}")
-
     return shift_final

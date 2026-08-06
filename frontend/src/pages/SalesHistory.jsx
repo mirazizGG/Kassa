@@ -158,7 +158,7 @@ const SalesHistory = () => {
                 <TableHead>Sana</TableHead>
                 <TableHead>Summa</TableHead>
                 <TableHead>To'lov Usuli</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>Holat</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

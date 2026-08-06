@@ -43,10 +43,10 @@ async def lifespan(app: FastAPI):
     else:
         print("Startup: Telegram bot is disabled (no token).")
 
-    # Create admin if not exists
+    # Create a default admin only if no admin account exists at all
     async with SessionLocal() as db:
         from sqlalchemy import select
-        result = await db.execute(select(Employee).where(Employee.username == "admin"))
+        result = await db.execute(select(Employee).where(Employee.role == "admin"))
         admin = result.scalars().first()
         if not admin:
             print("Admin yaratilmoqda: admin / 123")

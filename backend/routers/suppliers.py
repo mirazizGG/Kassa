@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime
 
 from database import get_db, Supplier, SupplyReceipt, SupplierPayment, Employee
-from core import get_current_user
+from core import get_current_user, verify_password
 from pydantic import BaseModel
 
 from routers.audit import log_action
@@ -56,6 +56,15 @@ class PaymentOut(BaseModel):
 
 # --- Endpoints ---
 
+async def verify_confirming_employee(db: AsyncSession, username: str, password: str) -> Employee:
+    result = await db.execute(select(Employee).where(Employee.username == username))
+    employee = result.scalars().first()
+    if not employee or not verify_password(password, employee.hashed_password):
+        raise HTTPException(status_code=401, detail="Login yoki parol noto'g'ri")
+    if not employee.is_active:
+        raise HTTPException(status_code=403, detail="Hisob bloklangan")
+    return employee
+
 @router.get("/", response_model=List[SupplierOut])
 async def get_suppliers(
     current_user: Employee = Depends(get_current_user),
@@ -90,11 +99,14 @@ async def add_receipt(
     total_amount: float = Form(...),
     note: Optional[str] = Form(None),
     image: Optional[UploadFile] = File(None),
+    confirm_username: str = Form(...),
+    confirm_password: str = Form(...),
     current_user: Employee = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     if current_user.role not in ["admin", "manager", "warehouse"]:
         raise HTTPException(status_code=403, detail="Ruxsat berilmagan")
+    confirming_employee = await verify_confirming_employee(db, confirm_username, confirm_password)
     # Check if supplier exists
     res = await db.execute(select(Supplier).where(Supplier.id == supplier_id))
     supplier = res.scalars().first()
@@ -128,7 +140,7 @@ async def add_receipt(
     # Update supplier balance (Increase debt)
     supplier.balance += total_amount
     
-    await log_action(db, current_user.id, "FIRMA_KIRIM", f"Firma: {supplier.name}. Summa: {total_amount} so'm. Izoh: {note or '-'}")
+    await log_action(db, current_user.id, "FIRMA_KIRIM", f"Firma: {supplier.name}. Summa: {total_amount} so'm. Izoh: {note or '-'}. Tasdiqladi: @{confirming_employee.username}")
     
     await db.commit()
     return {"message": "Kirim muvaffaqiyatli saqlandi", "new_balance": supplier.balance}
@@ -139,11 +151,14 @@ async def add_payment(
     amount: float = Form(...),
     payment_method: str = Form("cash"),
     note: Optional[str] = Form(None),
+    confirm_username: str = Form(...),
+    confirm_password: str = Form(...),
     current_user: Employee = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     if current_user.role not in ["admin", "manager", "warehouse"]:
         raise HTTPException(status_code=403, detail="Ruxsat berilmagan")
+    confirming_employee = await verify_confirming_employee(db, confirm_username, confirm_password)
     res = await db.execute(select(Supplier).where(Supplier.id == supplier_id))
     supplier = res.scalars().first()
     if not supplier:
@@ -160,7 +175,7 @@ async def add_payment(
     # Update supplier balance (Decrease debt)
     supplier.balance -= amount
     
-    await log_action(db, current_user.id, "FIRMA_TOLOV", f"Firma: {supplier.name}. Summa: {amount} so'm. Usul: {payment_method}. Izoh: {note or '-'}")
+    await log_action(db, current_user.id, "FIRMA_TOLOV", f"Firma: {supplier.name}. Summa: {amount} so'm. Usul: {payment_method}. Izoh: {note or '-'}. Tasdiqladi: @{confirming_employee.username}")
     
     await db.commit()
     return {"message": "To'lov muvaffaqiyatli saqlandi", "new_balance": supplier.balance}
