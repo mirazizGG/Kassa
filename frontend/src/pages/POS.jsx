@@ -302,6 +302,7 @@ const POS = () => {
       queryClient.invalidateQueries({ queryKey: ["sales-history"] });
       queryClient.invalidateQueries({ queryKey: ["finance-stats"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["active-shift"] });
     },
     onError: (err) => {
       const responseData = err.response?.data;
