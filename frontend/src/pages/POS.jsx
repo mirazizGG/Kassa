@@ -32,7 +32,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { cn } from "@/lib/utils.js";
+import { cn, formatThousands, parseThousands } from "@/lib/utils.js";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -65,6 +65,7 @@ const POS = () => {
     qarz: "",
   });
   const [selectedClient, setSelectedClient] = useState(null);
+  const [debtClientSearch, setDebtClientSearch] = useState("");
   const [isQuickClientOpen, setIsQuickClientOpen] = useState(false);
   const [newClient, setNewClient] = useState({ name: "", phone: "" });
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -242,7 +243,11 @@ const POS = () => {
     if (!cart.length) return;
     setHeldCarts((current) => [
       ...current,
-      { id: crypto.randomUUID(), createdAt: new Date().toISOString(), cart },
+      {
+        id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`,
+        createdAt: new Date().toISOString(),
+        cart,
+      },
     ]);
     setCart([]);
     setSelectedClient(null);
@@ -250,6 +255,13 @@ const POS = () => {
   };
 
   const restoreHeldCart = (heldCart) => {
+    if (cart.length > 0) {
+      toast.error("Avval joriy savdoni saqlang!", {
+        description:
+          "Hozirgi mijozning savatida mahsulotlar bor. Uni \"Saqlash\" tugmasi bilan kutishga qo'yib, keyin kutayotgan mijozning savdosini bajaring.",
+      });
+      return;
+    }
     setCart(heldCart.cart);
     setHeldCarts((current) => current.filter((item) => item.id !== heldCart.id));
     setIsHeldCartsOpen(false);
@@ -401,19 +413,6 @@ const POS = () => {
     );
   };
 
-  const requestDiscount = (item) => {
-    const price = Number(window.prompt(`${item.name} uchun yangi narx`, item.price));
-    if (!Number.isFinite(price) || price <= 0 || price >= item.price) return;
-    const username = window.prompt("Menejer logini");
-    const password = window.prompt("Menejer paroli");
-    if (!username || !password) {
-      toast.error("Chegirma uchun menejer login va paroli kerak");
-      return;
-    }
-    setManagerApproval({ manager_username: username, manager_password: password });
-    setCart((current) => current.map((cartItem) => cartItem.product_id === item.product_id ? { ...cartItem, price } : cartItem));
-    toast.info("Chegirma menejer tasdig'i bilan savdo yakunida tekshiriladi");
-  };
   const removeFromCart = (id) => {
     setCart((prev) => prev.filter((item) => item.product_id !== id));
   };
@@ -505,7 +504,8 @@ const POS = () => {
       // Favorites first
       if (a.is_favorite && !b.is_favorite) return -1;
       if (!a.is_favorite && b.is_favorite) return 1;
-      return 0;
+      // Keyin alifbo bo'yicha (A-Z)
+      return a.name.localeCompare(b.name, "uz");
     });
 
   // Shortcuts
@@ -697,7 +697,7 @@ const POS = () => {
       </div>
 
       {/* Right Side - Cart */}
-      <div className="min-h-0 w-full flex flex-col gap-4 lg:w-auto">
+      <div className="min-h-0 w-full min-w-0 flex flex-col gap-4 lg:w-auto">
         <Card className="flex-1 flex flex-col overflow-hidden rounded-2xl border shadow-xl bg-card">
           <div className="p-4 border-b bg-primary text-primary-foreground flex justify-between items-center">
             <div className="flex items-center gap-2">
@@ -725,52 +725,45 @@ const POS = () => {
               {cart.map((item) => (
                 <div
                   key={item.product_id}
-                  className="flex gap-3 items-center bg-muted/30 p-2 rounded-lg group animate-in slide-in-from-right-5 fade-in duration-300"
+                  className="w-full min-w-0 overflow-hidden bg-muted/30 p-2 rounded-lg group animate-in slide-in-from-right-5 fade-in duration-300"
                 >
-                  <div className="flex-1">
-                    <div className="font-medium truncate">{item.name}</div>
-                    <div className="text-sm text-muted-foreground">
+                  <div className="min-w-0 font-medium truncate">
+                    {item.name}
+                  </div>
+                  <div className="mt-1 flex min-w-0 items-center justify-between gap-2">
+                    <div className="min-w-0 truncate text-sm text-muted-foreground">
                       {item.price.toLocaleString("de-DE")} x {item.quantity} ={" "}
                       {Math.round(item.price * item.quantity).toLocaleString("de-DE")}
                     </div>
-                  </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    className="text-xs"
-                    onClick={() => requestDiscount(item)}
-                  >
-                    Chegirma
-                  </Button>
-                  <div className="flex items-center gap-1 bg-background rounded-md border shadow-sm">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 rounded-none rounded-l-md hover:bg-destructive/10 hover:text-destructive"
-                      onClick={() =>
-                        item.quantity > 1
-                          ? updateQuantity(item.product_id, -1)
-                          : removeFromCart(item.product_id)
-                      }
-                    >
-                      {item.quantity === 1 ? (
-                        <Trash2 className="w-4 h-4" />
-                      ) : (
-                        <Minus className="w-3 h-3" />
-                      )}
-                    </Button>
-                    <div className="px-2 text-center font-bold text-sm select-none min-w-[70px]">
-                      {Math.round(item.price * item.quantity).toLocaleString("de-DE")}
+                    <div className="flex shrink-0 items-center gap-1 rounded-md border bg-background shadow-sm">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-10 w-10 shrink-0 rounded-none rounded-l-md hover:bg-destructive/10 hover:text-destructive"
+                        onClick={() =>
+                          item.quantity > 1
+                            ? updateQuantity(item.product_id, -1)
+                            : removeFromCart(item.product_id)
+                        }
+                      >
+                        {item.quantity === 1 ? (
+                          <Trash2 className="w-5 h-5" />
+                        ) : (
+                          <Minus className="w-4 h-4" />
+                        )}
+                      </Button>
+                      <div className="min-w-[56px] select-none px-1 text-center text-base font-bold">
+                        {Math.round(item.price * item.quantity).toLocaleString("de-DE")}
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-10 w-10 shrink-0 rounded-none rounded-r-md"
+                        onClick={() => updateQuantity(item.product_id, 1)}
+                      >
+                        <Plus className="w-4 h-4" />
+                      </Button>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 rounded-none rounded-r-md"
-                      onClick={() => updateQuantity(item.product_id, 1)}
-                    >
-                      <Plus className="w-3 h-3" />
-                    </Button>
                   </div>
                 </div>
               ))}
@@ -850,16 +843,18 @@ const POS = () => {
                     Naqd Pul
                   </Label>
                   <Input
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
                     placeholder="0"
                     className="h-10 border-slate-200 text-base font-bold sm:text-lg focus-visible:ring-emerald-500"
-                    value={paymentAmounts.cash}
+                    value={formatThousands(paymentAmounts.cash)}
                     onChange={(e) =>
                       setPaymentAmounts((prev) => ({
                         ...prev,
-                        cash: e.target.value,
+                        cash: parseThousands(e.target.value),
                       }))
                     }
+                    onFocus={(e) => e.target.select()}
                     autoFocus
                   />
                 </div>
@@ -883,16 +878,18 @@ const POS = () => {
                     Karta (Terminal)
                   </Label>
                   <Input
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
                     placeholder="0"
                     className="h-10 border-slate-200 text-base font-bold sm:text-lg focus-visible:ring-blue-500"
-                    value={paymentAmounts.card}
+                    value={formatThousands(paymentAmounts.card)}
                     onChange={(e) =>
                       setPaymentAmounts((prev) => ({
                         ...prev,
-                        card: e.target.value,
+                        card: parseThousands(e.target.value),
                       }))
                     }
+                    onFocus={(e) => e.target.select()}
                   />
                 </div>
                 <Button
@@ -915,16 +912,18 @@ const POS = () => {
                     Perevod
                   </Label>
                   <Input
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
                     placeholder="0"
                     className="h-10 border-slate-200 text-base font-bold sm:text-lg focus-visible:ring-purple-500"
-                    value={paymentAmounts.perevod}
+                    value={formatThousands(paymentAmounts.perevod)}
                     onChange={(e) =>
                       setPaymentAmounts((prev) => ({
                         ...prev,
-                        perevod: e.target.value,
+                        perevod: parseThousands(e.target.value),
                       }))
                     }
+                    onFocus={(e) => e.target.select()}
                   />
                 </div>
                 <Button
@@ -948,15 +947,17 @@ const POS = () => {
                       Bonuslatish (Mavjud: {bonusBalance})
                     </Label>
                     <Input
-                      type="number"
+                      type="text"
+                      inputMode="numeric"
                       placeholder="0"
                       max={bonusBalance}
                       className="h-10 border-slate-200 text-base font-bold sm:text-lg focus-visible:ring-orange-500"
-                      value={bonusSpent}
+                      value={formatThousands(bonusSpent)}
+                      onFocus={(e) => e.target.select()}
                       onChange={(e) => {
                         const val = Math.min(
                           bonusBalance,
-                          parseFloat(e.target.value) || 0,
+                          parseFloat(parseThousands(e.target.value)) || 0,
                         );
                         setBonusSpent(val);
                       }}
@@ -991,18 +992,20 @@ const POS = () => {
                     Nasiya (Qarz)
                   </Label>
                   <Input
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
                     placeholder="0"
                     className="h-10 border-slate-200 text-base font-bold sm:text-lg focus-visible:ring-amber-500"
-                    value={paymentAmounts.qarz}
+                    value={formatThousands(paymentAmounts.qarz)}
                     onChange={(e) => {
-                      const qarz = e.target.value;
+                      const qarz = parseThousands(e.target.value);
                       setPaymentAmounts((prev) => ({ ...prev, qarz }));
                       if (!qarz || Number(qarz) <= 0) {
                         setSelectedClient(null);
                         setBonusSpent(0);
                       }
                     }}
+                    onFocus={(e) => e.target.select()}
                   />
                 </div>
                 <Button
@@ -1034,24 +1037,78 @@ const POS = () => {
                       <Plus className="h-4 w-4" /> Qo'shish
                     </Button>
                   </div>
-                  <Select
-                    value={selectedClient?.toString()}
-                    onValueChange={(val) =>
-                      setSelectedClient(val === "null" ? null : parseInt(val))
-                    }
-                  >
-                    <SelectTrigger className="h-11 bg-white border-slate-200">
-                      <SelectValue placeholder="Mijozni tanlang" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="null">Tanlanmagan</SelectItem>
-                      {clients.map((c) => (
-                        <SelectItem key={c.id} value={c.id.toString()}>
-                          {c.name} {c.phone ? `(${c.phone})` : ""}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {selectedClient ? (
+                    <div className="flex h-11 items-center justify-between rounded-md border border-slate-200 bg-white px-3">
+                      <span className="text-sm font-medium">
+                        {clients.find((c) => c.id === selectedClient)?.name}
+                      </span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 px-2 text-xs"
+                        onClick={() => {
+                          setSelectedClient(null);
+                          setDebtClientSearch("");
+                        }}
+                      >
+                        O'zgartirish
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                          className="h-11 border-slate-200 bg-white pl-9"
+                          placeholder="Mijoz ismi yoki telefon orqali qidirish..."
+                          value={debtClientSearch}
+                          onChange={(e) => setDebtClientSearch(e.target.value)}
+                        />
+                      </div>
+                      <ScrollArea className="h-[160px] rounded-md border border-slate-200 bg-white">
+                        <div className="p-1">
+                          {clients
+                            .filter(
+                              (c) =>
+                                c.name
+                                  .toLowerCase()
+                                  .includes(debtClientSearch.toLowerCase()) ||
+                                c.phone?.includes(debtClientSearch),
+                            )
+                            .map((c) => (
+                              <button
+                                type="button"
+                                key={c.id}
+                                onClick={() => {
+                                  setSelectedClient(c.id);
+                                  setDebtClientSearch("");
+                                }}
+                                className="flex w-full items-center justify-between rounded-md px-2 py-2 text-left text-sm hover:bg-slate-100"
+                              >
+                                <span className="font-medium">{c.name}</span>
+                                {c.phone && (
+                                  <span className="text-xs text-muted-foreground">
+                                    {c.phone}
+                                  </span>
+                                )}
+                              </button>
+                            ))}
+                          {clients.filter(
+                            (c) =>
+                              c.name
+                                .toLowerCase()
+                                .includes(debtClientSearch.toLowerCase()) ||
+                              c.phone?.includes(debtClientSearch),
+                          ).length === 0 && (
+                            <p className="py-6 text-center text-sm text-muted-foreground">
+                              Mijoz topilmadi
+                            </p>
+                          )}
+                        </div>
+                      </ScrollArea>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -1191,9 +1248,14 @@ const POS = () => {
               <p className="py-6 text-center text-sm text-muted-foreground">Saqlangan savat yo'q</p>
             ) : heldCarts.map((heldCart, index) => (
               <div key={heldCart.id} className="flex items-center justify-between gap-3 rounded-lg border p-3">
-                <div>
+                <div className="min-w-0">
                   <p className="font-semibold">Savatcha #{index + 1}</p>
-                  <p className="text-xs text-muted-foreground">{heldCart.cart.length} tur mahsulot</p>
+                  <p className="text-xs text-muted-foreground">
+                    {heldCart.cart.length} tur mahsulot
+                  </p>
+                  <p className="truncate text-[11px] text-muted-foreground/80">
+                    {heldCart.cart.map((item) => item.name).join(", ")}
+                  </p>
                 </div>
                 <div className="flex gap-2">
                   <Button size="sm" onClick={() => restoreHeldCart(heldCart)}>Davom ettirish</Button>
@@ -1227,10 +1289,12 @@ const POS = () => {
               </Label>
               <div className="relative">
                 <Input
-                  type="number"
-                  value={amountInput}
+                  type="text"
+                  inputMode="numeric"
+                  value={formatThousands(amountInput)}
+                  onFocus={(e) => e.target.select()}
                   onChange={(e) => {
-                    const val = e.target.value;
+                    const val = parseThousands(e.target.value);
                     setAmountInput(val);
                     if (val && selectedProductForWeight) {
                       const calcWeight = (

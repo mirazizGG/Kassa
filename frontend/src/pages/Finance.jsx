@@ -48,6 +48,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { formatThousands, parseThousands } from "@/lib/utils.js";
 import {
   Select,
   SelectContent,
@@ -271,15 +272,17 @@ const Finance = () => {
                       <Label htmlFor="amount">Summa (so'm)</Label>
                       <Input
                         id="amount"
-                        type="number"
-                        placeholder="100000"
-                        value={newExpense.amount}
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="100.000"
+                        value={formatThousands(newExpense.amount)}
                         onChange={(e) =>
                           setNewExpense({
                             ...newExpense,
-                            amount: e.target.value,
+                            amount: parseThousands(e.target.value),
                           })
                         }
+                        onFocus={(e) => e.target.select()}
                       />
                     </div>
                     <div className="space-y-2">

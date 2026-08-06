@@ -15,7 +15,6 @@ import {
   Truck,
   FolderPlus,
   History,
-  Star,
 } from "lucide-react";
 import { format } from "date-fns";
 import {
@@ -56,7 +55,7 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils.js";
+import { cn, formatThousands, parseThousands } from "@/lib/utils.js";
 
 const Inventory = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -73,8 +72,8 @@ const Inventory = () => {
     name: "",
     barcode: "",
     category_id: null,
-    buy_price: 0,
-    sell_price: 0,
+    buy_price: "",
+    sell_price: "",
     stock: 0,
     unit: "dona",
   });
@@ -182,20 +181,6 @@ const Inventory = () => {
     },
   });
 
-  const favoriteMutation = useMutation({
-    mutationFn: (productId) =>
-      api.post(`/inventory/products/${productId}/toggle-favorite`),
-    onSuccess: () => {
-      queryClient.invalidateQueries(["products"]);
-      toast.success("Mahsulot holati yangilandi");
-    },
-    onError: (err) => {
-      toast.error("Xatolik!", {
-        description: err.response?.data?.detail || "Amalni bajarib bo'lmadi",
-      });
-    },
-  });
-
   const handleCategorySubmit = (e) => {
     e.preventDefault();
     categoryMutation.mutate(newCategoryName);
@@ -206,8 +191,8 @@ const Inventory = () => {
       name: "",
       barcode: "",
       category_id: null,
-      buy_price: 0,
-      sell_price: 0,
+      buy_price: "",
+      sell_price: "",
       stock: 0,
       unit: "dona",
     });
@@ -219,8 +204,8 @@ const Inventory = () => {
       name: product.name,
       barcode: product.barcode || "",
       category_id: product.category_id,
-      buy_price: product.buy_price,
-      sell_price: product.sell_price,
+      buy_price: product.buy_price ? String(product.buy_price) : "",
+      sell_price: product.sell_price ? String(product.sell_price) : "",
       stock: product.stock,
       unit: product.unit,
     });
@@ -229,7 +214,40 @@ const Inventory = () => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    productMutation.mutate(formData);
+    if (!formData.name.trim()) {
+      toast.error("Mahsulot nomini kiriting");
+      return;
+    }
+    if (!formData.category_id) {
+      toast.error("Kategoriyani tanlang");
+      return;
+    }
+    if (!formData.barcode.trim()) {
+      toast.error("Shtrix kodni kiriting");
+      return;
+    }
+    if (!formData.buy_price || formData.buy_price <= 0) {
+      toast.error("Keltirilgan narxni kiriting");
+      return;
+    }
+    if (!formData.sell_price || formData.sell_price <= 0) {
+      toast.error("Sotish narxini kiriting");
+      return;
+    }
+    if (!formData.stock || formData.stock <= 0) {
+      toast.error("Kirim sonini kiriting");
+      return;
+    }
+    if (!formData.unit) {
+      toast.error("Birlikni tanlang");
+      return;
+    }
+    productMutation.mutate({
+      ...formData,
+      buy_price: Number(formData.buy_price) || 0,
+      sell_price: Number(formData.sell_price) || 0,
+      stock: Number(formData.stock) || 0,
+    });
   };
 
   const filteredProducts = products
@@ -261,7 +279,7 @@ const Inventory = () => {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0 flex-1">
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
             Ombor va Mahsulotlar
@@ -282,6 +300,7 @@ const Inventory = () => {
           </div>
         </div>
 
+        <div className="flex flex-wrap items-center gap-2">
         <Dialog
           open={isModalOpen}
           onOpenChange={(open) => {
@@ -309,7 +328,7 @@ const Inventory = () => {
             onOpenChange={setIsCategoryModalOpen}
           >
             <DialogTrigger asChild>
-              <Button variant="outline" className="gap-2 ml-2">
+              <Button variant="outline" className="gap-2">
                 <FolderPlus className="w-4 h-4" /> Kategoriya
               </Button>
             </DialogTrigger>
@@ -349,7 +368,7 @@ const Inventory = () => {
 
           <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
             <DialogTrigger asChild>
-              <Button variant="ghost" className="gap-2 ml-2">
+              <Button variant="ghost" className="gap-2">
                 <Truck className="w-4 h-4" /> Kirimlar
               </Button>
             </DialogTrigger>
@@ -427,7 +446,7 @@ const Inventory = () => {
 
           <Dialog open={isStockLogOpen} onOpenChange={setIsStockLogOpen}>
             <DialogTrigger asChild>
-              <Button variant="ghost" className="gap-2 ml-2">
+              <Button variant="ghost" className="gap-2">
                 <History className="w-4 h-4" /> Loglar
               </Button>
             </DialogTrigger>
@@ -618,6 +637,9 @@ const Inventory = () => {
                     onChange={(e) =>
                       setFormData({ ...formData, barcode: e.target.value })
                     }
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") e.preventDefault();
+                    }}
                   />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
@@ -626,15 +648,18 @@ const Inventory = () => {
                   </Label>
                   <Input
                     id="buy_price"
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="0"
                     className="col-span-3"
-                    value={formData.buy_price}
+                    value={formatThousands(formData.buy_price)}
                     onChange={(e) =>
                       setFormData({
                         ...formData,
-                        buy_price: parseFloat(e.target.value),
+                        buy_price: parseThousands(e.target.value),
                       })
                     }
+                    onFocus={(e) => e.target.select()}
                     required
                   />
                 </div>
@@ -644,15 +669,18 @@ const Inventory = () => {
                   </Label>
                   <Input
                     id="sell_price"
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="0"
                     className="col-span-3"
-                    value={formData.sell_price}
+                    value={formatThousands(formData.sell_price)}
                     onChange={(e) =>
                       setFormData({
                         ...formData,
-                        sell_price: parseFloat(e.target.value),
+                        sell_price: parseThousands(e.target.value),
                       })
                     }
+                    onFocus={(e) => e.target.select()}
                     required
                   />
                 </div>
@@ -673,6 +701,7 @@ const Inventory = () => {
                         stock: Number(e.target.value) || 0,
                       })
                     }
+                    onFocus={(e) => e.target.select()}
                     required
                   />
                 </div>
@@ -714,6 +743,7 @@ const Inventory = () => {
             </form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       <Card className="overflow-hidden border shadow-sm bg-card/70 backdrop-blur-sm">
@@ -801,22 +831,7 @@ const Inventory = () => {
                     className="group hover:bg-muted/50 transition-colors border-b-border/50 odd:bg-muted/10"
                   >
                     <TableCell className="pl-4 font-medium text-foreground">
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className={cn(
-                            "w-6 h-6 p-0 hover:bg-transparent",
-                            product.is_favorite
-                              ? "text-amber-500 fill-amber-500"
-                              : "text-muted-foreground/30 hover:text-amber-500/50",
-                          )}
-                          onClick={() => favoriteMutation.mutate(product.id)}
-                        >
-                          <Star className="w-4 h-4" />
-                        </Button>
-                        {product.name}
-                      </div>
+                      {product.name}
                     </TableCell>
                     <TableCell className="text-muted-foreground font-mono text-xs">
                       {product.barcode || "-"}
@@ -845,7 +860,7 @@ const Inventory = () => {
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {product.buy_price.toLocaleString("de-DE")} so'm
-                    </TableCell>{" "}
+                    </TableCell>
                     <TableCell className="font-semibold text-foreground">
                       {product.sell_price.toLocaleString("de-DE")}{" "}
                       <span className="text-[10px] text-muted-foreground font-medium uppercase">
@@ -864,7 +879,7 @@ const Inventory = () => {
                         product.sell_price - product.buy_price
                       ).toLocaleString("de-DE")}{" "}
                       so'm
-                    </TableCell>{" "}
+                    </TableCell>
                     <TableCell className="text-muted-foreground">
                       {product.unit}
                     </TableCell>

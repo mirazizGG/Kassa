@@ -64,6 +64,15 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 
+const ROLE_LABELS = {
+  admin: "Administrator",
+  manager: "Menejer",
+  cashier: "Kassir",
+  warehouse: "Omborchi",
+  sotuvchi: "Sotuvchi",
+};
+const roleLabel = (role) => ROLE_LABELS[role] || role;
+
 const Employees = () => {
   const role = localStorage.getItem("role");
   const currentUserId = parseInt(localStorage.getItem("userId")); // Assuming userId is stored
@@ -454,12 +463,13 @@ const Employees = () => {
                             <SelectItem value="admin">Admin</SelectItem>
                           )}
                           {(role === "admin" || role === "manager") && (
-                            <SelectItem value="manager">Manager</SelectItem>
+                            <SelectItem value="manager">Menejer</SelectItem>
                           )}
                           {(role === "admin" || role === "manager") && (
                             <SelectItem value="warehouse">Omborchi</SelectItem>
                           )}
                           <SelectItem value="cashier">Kassir</SelectItem>
+                          <SelectItem value="sotuvchi">Sotuvchi</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -493,7 +503,7 @@ const Employees = () => {
                     <TableHead>Foydalanuvchi</TableHead>
                     <TableHead>Lavozim</TableHead>
                     <TableHead>Telefon</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead>Holat</TableHead>
                     <TableHead className="text-right pr-6">Amallar</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -527,7 +537,7 @@ const Employees = () => {
                             }
                             className="uppercase text-[10px]"
                           >
-                            {emp.role}
+                            {roleLabel(emp.role)}
                           </Badge>
                         </TableCell>
                         <TableCell>{emp.phone || "-"}</TableCell>
@@ -772,7 +782,7 @@ const Employees = () => {
                           {emp.full_name || emp.username}
                         </CardTitle>
                         <CardDescription className="text-[10px] uppercase font-semibold">
-                          {emp.role}
+                          {roleLabel(emp.role)}
                         </CardDescription>
                       </div>
                     </div>
@@ -988,9 +998,10 @@ const Employees = () => {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="admin">Admin</SelectItem>
-                        <SelectItem value="manager">Manager</SelectItem>
+                        <SelectItem value="manager">Menejer</SelectItem>
                         <SelectItem value="warehouse">Omborchi</SelectItem>
                         <SelectItem value="cashier">Kassir</SelectItem>
+                        <SelectItem value="sotuvchi">Sotuvchi</SelectItem>
                       </SelectContent>
                     </Select>
                     {editingEmployee.id === currentUserId && (
@@ -1006,7 +1017,7 @@ const Employees = () => {
                       )}
                   </div>
                   <div className="grid gap-2">
-                    <Label>Status</Label>
+                    <Label>Holat</Label>
                     <Select
                       value={editingEmployee.is_active ? "active" : "blocked"}
                       onValueChange={(v) =>

@@ -25,35 +25,33 @@ python main.py
 # OR
 uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
-# Database utilities
-python backend/check_db_users.py      # View all employees
-python backend/reset_admin.py         # Reset admin password
-python backend/check_all.py           # View employees and shifts
-python backend/check_shifts.py        # Check open shifts
-python backend/fix_shifts.py          # Close all open shifts (emergency only)
-python backend/seed_data.py           # Seed initial data
+# Database utilities (run from backend/)
+python check_db_users.py      # View all employees
+python reset_admin.py         # Reset admin password
+python check_all.py           # View employees and shifts
+python check_shifts.py        # Check open shifts
+python fix_shifts.py          # Close all open shifts (emergency only)
+python seed_data.py           # Seed initial data
 ```
 
 ### Frontend
 
 ```bash
 cd frontend
-
-# Install dependencies
 npm install
-
-# Run development server
-npm run dev
-
-# Build for production
-npm run build
-
-# Lint code
-npm run lint
-
-# Preview production build
-npm run preview
+npm run dev        # Development server (Vite, binds 0.0.0.0:5173 — LAN-accessible by default)
+npm run build       # Production bundle
+npm run lint         # ESLint — run before submitting frontend changes
+npm run preview     # Preview production build
 ```
+
+### Running both at once
+
+`./run_project.ps1` starts backend and frontend together, but it first force-kills any running `python`/`node`/`uvicorn` processes — only use it when that's acceptable.
+
+### Testing
+
+There is no unified test runner or coverage tooling. Ad hoc scripts exist at the repo root (`test_features.py`, `test_async_db.py`, `check_db_lock.py`) — some require a running API or configured database. For new behavior, prefer adding a focused script and manually verifying the affected API routes and UI flows.
 
 ## Architecture
 
@@ -116,7 +114,9 @@ All timestamps use `datetime.utcnow()` and are stored as DateTime columns.
 
 **Default Credentials:**
 - Username: `admin`
-- Password: `123` (created in [main.py:33](backend/main.py#L33))
+- Password: `123` (created in [main.py](backend/main.py) on startup if the user doesn't already exist)
+
+**Single active session per user:** logging in while a previous session token hasn't expired returns `409 Conflict` ("boshqa qurilmada tizimga kirgan"). This is enforced via `Employee.session_token`/`session_expires_at` in [routers/auth.py](backend/routers/auth.py) — not a bug. Sessions expire after `ACCESS_TOKEN_EXPIRE_MINUTES` (600 min) or clear on logout.
 
 ### Telegram Bot Integration
 
@@ -154,14 +154,15 @@ Uses TanStack Query (React Query) for data fetching:
 
 ## Important Configuration
 
-**Backend:**
-- **[core.py:13](backend/core.py#L13)** - `SECRET_KEY` for JWT signing (change in production!)
-- **[bot.py](backend/bot.py)** - Telegram bot token (search for `TOKEN`)
-- **[database.py:8](backend/database.py#L8)** - Database URL (SQLite by default)
+**Backend** — configured via `backend/.env` (loaded with `python-dotenv`):
+- `SECRET_KEY` - JWT signing key ([core.py](backend/core.py), falls back to an insecure dev default)
+- `DATABASE_URL` - defaults to local SQLite (`backend/market.db`); `postgres://`/`postgresql://` URLs are rewritten to use `asyncpg` automatically ([database.py](backend/database.py))
+- `ALLOWED_ORIGINS` - comma-separated CORS allowlist ([main.py](backend/main.py)); defaults to `*` if unset, but if you set it, every frontend origin you test from (including LAN IPs) must be listed explicitly or requests are blocked by CORS with no error detail beyond a browser console message
+- `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ADMIN_CHAT_ID` - bot credentials
 
 **Frontend:**
-- **[vite.config.js](frontend/vite.config.js)** - Path alias `@` points to `src/`
-- API endpoint configuration in api client (check for base URL configuration)
+- **[vite.config.js](frontend/vite.config.js)** - Path alias `@` points to `src/`; dev server binds `0.0.0.0:5173` and proxies `/api` to `http://127.0.0.1:8000`
+- **[api/axios.jsx](frontend/src/api/axios.jsx)** - `VITE_API_URL` env var sets the API base URL (defaults to `http://localhost:8000`, which only works for same-machine access — set it to the backend host's LAN IP when testing from another device)
 
 ## Development Workflow
 
@@ -193,3 +194,9 @@ Uses TanStack Query (React Query) for data fetching:
 **Audit Logging:**
 - Important actions logged to audit_logs table
 - Includes user_id (employee), action, details, timestamp
+
+## Coding Conventions
+
+- Python: four-space indentation, `snake_case` functions/modules, `PascalCase` for models/Pydantic schemas, type annotations, async DB access throughout. Add new endpoints to the appropriate domain router in `routers/`, not `main.py`.
+- React: `PascalCase.jsx` for components/pages, camelCase variables/functions, Tailwind utility classes. Resolve ESLint errors rather than disabling rules.
+- Do not commit local databases (`*.db`, `*.db-shm`, `*.db-wal`), `.env` files, or generated build output.

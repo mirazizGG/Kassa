@@ -100,7 +100,7 @@ const ShiftHistory = () => {
                 <TableHead>Boshlang'ich</TableHead>
                 <TableHead>Yakuniy</TableHead>
                 <TableHead>Farq</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>Holat</TableHead>
                 <TableHead className="pr-6 text-right">Amallar</TableHead>
               </TableRow>
             </TableHeader>

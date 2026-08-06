@@ -31,7 +31,13 @@ async def login_for_access_token(request: Request, form_data: OAuth2PasswordRequ
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Hisobingiz bloklangan. Iltimos, administratorga murojaat qiling."
         )
-    
+
+    if user.role == "sotuvchi":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Sotuvchi lavozimi saytga kira olmaydi. Faqat Telegram bot orqali ishga kelish/ketishni belgilang.",
+        )
+
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     if user.session_token and user.session_expires_at and user.session_expires_at > now:
         raise HTTPException(
