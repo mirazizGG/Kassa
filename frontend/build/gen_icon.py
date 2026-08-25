@@ -5,7 +5,7 @@ img = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
 draw = ImageDraw.Draw(img)
 
 # Rounded square background with a purple->indigo gradient, matching the
-# Login page's branding colors.
+# app's brand colors.
 def lerp(a, b, t):
     return tuple(int(a[i] + (b[i] - a[i]) * t) for i in range(3))
 
@@ -27,54 +27,66 @@ mdraw.rounded_rectangle([(0, 0), (SIZE, SIZE)], radius=radius, fill=255)
 img = Image.composite(grad.convert("RGBA"), img, mask)
 draw = ImageDraw.Draw(img)
 
-# House / roof shape (matches the roof-and-bars glyph used on the Login page).
-cx, cy = SIZE // 2, SIZE // 2
+# Cash register glyph: screen on top, body, and a sliding cash drawer below.
+cx = SIZE // 2
 white = (255, 255, 255, 255)
+accent = (79, 70, 229, 255)  # same as gradient bottom, used for the seam cutout
 
-roof_w = int(SIZE * 0.46)
-roof_top_y = int(SIZE * 0.28)
-roof_bottom_y = int(SIZE * 0.5)
-draw.polygon(
-    [
-        (cx, roof_top_y),
-        (cx - roof_w // 2, roof_bottom_y),
-        (cx - roof_w // 2 + int(SIZE * 0.05), roof_bottom_y),
-        (cx, roof_top_y + int(SIZE * 0.08)),
-        (cx + roof_w // 2 - int(SIZE * 0.05), roof_bottom_y),
-        (cx + roof_w // 2, roof_bottom_y),
-    ],
-    fill=white,
-)
-
-body_left = cx - int(SIZE * 0.16)
-body_right = cx + int(SIZE * 0.16)
-body_top = roof_bottom_y
-body_bottom = int(SIZE * 0.72)
-line_w = int(SIZE * 0.045)
+# Screen (the small display on top of the register)
+screen_w = int(SIZE * 0.30)
+screen_h = int(SIZE * 0.14)
+screen_top = int(SIZE * 0.20)
 draw.rounded_rectangle(
-    [(body_left, body_top), (body_left + line_w, body_bottom)],
-    radius=line_w // 2,
-    fill=white,
-)
-draw.rounded_rectangle(
-    [(body_right - line_w, body_top), (body_right, body_bottom)],
-    radius=line_w // 2,
+    [(cx - screen_w // 2, screen_top), (cx + screen_w // 2, screen_top + screen_h)],
+    radius=int(SIZE * 0.03),
     fill=white,
 )
 
-# Small bar chart (sales/POS motif) beneath the roof
-bar_w = int(SIZE * 0.06)
-gap = int(SIZE * 0.03)
-base_y = int(SIZE * 0.72)
-bars = [0.10, 0.16, 0.12]
-start_x = cx - (len(bars) * bar_w + (len(bars) - 1) * gap) // 2
-for i, h_frac in enumerate(bars):
-    h = int(SIZE * h_frac)
-    x0 = start_x + i * (bar_w + gap)
-    x1 = x0 + bar_w
-    y1 = base_y
-    y0 = y1 - h
-    draw.rounded_rectangle([(x0, y0), (x1, y1)], radius=bar_w // 3, fill=white)
+# Neck connecting the screen to the body
+neck_w = int(SIZE * 0.14)
+neck_top = screen_top + screen_h
+neck_bottom = int(SIZE * 0.40)
+draw.rectangle(
+    [(cx - neck_w // 2, neck_top), (cx + neck_w // 2, neck_bottom)],
+    fill=white,
+)
+
+# Body (main housing)
+body_w = int(SIZE * 0.50)
+body_top = neck_bottom
+body_bottom = int(SIZE * 0.60)
+draw.rounded_rectangle(
+    [(cx - body_w // 2, body_top), (cx + body_w // 2, body_bottom)],
+    radius=int(SIZE * 0.05),
+    fill=white,
+)
+
+# Cash drawer (wider than the body, sits below it)
+drawer_w = int(SIZE * 0.64)
+drawer_top = body_bottom - int(SIZE * 0.02)
+drawer_bottom = int(SIZE * 0.76)
+draw.rounded_rectangle(
+    [(cx - drawer_w // 2, drawer_top), (cx + drawer_w // 2, drawer_bottom)],
+    radius=int(SIZE * 0.04),
+    fill=white,
+)
+
+# Seam between body and drawer
+seam_y = body_bottom + int(SIZE * 0.005)
+draw.rectangle(
+    [(cx - drawer_w // 2 + int(SIZE * 0.03), seam_y), (cx + drawer_w // 2 - int(SIZE * 0.03), seam_y + int(SIZE * 0.012))],
+    fill=accent,
+)
+
+# Drawer handle
+handle_w = int(SIZE * 0.16)
+handle_h = int(SIZE * 0.03)
+handle_y = drawer_top + int(SIZE * 0.045)
+draw.rounded_rectangle(
+    [(cx - handle_w // 2, handle_y), (cx + handle_w // 2, handle_y + handle_h)],
+    radius=handle_h // 2,
+    fill=accent,
+)
 
 sizes = [16, 24, 32, 48, 64, 128, 256]
 img.save("icon.ico", sizes=[(s, s) for s in sizes])

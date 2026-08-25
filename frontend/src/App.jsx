@@ -6,7 +6,6 @@ import Layout from './components/Layout';
 import ErrorBoundary from './components/ErrorBoundary';
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
-import TitleBar from './components/TitleBar';
 
 const Login = React.lazy(() => import('./pages/Login'));
 const Dashboard = React.lazy(() => import('./pages/Dashboard'));
@@ -47,7 +46,6 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <ThemeProvider defaultTheme="light" storageKey="vite-ui-theme">
           <div className="flex h-screen flex-col">
-            <TitleBar />
             <div className="min-h-0 flex-1">
               <Router>
                 <React.Suspense fallback={<PageLoader />}>
