@@ -89,5 +89,3 @@ backend/.env
 # Local uploaded files
 backend/uploads/
 
-# Built desktop installer (large binary, produced by npm run electron:build)
-SmartKassa Setup*.exe
