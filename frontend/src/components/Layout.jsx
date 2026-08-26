@@ -83,7 +83,7 @@ const Layout = () => {
   ];
 
   return (
-    <div className="flex h-screen w-full bg-background transition-colors duration-300">
+    <div className="flex h-full w-full bg-background transition-colors duration-300">
       {/* Sidebar */}
       {/* Sidebar - Hide for Cashier */}
       {role !== "cashier" && (

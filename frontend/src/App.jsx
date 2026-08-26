@@ -45,27 +45,31 @@ function App() {
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <ThemeProvider defaultTheme="light" storageKey="vite-ui-theme">
-          <Router>
-            <React.Suspense fallback={<PageLoader />}>
-              <Routes>
-                <Route path="/login" element={<Login />} />
-                <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-                  <Route index element={<Dashboard />} />
-                  <Route path="pos" element={<POS />} />
-                  <Route path="inventory" element={<RoleProtectedRoute allowedRoles={['admin', 'manager', 'warehouse']}><Inventory /></RoleProtectedRoute>} />
-                  <Route path="crm" element={<CRM />} />
-                  <Route path="finance" element={<RoleProtectedRoute allowedRoles={['admin', 'manager']}><Finance /></RoleProtectedRoute>} />
-                  <Route path="employees" element={<RoleProtectedRoute allowedRoles={['admin', 'manager']}><Employees /></RoleProtectedRoute>} />
-                  <Route path="attendance" element={<RoleProtectedRoute allowedRoles={['admin', 'manager']}><Attendance /></RoleProtectedRoute>} />
-                  <Route path="shifts" element={<ShiftHistory />} />
-                  <Route path="sales" element={<SalesHistory />} />
-                  <Route path="suppliers" element={<RoleProtectedRoute allowedRoles={['admin', 'manager', 'warehouse']}><Suppliers /></RoleProtectedRoute>} />
-                  <Route path="audit" element={<RoleProtectedRoute allowedRoles={['admin']}><AuditLogs /></RoleProtectedRoute>} />
-                  <Route path="settings" element={<RoleProtectedRoute allowedRoles={['admin']}><Settings /></RoleProtectedRoute>} />
-                </Route>
-              </Routes>
-            </React.Suspense>
-          </Router>
+          <div className="flex h-screen flex-col">
+            <div className="min-h-0 flex-1">
+              <Router>
+                <React.Suspense fallback={<PageLoader />}>
+                  <Routes>
+                    <Route path="/login" element={<Login />} />
+                    <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+                      <Route index element={<Dashboard />} />
+                      <Route path="pos" element={<POS />} />
+                      <Route path="inventory" element={<RoleProtectedRoute allowedRoles={['admin', 'manager', 'warehouse']}><Inventory /></RoleProtectedRoute>} />
+                      <Route path="crm" element={<CRM />} />
+                      <Route path="finance" element={<RoleProtectedRoute allowedRoles={['admin', 'manager']}><Finance /></RoleProtectedRoute>} />
+                      <Route path="employees" element={<RoleProtectedRoute allowedRoles={['admin', 'manager']}><Employees /></RoleProtectedRoute>} />
+                      <Route path="attendance" element={<RoleProtectedRoute allowedRoles={['admin', 'manager']}><Attendance /></RoleProtectedRoute>} />
+                      <Route path="shifts" element={<ShiftHistory />} />
+                      <Route path="sales" element={<SalesHistory />} />
+                      <Route path="suppliers" element={<RoleProtectedRoute allowedRoles={['admin', 'manager', 'warehouse']}><Suppliers /></RoleProtectedRoute>} />
+                      <Route path="audit" element={<RoleProtectedRoute allowedRoles={['admin']}><AuditLogs /></RoleProtectedRoute>} />
+                      <Route path="settings" element={<RoleProtectedRoute allowedRoles={['admin']}><Settings /></RoleProtectedRoute>} />
+                    </Route>
+                  </Routes>
+                </React.Suspense>
+              </Router>
+            </div>
+          </div>
           <Toaster />
         </ThemeProvider>
       </QueryClientProvider>

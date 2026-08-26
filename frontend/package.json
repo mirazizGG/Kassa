@@ -1,13 +1,15 @@
 {
-  "name": "frontend",
+  "name": "smartkassa",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
+  "description": "SmartKassa — savdo, ombor va CRM boshqaruv tizimi",
+  "author": "SmartKassa",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview --host 0.0.0.0 --port 4173 --strictPort"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.11",
