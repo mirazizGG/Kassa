@@ -79,20 +79,12 @@ const Login = () => {
       <div className="hidden lg:flex flex-col justify-center items-center bg-zinc-900 text-white p-8 relative overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(#ffffff33_1px,transparent_1px)] [background-size:24px_24px] opacity-20"></div>
         <div className="relative z-10 flex flex-col items-center text-center">
-          <div className="w-20 h-20 bg-white/10 rounded-2xl flex items-center justify-center mb-6 backdrop-blur-sm border border-white/10 shadow-2xl">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="w-10 h-10"
-            >
-              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-              <polyline points="9 22 9 12 15 12 15 22" />
-            </svg>
+          <div className="w-20 h-20 rounded-2xl overflow-hidden mb-6 backdrop-blur-sm border border-white/10 shadow-2xl">
+            <img
+              src="/favicon.png"
+              alt="SmartKassa"
+              className="w-full h-full object-cover"
+            />
           </div>
           <h1 className="text-4xl font-bold mb-3 tracking-tight">SmartKassa</h1>
           <p className="text-zinc-400 text-lg max-w-sm leading-relaxed">
