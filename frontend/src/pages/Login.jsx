@@ -71,7 +71,7 @@ const Login = () => {
   };
 
   return (
-    <div className="relative grid min-h-screen w-full lg:grid-cols-[35%_65%]">
+    <div className="relative grid min-h-full w-full lg:grid-cols-[35%_65%]">
       <div className="absolute right-4 top-4 z-20">
         <ModeToggle />
       </div>

@@ -35,7 +35,7 @@ class ErrorBoundary extends React.Component {
     render() {
         if (this.state.hasError) {
             return (
-                <div className="min-h-screen w-full flex items-center justify-center bg-background p-4">
+                <div className="min-h-full w-full flex items-center justify-center bg-background p-4">
                     <Card className="w-full max-w-lg border-destructive/50">
                         <CardHeader>
                             <div className="flex items-center gap-3">

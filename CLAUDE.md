@@ -11,10 +11,6 @@ Kassa is a full-stack Point of Sale (POS) system with Telegram bot integration. 
 - Frontend: React 19, Vite, React Router, TanStack Query, Tailwind CSS, Radix UI, shadcn/ui components
 - Authentication: JWT tokens with passlib (pbkdf2_sha256)
 
-## Muloqot tili / Response Language
-
-Claude Code ushbu repozitoriyada foydalanuvchiga **har doim o'zbek tilida** javob berishi kerak — kod, fayl nomlari va commit xabarlari ingliz/o'zbek aralash bo'lishi mumkin bo'lsa-da, foydalanuvchiga yo'naltirilgan barcha matnli javoblar o'zbek tilida yozilishi shart.
-
 ## Common Commands
 
 ### Backend
@@ -30,15 +26,12 @@ python main.py
 uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
 # Database utilities (run from backend/)
-python check_db.py            # List all employees
-python check_all_data.py      # Row counts for every table
-python diag_db.py             # Dump raw product rows for debugging
-python reset_admin.py         # Reset (or create) admin, password 123
-python seed_data.py           # Seed starter categories/products
-python create_tables.py       # Create tables from current models
-python update_db.py           # Apply additive schema changes (new tables/columns) via SQLAlchemy
-python migrate_db.py          # One-off raw sqlite3 ALTER TABLE migration
-python clear_database.py      # DESTRUCTIVE: drops and recreates every table
+python check_db_users.py      # View all employees
+python reset_admin.py         # Reset admin password
+python check_all.py           # View employees and shifts
+python check_shifts.py        # Check open shifts
+python fix_shifts.py          # Close all open shifts (emergency only)
+python seed_data.py           # Seed initial data
 ```
 
 ### Frontend
@@ -60,38 +53,31 @@ npm run preview     # Preview production build
 
 There is no unified test runner or coverage tooling. Ad hoc scripts exist at the repo root (`test_features.py`, `test_async_db.py`, `check_db_lock.py`) — some require a running API or configured database. For new behavior, prefer adding a focused script and manually verifying the affected API routes and UI flows.
 
-CI ([.github/workflows/verify.yml](.github/workflows/verify.yml)) runs on every push/PR to `main`: frontend job does `npm ci`, `npm run lint`, `npm run build`; backend job does `pip install -r requirements.txt`, `python -m compileall -q .` (syntax-check only, no tests executed).
-
 ## Architecture
 
 ### Backend Structure
 
 The backend follows a **modular router pattern**:
 
-- **[main.py](backend/main.py)** - Application entry point with lifespan management. Initializes the database, registers a global exception handler (returns a generic 500 to hide internals), configures CORS and the slowapi rate limiter, mounts `/uploads` for invoice files, creates the default admin user, starts Telegram bot polling, and starts an `AsyncIOScheduler` (APScheduler) with cron jobs for daily debt checks (09:00) and daily SQLite backup (hour set by `BACKUP_HOUR`, skippable via `BACKUP_ENABLED`)
+- **[main.py](backend/main.py)** - Application entry point with lifespan management. Initializes database, creates default admin user, starts Telegram bot polling and debt checking tasks in background
 - **[database.py](backend/database.py)** - SQLAlchemy 2.0 async models and database setup. All database operations are async using `AsyncSession`
-- **[core.py](backend/core.py)** - Authentication utilities (JWT, password hashing, `get_current_user` dependency, the shared slowapi `limiter`)
+- **[core.py](backend/core.py)** - Authentication utilities (JWT, password hashing, `get_current_user` dependency)
 - **[schemas.py](backend/schemas.py)** - Pydantic models for request/response validation
 - **[bot.py](backend/bot.py)** - Telegram bot implementation with debt reminders
-- **[utils/backup.py](backend/utils/backup.py)** - SQLite backup creation/retention (`BACKUP_RETENTION`)
-- **[routers/](backend/routers/)** - FastAPI routers organized by domain, each included in `main.py`:
+- **[routers/](backend/routers/)** - FastAPI routers organized by domain:
   - **auth.py** - Login, employee CRUD (admin/manager only)
   - **pos.py** - POS sales, shift management (open/close)
   - **inventory.py** - Products, categories, stock management
   - **crm.py** - Clients, debt tracking, payment history
-  - **finance.py** - Expenses, statistics
-  - **sales.py** - Sale creation, sales history, refunds, top products
+  - **finance.py** - Sales history, expenses, statistics
   - **tasks.py** - Employee task management
-  - **audit.py** - Audit log listing and Excel export
-  - **settings.py** - Store settings (low-stock threshold, bonus %, debt reminder days) and manual backup trigger
-  - **suppliers.py** - Suppliers, stock receipts, supplier payments
 
 ### Frontend Structure
 
 The frontend uses **React Router for navigation** with a protected route pattern:
 
 - **[App.jsx](frontend/src/App.jsx)** - Root component with React Router setup, protected routes, TanStack Query provider, theme provider
-- **[pages/](frontend/src/pages/)** - Route components (Dashboard, POS, Inventory, CRM, Finance, Employees, Suppliers, Attendance, AuditLogs, Settings, SalesHistory, ShiftHistory, Login)
+- **[pages/](frontend/src/pages/)** - Route components (Dashboard, POS, Inventory, CRM, Finance, Employees, Login)
 - **[components/](frontend/src/components/)** - Shared UI components:
   - **Layout.jsx** - Main layout with navigation sidebar
   - **ui/** - shadcn/ui components (buttons, dialogs, forms, etc.)
@@ -172,8 +158,7 @@ Uses TanStack Query (React Query) for data fetching:
 - `SECRET_KEY` - JWT signing key ([core.py](backend/core.py), falls back to an insecure dev default)
 - `DATABASE_URL` - defaults to local SQLite (`backend/market.db`); `postgres://`/`postgresql://` URLs are rewritten to use `asyncpg` automatically ([database.py](backend/database.py))
 - `ALLOWED_ORIGINS` - comma-separated CORS allowlist ([main.py](backend/main.py)); defaults to `*` if unset, but if you set it, every frontend origin you test from (including LAN IPs) must be listed explicitly or requests are blocked by CORS with no error detail beyond a browser console message
-- `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ADMIN_CHAT_ID` - bot credentials; if `TELEGRAM_BOT_TOKEN` is unset the bot is disabled (no polling) rather than erroring
-- `BACKUP_ENABLED`, `BACKUP_HOUR`, `BACKUP_RETENTION` - daily SQLite backup schedule and retention (days), see [utils/backup.py](backend/utils/backup.py)
+- `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ADMIN_CHAT_ID` - bot credentials
 
 **Frontend:**
 - **[vite.config.js](frontend/vite.config.js)** - Path alias `@` points to `src/`; dev server binds `0.0.0.0:5173` and proxies `/api` to `http://127.0.0.1:8000`
