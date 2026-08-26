@@ -1,0 +1,36 @@
+# Backend Framework
+fastapi
+uvicorn[standard]
+
+# Database
+sqlalchemy
+aiosqlite
+asyncpg
+
+# Authentication & Security
+python-jose[cryptography]
+passlib
+bcrypt
+python-multipart
+
+# Telegram Bot
+aiogram
+
+# HTTP Client
+httpx
+
+# Templates
+jinja2
+
+# Background Tasks & Rate Limiting
+apscheduler
+slowapi
+
+# Date and Time
+python-dateutil
+python-dotenv
+pydantic>=2.0
+
+# Reporting exports
+pandas
+openpyxl

@@ -1,0 +1,628 @@
+import React from "react";
+import {
+  TrendingUp,
+  TrendingDown,
+  DollarSign,
+  PieChart,
+  Plus,
+  Receipt,
+  Wallet,
+  Calendar,
+  User,
+  ArrowUpRight,
+  Loader2,
+  BarChart3,
+  FileDown,
+} from "lucide-react";
+import {
+  PieChart as RePieChart,
+  Pie,
+  Cell,
+  Tooltip as ReTooltip,
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+} from "recharts";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import api from "../api/axios";
+import FilterBar from "../components/FilterBar";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { formatThousands, parseThousands } from "@/lib/utils.js";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { toast } from "sonner";
+import { format } from "date-fns";
+const StatCard = ({ title, value, icon, type = "neutral" }) => (
+  <Card>
+    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+      <CardTitle className="text-sm font-medium">{title}</CardTitle>
+      {React.createElement(icon, {
+        className: `h-4 w-4 ${type === "positive" ? "text-emerald-500" : type === "negative" ? "text-rose-500" : "text-muted-foreground"}`,
+      })}
+    </CardHeader>
+    <CardContent>
+      <div className="text-2xl font-bold">{value}</div>
+    </CardContent>
+  </Card>
+);
+const Finance = () => {
+  const role = localStorage.getItem("role");
+  const queryClient = useQueryClient();
+  const today = new Date().toISOString().split("T")[0];
+  const [filters, setFilters] = React.useState({
+    employee_id: "",
+    start_date: today,
+    end_date: today,
+  });
+  const [isDialogOpen, setIsDialogOpen] = React.useState(false);
+  const [newExpense, setNewExpense] = React.useState({
+    reason: "",
+    amount: "",
+    category: "Boshqa",
+  });
+  const { data: stats, isLoading: statsLoading } = useQuery({
+    queryKey: ["finance-stats", filters],
+    queryFn: async () => {
+      const params = {};
+      if (filters.employee_id && filters.employee_id !== "all")
+        params.employee_id = filters.employee_id;
+      if (filters.start_date) params.start_date = filters.start_date;
+      if (filters.end_date) params.end_date = filters.end_date;
+      const response = await api.get("/finance/stats", { params });
+      return response.data;
+    },
+  });
+  const { data: expenses = [], isLoading: expensesLoading } = useQuery({
+    queryKey: ["expenses", filters],
+    queryFn: async () => {
+      const params = {};
+      if (filters.employee_id && filters.employee_id !== "all")
+        params.employee_id = filters.employee_id;
+      if (filters.start_date) params.start_date = filters.start_date;
+      if (filters.end_date) params.end_date = filters.end_date;
+      const response = await api.get("/finance/expenses", { params });
+      return response.data;
+    },
+  });
+  const { data: categoryData = [], isLoading: categoryLoading } = useQuery({
+    queryKey: ["expenses-by-category", filters],
+    queryFn: async () => {
+      const params = {};
+      if (filters.start_date) params.start_date = filters.start_date;
+      if (filters.end_date) params.end_date = filters.end_date;
+      const res = await api.get("/finance/expenses-by-category", { params });
+      return res.data;
+    },
+  });
+  const { data: profitData = [], isLoading: profitLoading } = useQuery({
+    queryKey: ["profit-chart", filters],
+    queryFn: async () => {
+      const res = await api.get("/finance/profit-chart", {
+        params: { days: 7 },
+      });
+      return res.data;
+    },
+  });
+  const expenseMutation = useMutation({
+    mutationFn: (data) => api.post("/finance/expenses", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries(["expenses"]);
+      queryClient.invalidateQueries(["finance-stats"]);
+      queryClient.invalidateQueries(["dashboard-stats"]);
+      toast.success("Xarajat qo'shildi!");
+      setIsDialogOpen(false);
+      setNewExpense({ reason: "", amount: "", category: "Boshqa" });
+    },
+    onError: (error) => {
+      toast.error("Xatolik!", {
+        description:
+          error.response?.data?.detail || "Xarajatni qo'shib bo'lmadi",
+      });
+    },
+  });
+  const handleAddExpense = (e) => {
+    e.preventDefault();
+    if (!newExpense.reason || !newExpense.amount) {
+      toast.error("Ma'lumotlarni to'liq kiriting");
+      return;
+    }
+    expenseMutation.mutate({
+      ...newExpense,
+      amount: parseFloat(newExpense.amount),
+    });
+  };
+  const handleExport = async () => {
+    try {
+      const params = {};
+      if (filters.start_date) params.start_date = filters.start_date;
+      if (filters.end_date) params.end_date = filters.end_date;
+      const response = await api.get("/finance/export-sales", {
+        params,
+        responseType: "blob",
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute(
+        "download",
+        `hisobot_${new Date().toISOString().split("T")[0]}.csv`,
+      );
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (error) {
+      console.error("Export error:", error);
+      toast.error("Hisobotni yuklab olishda xatolik yuz berdi");
+    }
+  };
+  const handleExportExcel = async () => {
+    try {
+      const params = {};
+      if (filters.start_date) params.start_date = filters.start_date;
+      if (filters.end_date) params.end_date = filters.end_date;
+      const response = await api.get("/finance/export-sales-excel", {
+        params,
+        responseType: "blob",
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute(
+        "download",
+        `hisobot_${new Date().toISOString().split("T")[0]}.xlsx`,
+      );
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (error) {
+      console.error("Excel Export error:", error);
+      toast.error("Excel hisobotni yuklab olishda xatolik yuz berdi");
+    }
+  };
+  return (
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <section className="rounded-2xl border bg-gradient-to-br from-primary/15 via-background to-background p-5 md:p-7">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">
+              Moliya va Hisobotlar
+            </h1>
+            <p className="text-muted-foreground">
+              Do'kon daromadi, xarajatlar va foyda tahlili
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="shadow-sm"
+                onClick={handleExport}
+              >
+                <FileDown className="h-4 w-4" /> CSV
+              </Button>
+              <Button
+                variant="outline"
+                className="shadow-sm border-emerald-200 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
+                onClick={handleExportExcel}
+              >
+                <FileDown className="h-4 w-4" /> Excel
+              </Button>
+            </div>
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <DialogTrigger asChild>
+                <Button className="gap-2 shadow-lg shadow-primary/20">
+                  <Plus className="h-4 w-4" /> Xarajat Qo'shish
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Yangi Xarajat Kiritish</DialogTitle>
+                  <DialogDescription>
+                    Do'kon uchun qilingan chiqimni ro'yxatga oling.
+                  </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleAddExpense} className="space-y-4 pt-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="reason">Xarajat sababi</Label>
+                    <Input
+                      id="reason"
+                      placeholder="Masalan: Ijara to'lovi"
+                      value={newExpense.reason}
+                      onChange={(e) =>
+                        setNewExpense({ ...newExpense, reason: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="amount">Summa (so'm)</Label>
+                      <Input
+                        id="amount"
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="100.000"
+                        value={formatThousands(newExpense.amount)}
+                        onChange={(e) =>
+                          setNewExpense({
+                            ...newExpense,
+                            amount: parseThousands(e.target.value),
+                          })
+                        }
+                        onFocus={(e) => e.target.select()}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="category">Kategoriya</Label>
+                      <Select
+                        value={newExpense.category}
+                        onValueChange={(v) =>
+                          setNewExpense({ ...newExpense, category: v })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Boshqa">Boshqa</SelectItem>
+                          <SelectItem value="Ijara">Ijara</SelectItem>
+                          <SelectItem value="Ish haqi">Ish haqi</SelectItem>
+                          <SelectItem value="Oziq-ovqat">Oziq-ovqat</SelectItem>
+                          <SelectItem value="Logistika">Logistika</SelectItem>
+                          <SelectItem value="Soliq">Soliq</SelectItem>
+                          <SelectItem value="Kommunal">Kommunal</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <DialogFooter className="pt-4">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => setIsDialogOpen(false)}
+                    >
+                      Bekor qilish
+                    </Button>
+                    <Button type="submit" disabled={expenseMutation.isPending}>
+                      {expenseMutation.isPending && (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      )}
+                      Saqlash
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border bg-card/70 p-3 shadow-sm backdrop-blur-sm">
+        <FilterBar
+          filters={filters}
+          onFilterChange={setFilters}
+          showSearch={false}
+        />
+      </section>
+
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          title="Umumiy Savdo"
+          value={statsLoading ? "..." : stats?.dailySalesFormatted || "0 so'm"}
+          icon={DollarSign}
+          type="positive"
+        />
+        {role === "admin" && (
+          <StatCard
+            title="Mahsulot Tannarxi"
+            value={
+              statsLoading
+                ? "..."
+                : `${stats?.totalCost?.toLocaleString("de-DE") || 0} so'm`
+            }
+            icon={Receipt}
+            type="negative"
+          />
+        )}
+        <StatCard
+          title="Umumiy Xarajat"
+          value={
+            statsLoading
+              ? "..."
+              : `${stats?.totalExpenses?.toLocaleString("de-DE") || 0} so'm`
+          }
+          icon={TrendingDown}
+          type="negative"
+        />
+        {role === "admin" && (
+          <Card className="bg-primary/5 border-primary/20">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Sof Foyda</CardTitle>
+              <TrendingUp className="h-4 w-4 text-primary" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-primary">
+                {statsLoading ? "..." : stats?.netProfitFormatted || "0 so'm"}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Savdo - Tannarx - Xarajat
+              </p>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+      <div className="grid gap-6 md:grid-cols-7">
+        <Card className="md:col-span-4 border-none shadow-md overflow-hidden bg-background/60 backdrop-blur-xl">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Wallet className="w-5 h-5 text-primary" /> Xarajatlar Tarixi
+                </CardTitle>
+                <CardDescription>
+                  Oxirgi kiritilgan chiqimlar ro'yxati
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader className="bg-muted/30">
+                <TableRow>
+                  <TableHead className="pl-6">Sabab / Kategoriya</TableHead>
+                  <TableHead>Summa</TableHead>
+                  <TableHead>Xodim</TableHead>
+                  <TableHead className="pr-6">Sana</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {expensesLoading ? (
+                  [1, 2, 3].map((i) => (
+                    <TableRow key={i}>
+                      <TableCell colSpan={4} className="h-12 text-center">
+                        Yuklanmoqda...
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : expenses.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={4}
+                      className="h-32 text-center text-muted-foreground"
+                    >
+                      Hozircha xarajatlar yo'q
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  expenses.map((exp) => (
+                    <TableRow key={exp.id}>
+                      <TableCell className="pl-6">
+                        <div className="font-medium">{exp.reason}</div>
+                        <div className="text-[10px] text-muted-foreground uppercase">
+                          {exp.category}
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-mono text-rose-500">
+                        -{exp.amount.toLocaleString("de-DE")} so'm
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1 text-xs">
+                          <User className="w-3 h-3 opacity-50" />
+                          {exp.creator?.username || "Tizim"}
+                        </div>
+                      </TableCell>
+                      <TableCell className="pr-6 text-xs text-muted-foreground">
+                        <div className="flex items-center gap-1">
+                          <Calendar className="w-3 h-3 opacity-50" />
+                          {format(new Date(exp.created_at), "dd.MM.yyyy HH:mm")}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+        <Card className="md:col-span-3 border-none shadow-md bg-background/60 backdrop-blur-xl">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <BarChart3 className="w-5 h-5 text-primary" /> Xarajatlar Tahlili
+            </CardTitle>
+            <CardDescription>Kategoriyalar bo'yicha taqsimot</CardDescription>
+          </CardHeader>
+          <CardContent className="h-[300px]">
+            {categoryLoading ? (
+              <div className="flex items-center justify-center h-full">
+                <Loader2 className="animate-spin text-primary" />
+              </div>
+            ) : categoryData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <RePieChart>
+                  <Pie
+                    data={categoryData}
+                    dataKey="amount"
+                    nameKey="category"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={80}
+                    label={({ name, percent }) =>
+                      `${name} ${(percent * 100).toFixed(0)}%`
+                    }
+                  >
+                    {categoryData.map((entry, index) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={
+                          [
+                            "hsl(var(--primary))",
+                            "#10b981",
+                            "#f59e0b",
+                            "#ef4444",
+                            "#8b5cf6",
+                            "#ec4899",
+                          ][index % 6]
+                        }
+                      />
+                    ))}
+                  </Pie>
+                  <ReTooltip
+                    formatter={(value) => `${value.toLocaleString("de-DE")} so'm`}
+                    contentStyle={{
+                      backgroundColor: "hsl(var(--card))",
+                      borderRadius: "8px",
+                      border: "1px solid hsl(var(--border))",
+                    }}
+                  />
+                </RePieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full opacity-50">
+                <PieChart className="w-12 h-12 mb-2" />
+                <p>Ma'lumot yo'q</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+        {role === "admin" && (
+          <Card className="col-span-full border-none shadow-md bg-background/60 backdrop-blur-xl">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp className="w-5 h-5 text-primary" /> Foyda va Daromad
+                Dinamikasi
+              </CardTitle>
+              <CardDescription>Oxirgi 7 kundagi ko'rsatkichlar</CardDescription>
+            </CardHeader>
+            <CardContent className="h-[350px]">
+              {profitLoading ? (
+                <div className="flex items-center justify-center h-full">
+                  <Loader2 className="animate-spin text-primary" />
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={profitData}>
+                    <defs>
+                      <linearGradient
+                        id="colorProfit"
+                        x1="0"
+                        y1="0"
+                        x2="0"
+                        y2="1"
+                      >
+                        <stop
+                          offset="5%"
+                          stopColor="#10b981"
+                          stopOpacity={0.3}
+                        />
+                        <stop
+                          offset="95%"
+                          stopColor="#10b981"
+                          stopOpacity={0}
+                        />
+                      </linearGradient>
+                      <linearGradient
+                        id="colorRevenue"
+                        x1="0"
+                        y1="0"
+                        x2="0"
+                        y2="1"
+                      >
+                        <stop
+                          offset="5%"
+                          stopColor="hsl(var(--primary))"
+                          stopOpacity={0.1}
+                        />
+                        <stop
+                          offset="95%"
+                          stopColor="hsl(var(--primary))"
+                          stopOpacity={0}
+                        />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      vertical={false}
+                      stroke="hsl(var(--border))"
+                    />
+                    <XAxis
+                      dataKey="date"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 12 }}
+                    />
+                    <YAxis
+                      axisLine={false}
+                      tickLine={false}
+                      tickFormatter={(v) => `${(v / 1000000).toFixed(1)}M`}
+                      tick={{ fontSize: 12 }}
+                    />
+                    <ReTooltip
+                      formatter={(v) => `${v.toLocaleString("de-DE")} so'm`}
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--card))",
+                        borderRadius: "8px",
+                        border: "1px solid hsl(var(--border))",
+                      }}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="revenue"
+                      name="Daromad"
+                      stroke="hsl(var(--primary))"
+                      fillOpacity={1}
+                      fill="url(#colorRevenue)"
+                      strokeWidth={2}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="profit"
+                      name="Sof Foyda"
+                      stroke="#10b981"
+                      fillOpacity={1}
+                      fill="url(#colorProfit)"
+                      strokeWidth={3}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+};
+export default Finance;

@@ -1,0 +1,352 @@
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, update, func
+from typing import List, Optional
+from datetime import datetime, timezone
+
+from database import get_db, Product, Sale, SaleItem, Employee, Client, StoreSetting, StockMove, Shift
+from schemas import SaleCreate, SaleOut, RefundApproval
+from core import get_current_user, verify_password
+from routers.audit import log_action
+
+from sqlalchemy.orm import joinedload
+
+router = APIRouter(prefix="/sales", tags=["sales"])
+
+def parse_date(date_val: Optional[str], default_time=datetime.min.time()):
+    if not date_val:
+        return None
+    try:
+        if len(date_val) <= 10:
+            d = datetime.strptime(date_val, "%Y-%m-%d")
+            return datetime.combine(d.date(), default_time)
+        
+        dt = datetime.fromisoformat(date_val.replace("Z", "+00:00"))
+        if dt.tzinfo:
+            dt = dt.replace(tzinfo=None)
+        return dt
+    except ValueError:
+        return None
+
+@router.post("/", response_model=SaleOut)
+async def create_sale(
+    sale: SaleCreate,
+    current_user: Employee = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    active_shift = await db.scalar(
+        select(Shift).where(Shift.cashier_id == current_user.id, Shift.status == "open")
+    )
+    if not active_shift:
+        raise HTTPException(status_code=400, detail="Savdo qilish uchun avval smenani oching")
+    # 1. Start a transaction implicit in async session
+    
+    # 2. Check stock availability
+    total_amount_check = 0
+    sale_items_data = []
+
+    manager_approved = False
+    for item in sale.items:
+        result = await db.execute(select(Product).where(Product.id == item.product_id))
+        product = result.scalars().first()
+        
+        if not product:
+            raise HTTPException(status_code=404, detail=f"Product {item.product_id} not found")
+
+        if item.price < product.sell_price:
+            if not manager_approved:
+                if not sale.manager_username or not sale.manager_password:
+                    raise HTTPException(status_code=403, detail="Chegirma uchun menejer tasdig'i kerak")
+                approver = await db.scalar(
+                    select(Employee).where(Employee.username == sale.manager_username, Employee.is_active == True)
+                )
+                if not approver or approver.role not in ["admin", "manager"] or not verify_password(sale.manager_password, approver.hashed_password):
+                    raise HTTPException(status_code=403, detail="Menejer tasdig'i noto'g'ri")
+                manager_approved = True
+
+        if product.stock < item.quantity:
+            raise HTTPException(status_code=400, detail=f"Mahsulot yetarli emas: {product.name}. Mavjud: {product.stock}")
+        
+        # Deduct stock
+        product.stock -= item.quantity
+        total_amount_check += item.quantity * item.price
+        
+        # Prepare item data for DB
+        sale_items_data.append(SaleItem(
+            product_id=product.id,
+            quantity=item.quantity,
+            price=item.price
+        ))
+
+    # Cash entered by the buyer can include change; persist only the net amount left in the drawer.
+    net_cash_amount = max(
+        0,
+        sale.total_amount
+        - sale.card_amount
+        - sale.transfer_amount
+        - sale.debt_amount
+        - sale.bonus_spent,
+    )
+
+    # 3. Create Sale Record
+    db_sale = Sale(
+        total_amount=sale.total_amount, 
+        payment_method=sale.payment_method,
+        cashier_id=current_user.id,
+        client_id=sale.client_id,
+        status="completed",
+        cash_amount=net_cash_amount,
+        card_amount=sale.card_amount,
+        transfer_amount=sale.transfer_amount,
+        debt_amount=sale.debt_amount
+    )
+    db.add(db_sale)
+    await db.flush() # Get ID
+
+    # 4. Create Sale Items and Stock Logs
+    for sale_item in sale_items_data:
+        sale_item.sale_id = db_sale.id
+        db.add(sale_item)
+        
+        # Log Stock Movement (Negative for sale)
+        db_move = StockMove(
+            product_id=sale_item.product_id,
+            quantity=-sale_item.quantity,
+            type="sale",
+            reason=f"Sotuv (Chek ID: {db_sale.id})",
+            created_by=current_user.id
+        )
+        db.add(db_move)
+
+    # 5. Handle Client Balance and Bonuses
+    if sale.client_id:
+        result = await db.execute(select(Client).where(Client.id == sale.client_id))
+        client = result.scalars().first()
+        if client:
+            # Handle Debt
+            if sale.debt_amount > 0:
+                client.balance -= sale.debt_amount
+            
+            # 5.1 Handle Bonuses
+            # Get bonus setting
+            settings_res = await db.execute(select(StoreSetting))
+            settings = settings_res.scalars().first()
+            bonus_percent = settings.bonus_percentage if settings else 1.0
+            
+            # Calculate earned bonus (from the amount actually paid or total?) 
+            # Usually from total non-debt amount or just total? Let's do from (total - debt)
+            paid_amount = db_sale.total_amount - db_sale.debt_amount
+            if paid_amount > 0:
+                earned = (paid_amount * bonus_percent) / 100
+                db_sale.bonus_earned = earned
+                client.bonus_balance += earned
+            
+            # Handle spent bonus
+            if sale.bonus_spent > 0:
+                if client.bonus_balance < sale.bonus_spent:
+                    raise HTTPException(status_code=400, detail="Bonus balansi yetarli emas")
+                client.bonus_balance -= sale.bonus_spent
+                db_sale.bonus_spent = sale.bonus_spent
+    
+    await log_action(db, current_user.id, "YANGI_SOTUV", f"Summa: {db_sale.total_amount:,.0f} so'm. Usul: {db_sale.payment_method}. Chek ID: {db_sale.id}")
+    
+    await db.commit()
+    
+    # 6. Safety Backup (Automatic)
+    try:
+        from utils.backup import create_backup
+        create_backup()
+    except:
+        pass
+    
+    # Reload with relationships for response_model
+    result = await db.execute(
+        select(Sale)
+        .where(Sale.id == db_sale.id)
+        .options(
+            joinedload(Sale.items).joinedload(SaleItem.product),
+            joinedload(Sale.cashier),
+            joinedload(Sale.client)
+        )
+    )
+    db_sale_full = result.unique().scalars().first()
+    return db_sale_full
+
+@router.get("/top-products")
+async def get_top_products(
+    limit: int = 12,
+    current_user: Employee = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    rows = await db.execute(
+        select(
+            Product.id,
+            Product.name,
+            Product.barcode,
+            Product.sell_price,
+            Product.stock,
+            Product.unit,
+            func.sum(SaleItem.quantity).label("sold_quantity"),
+        )
+        .join(SaleItem, SaleItem.product_id == Product.id)
+        .join(Sale, Sale.id == SaleItem.sale_id)
+        .where(Sale.status == "completed")
+        .group_by(Product.id)
+        .order_by(func.sum(SaleItem.quantity).desc())
+        .limit(min(max(limit, 1), 20))
+    )
+    return [dict(row._mapping) for row in rows]
+
+
+@router.get("/my-daily-summary")
+async def get_my_daily_summary(
+    current_user: Employee = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from datetime import timedelta
+    from zoneinfo import ZoneInfo
+
+    now_local = datetime.now(ZoneInfo("Asia/Tashkent"))
+    start_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+    end_local = start_local + timedelta(days=1)
+    start = start_local.astimezone(timezone.utc).replace(tzinfo=None)
+    end = end_local.astimezone(timezone.utc).replace(tzinfo=None)
+    result = await db.execute(
+        select(
+            func.count(Sale.id).label("sales_count"),
+            func.coalesce(func.sum(Sale.total_amount), 0).label("total_amount"),
+            func.coalesce(func.sum(Sale.cash_amount), 0).label("cash_amount"),
+            func.coalesce(func.sum(Sale.card_amount), 0).label("card_amount"),
+            func.coalesce(func.sum(Sale.transfer_amount), 0).label("transfer_amount"),
+            func.coalesce(func.sum(Sale.debt_amount), 0).label("debt_amount"),
+        ).where(
+            Sale.cashier_id == current_user.id,
+            Sale.status == "completed",
+            Sale.created_at >= start,
+            Sale.created_at < end,
+        )
+    )
+    return dict(result.one()._mapping)
+@router.get("/", response_model=List[SaleOut])
+async def get_sales(
+    skip: int = 0, 
+    limit: int = 100,
+    employee_id: Optional[int] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    current_user: Employee = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    # Enforce RBAC
+    if current_user.role == "cashier":
+        employee_id = current_user.id
+        
+    start_date = parse_date(start_date, datetime.min.time())
+    end_date = parse_date(end_date, datetime.max.time())
+    
+    query = (
+        select(Sale)
+        .options(
+            joinedload(Sale.items).joinedload(SaleItem.product),
+            joinedload(Sale.cashier),
+            joinedload(Sale.client)
+        )
+    )
+    if employee_id:
+        query = query.where(Sale.cashier_id == employee_id)
+        
+    # Manager restriction: Filter out Admin sales if viewing 'all' or specific admin
+    if current_user.role == "manager":
+         # Join with Employee to check role of the cashier
+         # This is a bit complex for a simple list, but let's just do a simple check if employee_id is provided
+         if employee_id:
+             target_emp = await db.scalar(select(Employee).where(Employee.id == employee_id))
+             if target_emp and target_emp.role == "admin":
+                 # Return empty or error? Empty seems safer for list view
+                 return []
+         else:
+             # If listing all, exclude sales made by admins
+             # We need to join with Employee table to filter by role
+             query = query.join(Employee, Sale.cashier_id == Employee.id).where(Employee.role != "admin")
+
+    if start_date:
+        query = query.where(Sale.created_at >= start_date)
+    if end_date:
+        query = query.where(Sale.created_at <= end_date)
+        
+    result = await db.execute(query.offset(skip).limit(limit).order_by(Sale.created_at.desc()))
+    return result.unique().scalars().all()
+
+@router.post("/{sale_id}/refund", response_model=SaleOut)
+async def refund_sale(
+    sale_id: int,
+    current_user: Employee = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    # Every completed-sale refund requires a manager/admin credential confirmation.
+    approver_result = await db.execute(
+        select(Employee).where(Employee.username == approval.manager_username, Employee.is_active == True)
+    )
+    approver = approver_result.scalars().first()
+    if not approver or approver.role not in ["admin", "manager"] or not verify_password(approval.manager_password, approver.hashed_password):
+        raise HTTPException(status_code=403, detail="Menejer tasdig'i noto'g'ri")
+
+    # 1. Fetch the sale with items
+    result = await db.execute(
+        select(Sale)
+        .where(Sale.id == sale_id)
+        .options(
+            joinedload(Sale.items).joinedload(SaleItem.product),
+            joinedload(Sale.client)
+        )
+    )
+    db_sale = result.unique().scalars().first()
+    
+    if not db_sale:
+        raise HTTPException(status_code=404, detail="Sale not found")
+    
+    if db_sale.status == "refunded":
+        raise HTTPException(status_code=400, detail="Sale already refunded")
+
+    # 2. Restore stock for each item and Log
+    for item in db_sale.items:
+        if item.product:
+            item.product.stock += item.quantity
+            
+            # Log Stock Movement (Positive for refund)
+            db_move = StockMove(
+                product_id=item.product_id,
+                quantity=item.quantity,
+                type="refund",
+                reason=f"Vozvrat (Chek ID: {db_sale.id})",
+                created_by=current_user.id
+            )
+            db.add(db_move)
+    
+    # 3. Handle Client Balance and Bonuses (Deduct earned bonuses)
+    if db_sale.client:
+        if db_sale.debt_amount > 0:
+            db_sale.client.balance += db_sale.debt_amount 
+        
+        # Deduct earned bonus
+        if db_sale.bonus_earned > 0:
+            db_sale.client.bonus_balance -= db_sale.bonus_earned
+
+    # 4. Update Sale Status
+    db_sale.status = "refunded"
+    
+    await log_action(db, current_user.id, "VOZVRAT", f"Savdo qaytarildi. Chek ID: {sale_id}. Summa: {db_sale.total_amount:,.0f} so'm. Tasdiqladi: @{approver.username}")
+    
+    await db.commit()
+    
+    # Reload for response
+    result = await db.execute(
+        select(Sale)
+        .where(Sale.id == sale_id)
+        .options(
+            joinedload(Sale.items).joinedload(SaleItem.product),
+            joinedload(Sale.cashier),
+            joinedload(Sale.client)
+        )
+    )
+    return result.unique().scalars().first()
