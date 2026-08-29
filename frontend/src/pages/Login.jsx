@@ -14,6 +14,14 @@ import {
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { ModeToggle } from "@/components/mode-toggle";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogFooter,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 
 const Login = () => {
@@ -21,16 +29,17 @@ const Login = () => {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [conflictOpen, setConflictOpen] = useState(false);
   const navigate = useNavigate();
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
+  const doLogin = async ({ force = false } = {}) => {
     setLoading(true);
 
     try {
       const params = new URLSearchParams();
       params.append("username", username);
       params.append("password", password);
+      if (force) params.append("force", "true");
 
       const response = await api.post("/auth/token", params, {
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -49,6 +58,7 @@ const Login = () => {
       localStorage.setItem("userId", user_id);
       localStorage.setItem("permissions", permissions || "");
 
+      setConflictOpen(false);
       toast.success("Muvaffaqiyatli kirildi!", {
         description: `Xush kelibsiz, ${user}`,
       });
@@ -61,13 +71,24 @@ const Login = () => {
         navigate("/");
       }
     } catch (err) {
-      toast.error("Xatolik!", {
-        description:
-          err.response?.data?.detail || "Login yoki parol noto'g'ri.",
-      });
+      if (err.response?.status === 409) {
+        // Boshqa qurilmada aktiv sessiya bor — tasdiqlash oynasini ko'rsatamiz.
+        setConflictOpen(true);
+      } else {
+        setConflictOpen(false);
+        toast.error("Xatolik!", {
+          description:
+            err.response?.data?.detail || "Login yoki parol noto'g'ri.",
+        });
+      }
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleLogin = (e) => {
+    e.preventDefault();
+    doLogin();
   };
 
   return (
@@ -186,6 +207,39 @@ const Login = () => {
           </p>
         </div>
       </div>
+
+      <Dialog open={conflictOpen} onOpenChange={setConflictOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Boshqa qurilmada aktiv sessiya</DialogTitle>
+            <DialogDescription>
+              Bu foydalanuvchi hozir boshqa qurilmada tizimga kirgan. Agar
+              o'sha yerdan chiqishni unutgan bo'lsangiz, uni majburan
+              chiqarib, shu qurilmadan kirishingiz mumkin. Boshqa qurilmadagi
+              sessiya darhol yopiladi.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setConflictOpen(false)}
+              disabled={loading}
+            >
+              Bekor qilish
+            </Button>
+            <Button onClick={() => doLogin({ force: true })} disabled={loading}>
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Kirilmoqda...
+                </>
+              ) : (
+                "Chiqarib, shu yerdan kirish"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
