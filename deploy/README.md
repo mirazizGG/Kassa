@@ -134,9 +134,22 @@ cd C:\SmartKassa\deploy\scripts
 .\update.ps1
 ```
 
-Ikkalasi ham bir xil ishni qiladi: `git pull` → kerak bo'lsa `pip install` /
-`npm build` → backendni qayta ishga tushiradi (5-10 soniya). Yangilik bo'lmasa
-hech narsa qilmaydi.
+Ikkalasi ham bir xil ishni qiladi: **bazadan zahira nusxa oladi** →
+`git pull` → kerak bo'lsa `pip install` / `npm build` → backendni qayta ishga
+tushiradi (5-10 soniya). Yangilik bo'lmasa hech narsa qilmaydi.
+
+### Ma'lumotlar xavfsizmi?
+
+Ha. Yangilanish **faqat kodni** almashtiradi:
+
+- Baza (`market.db`) git'ga kirmaydi — `git pull` unga hech qachon tegmaydi
+- Yangilanish boshida avtomatik **zahira nusxa** olinadi (`backups/`)
+- Migratsiyalar faqat yangi ustun qo'shadi, hech narsa o'chirmaydi
+- Kassir yangilanish paytida savdo qilayotgan bo'lsa, savati saqlanib,
+  sahifa qayta yuklangach tiklanadi
+
+Yo'qolishi mumkin bo'lgan yagona narsa — brauzerdagi ochilmagan to'lov oynasi
+summasi (savatning o'zi emas).
 
 > **Savdo gavjum vaqtida yangilamang** — o'sha 5-10 soniyada chek yopib bo'lmaydi.
 
