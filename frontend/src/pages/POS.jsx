@@ -45,9 +45,33 @@ import {
 import { Label } from "@/components/ui/label";
 import { useHotkeys } from "react-hotkeys-hook";
 
+// Tugallanmagan savdo qoralamasi. Sahifa yangilanib ketsa (masalan dastur
+// yangilanganda yoki tasodifan F5 bosilsa) savat shu yerdan tiklanadi.
+const POS_DRAFT_KEY = "pos-draft";
+const readPosDraft = () => {
+  try {
+    const d = JSON.parse(localStorage.getItem(POS_DRAFT_KEY) || "{}");
+    return {
+      cart: Array.isArray(d.cart) ? d.cart : [],
+      selectedClient: d.selectedClient ?? null,
+      bonusSpent: Number(d.bonusSpent) || 0,
+    };
+  } catch {
+    return { cart: [], selectedClient: null, bonusSpent: 0 };
+  }
+};
+const clearPosDraft = () => {
+  try {
+    localStorage.removeItem(POS_DRAFT_KEY);
+  } catch {
+    /* jim */
+  }
+};
+
 const POS = () => {
+  const initialDraft = readPosDraft();
   const [searchTerm, setSearchTerm] = useState("");
-  const [cart, setCart] = useState([]);
+  const [cart, setCart] = useState(initialDraft.cart);
   const [heldCarts, setHeldCarts] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem("held-carts") || "[]");
@@ -64,7 +88,7 @@ const POS = () => {
     perevod: "",
     qarz: "",
   });
-  const [selectedClient, setSelectedClient] = useState(null);
+  const [selectedClient, setSelectedClient] = useState(initialDraft.selectedClient);
   const [debtClientSearch, setDebtClientSearch] = useState("");
   const [isQuickClientOpen, setIsQuickClientOpen] = useState(false);
   const [newClient, setNewClient] = useState({ name: "", phone: "" });
@@ -83,8 +107,9 @@ const POS = () => {
     useState(null);
   const [weightInput, setWeightInput] = useState("");
   const [amountInput, setAmountInput] = useState("");
-  const [bonusSpent, setBonusSpent] = useState(0);
-  const [managerApproval, setManagerApproval] = useState(null);
+  const [bonusSpent, setBonusSpent] = useState(initialDraft.bonusSpent);
+  // TODO: chegirma uchun menejer tasdig'i oynasi hali ulanmagan — hozircha null
+  const [managerApproval] = useState(null);
   const posContainerRef = useRef(null);
   const searchInputRef = useRef(null);
   const role = localStorage.getItem("role");
@@ -228,6 +253,22 @@ const POS = () => {
   useEffect(() => {
     localStorage.setItem("held-carts", JSON.stringify(heldCarts));
   }, [heldCarts]);
+
+  // Tugallanmagan savdoni saqlab boramiz (yangilanish/F5 dan keyin tiklash uchun)
+  useEffect(() => {
+    if (cart.length === 0) {
+      clearPosDraft();
+      return;
+    }
+    try {
+      localStorage.setItem(
+        POS_DRAFT_KEY,
+        JSON.stringify({ cart, selectedClient, bonusSpent }),
+      );
+    } catch {
+      /* jim */
+    }
+  }, [cart, selectedClient, bonusSpent]);
 
   const favoriteMutation = useMutation({
     mutationFn: (productId) => api.post(`/inventory/products/${productId}/toggle-favorite`),
