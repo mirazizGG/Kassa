@@ -47,7 +47,8 @@ def _git(*args: str) -> str:
 
 def _read_status() -> dict:
     try:
-        return json.loads(STATUS_FILE.read_text(encoding="utf-8"))
+        # utf-8-sig: PowerShell 5.1 `Set-Content -Encoding utf8` BOM qo'shadi
+        return json.loads(STATUS_FILE.read_text(encoding="utf-8-sig"))
     except Exception:
         return {}
 
@@ -133,24 +134,26 @@ async def start_update(
     await log_action(db, current_user.id, "TIZIM_YANGILASH", f"Dastur yangilanishi boshlandi: @{current_user.username}")
     await db.commit()
 
-    # update.ps1 ni ALOHIDA jarayonda ishga tushiramiz — backend qayta ishga
-    # tushganda ham u to'xtamasligi kerak.
+    # update.ps1 ni alohida jarayonda ishga tushiramiz. Backend qayta ishga
+    # tushganda ham (uni update.ps1 ning o'zi o'chiradi) bu jarayon davom etadi —
+    # Windows'da farzand jarayon ota o'lganda o'lmaydi.
+    RUN_DIR.mkdir(parents=True, exist_ok=True)
+    _spawn_log = open(RUN_DIR / "update.out.log", "w")
     if sys.platform == "win32":
-        DETACHED_PROCESS = 0x00000008
         CREATE_NEW_PROCESS_GROUP = 0x00000200
+        CREATE_NO_WINDOW = 0x08000000
         subprocess.Popen(
             ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
              "-File", str(UPDATE_SCRIPT), "-FromApp"],
             cwd=str(REPO_ROOT),
-            creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
-            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            close_fds=True,
+            creationflags=CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW,
+            stdin=subprocess.DEVNULL, stdout=_spawn_log, stderr=subprocess.STDOUT,
         )
     else:
         subprocess.Popen(
             ["pwsh", "-NoProfile", "-File", str(UPDATE_SCRIPT), "-FromApp"],
             cwd=str(REPO_ROOT), start_new_session=True,
-            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL, stdout=_spawn_log, stderr=subprocess.STDOUT,
         )
 
     return {"started": True}
