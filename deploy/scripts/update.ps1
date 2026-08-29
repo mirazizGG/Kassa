@@ -61,6 +61,18 @@ try {
 	Write-Step "Yangi commitlar:"
 	git --no-pager log --oneline "$local..$remote"
 
+	# --- Bazadan zahira nusxa (yangilanishdan oldin, ehtiyot uchun) ---
+	if ($FromApp) { Set-Status -Phase "zahira" -Message "Bazadan zahira nusxa olinmoqda..." -Running }
+	Write-Step "Zahira nusxa olinmoqda..."
+	Push-Location $BackendDir
+	$bk = python -c "from utils.backup import create_backup; p = create_backup(); print(p or '')" 2>&1
+	Pop-Location
+	if ($bk -and (Test-Path $bk)) {
+		Write-Ok "Zahira: $bk"
+	} else {
+		Write-Warn2 "Zahira olinmadi (SQLite emasmi?) - yangilanish davom etadi: $bk"
+	}
+
 	# --- Kodni tortib olish ---
 	if ($FromApp) { Set-Status -Phase "yuklanmoqda" -Message "Yangi kod yuklanmoqda..." -Running }
 	Write-Step "git pull..."

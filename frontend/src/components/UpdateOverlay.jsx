@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 const PHASE_TEXT = {
   boshlanmoqda: "Boshlanmoqda...",
   tekshirilmoqda: "GitHub tekshirilmoqda...",
+  zahira: "Bazadan zahira nusxa olinmoqda...",
   yuklanmoqda: "Yangi kod yuklanmoqda...",
   kutubxonalar: "Kutubxonalar o'rnatilmoqda...",
   qurilmoqda: "Dastur qurilmoqda (biroz vaqt oladi)...",
