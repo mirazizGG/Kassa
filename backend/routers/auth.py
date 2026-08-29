@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Form
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,7 +15,12 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/token", response_model=Token)
 @limiter.limit("5/minute")
-async def login_for_access_token(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
+async def login_for_access_token(
+    request: Request,
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    force: bool = Form(False),
+    db: AsyncSession = Depends(get_db),
+):
     result = await db.execute(select(Employee).where(Employee.username == form_data.username))
     user = result.scalars().first()
     
@@ -39,10 +44,19 @@ async def login_for_access_token(request: Request, form_data: OAuth2PasswordRequ
         )
 
     now = datetime.now(timezone.utc).replace(tzinfo=None)
-    if user.session_token and user.session_expires_at and user.session_expires_at > now:
+    has_active_session = bool(
+        user.session_token and user.session_expires_at and user.session_expires_at > now
+    )
+    if has_active_session and not force:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Bu foydalanuvchi boshqa qurilmada tizimga kirgan. Avval o'sha yerdan chiqish qiling.",
+            detail="Bu foydalanuvchi boshqa qurilmada tizimga kirgan. Boshqa qurilmadan chiqib, shu qurilmadan kirasizmi?",
+        )
+    if has_active_session and force:
+        # Foydalanuvchi login/parol bilan tasdiqladi — eski sessiyani majburan yopamiz.
+        await log_action(
+            db, user.id, "FORCE_LOGOUT",
+            f"Boshqa qurilmadagi sessiya majburan yopildi: @{user.username}",
         )
 
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)

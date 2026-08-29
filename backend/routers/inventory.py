@@ -92,8 +92,11 @@ async def create_supply(
 @router.get("/supplies", response_model=List[SupplyOut])
 async def get_supplies(
     product_id: Optional[int] = None,
+    current_user: Employee = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    if current_user.role not in ["admin", "manager", "warehouse"]:
+        raise HTTPException(status_code=403, detail="Ruxsat berilmagan")
     stmt = select(Supply).order_by(Supply.created_at.desc())
     if product_id:
         stmt = stmt.where(Supply.product_id == product_id)
