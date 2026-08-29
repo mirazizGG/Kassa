@@ -91,7 +91,7 @@ const Layout = () => {
   return (
     <div className="flex h-full w-full bg-background transition-colors duration-300">
       <UpdateOverlay />
-      <UpdateButton isCashier={role === "cashier"} />
+      {role === "cashier" && <UpdateButton variant="floating" />}
       {/* Sidebar */}
       {/* Sidebar - Hide for Cashier */}
       {role !== "cashier" && (
@@ -179,6 +179,8 @@ const Layout = () => {
                 </div>
               )}
             </div>
+
+            <UpdateButton variant="sidebar" expanded={isSidebarOpen} />
 
             <Button
               variant="destructive"

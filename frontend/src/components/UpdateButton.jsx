@@ -13,11 +13,13 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
 /**
- * Kichik suzuvchi "Dasturni yangilash" tugmasi. Barcha xodimlarga ko'rinadi,
- * lekin faqat server `.env` da ALLOW_SELF_UPDATE=true bo'lsagina.
- * Bosilганда serverda update.ps1 ishga tushadi; UpdateOverlay "kuting" oynasini ko'rsatadi.
+ * "Dasturni yangilash" boshqaruvi. Barcha xodimlarga ko'rinadi, lekin faqat
+ * server `.env` da ALLOW_SELF_UPDATE=true bo'lsagina.
+ *
+ * variant="sidebar"   -> menyu pastidagi ozoda tugma (admin/menejer/omborchi)
+ * variant="floating"  -> kichik doira, o'ng-yuqorida (kassir)
  */
-export default function UpdateButton({ isCashier = false }) {
+export default function UpdateButton({ variant = "sidebar", expanded = true }) {
   const [enabled, setEnabled] = useState(false);
   const [available, setAvailable] = useState(false);
   const [behind, setBehind] = useState(0);
@@ -52,13 +54,13 @@ export default function UpdateButton({ isCashier = false }) {
       setConfirmOpen(false);
       window.dispatchEvent(new Event("smartkassa:update-started"));
     } catch (err) {
-      const msg = err.response?.data?.detail || "Yangilanishni boshlab bo'lmadi";
       if (err.response?.status === 409) {
-        // allaqachon ketyapti — overlay o'zi ko'rsatadi
         setConfirmOpen(false);
         window.dispatchEvent(new Event("smartkassa:update-started"));
       } else {
-        toast.error("Xatolik", { description: msg });
+        toast.error("Xatolik", {
+          description: err.response?.data?.detail || "Yangilanishni boshlab bo'lmadi",
+        });
       }
     } finally {
       setStarting(false);
@@ -67,22 +69,56 @@ export default function UpdateButton({ isCashier = false }) {
 
   if (!enabled) return null;
 
-  return (
-    <>
+  const label = available
+    ? `Yangilanish bor${behind ? ` (${behind})` : ""}`
+    : "Dasturni yangilash";
+
+  const trigger =
+    variant === "floating" ? (
       <button
         type="button"
         onClick={() => setConfirmOpen(true)}
-        title="Dasturni yangilash"
-        className={`fixed right-4 z-[60] flex items-center gap-2 rounded-full border bg-card px-3 py-2 text-xs font-semibold shadow-lg transition-all hover:scale-105 ${
-          isCashier ? "bottom-20" : "bottom-4"
-        } ${available ? "border-amber-400 text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}
+        title={label}
+        className={`fixed right-3 top-3 z-[60] flex items-center gap-2 rounded-full border bg-card/90 backdrop-blur px-2.5 py-2 text-xs font-semibold shadow-md transition-all hover:scale-105 ${
+          available
+            ? "border-amber-400 text-amber-600 dark:text-amber-400 pr-3"
+            : "text-muted-foreground"
+        }`}
       >
-        <RefreshCw className="h-4 w-4" />
-        {available ? `Yangilanish bor${behind ? ` (${behind})` : ""}` : "Yangilash"}
-        {available && (
-          <span className="absolute -right-1 -top-1 h-3 w-3 animate-pulse rounded-full bg-amber-500" />
+        <RefreshCw className={`h-4 w-4 ${available ? "animate-[spin_3s_linear_infinite]" : ""}`} />
+        {available && <span>{label}</span>}
+      </button>
+    ) : (
+      <button
+        type="button"
+        onClick={() => setConfirmOpen(true)}
+        title={label}
+        className={`group relative flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
+          expanded ? "" : "justify-center px-0"
+        } ${
+          available
+            ? "bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-950/30 dark:text-amber-400"
+            : "text-muted-foreground hover:bg-muted"
+        }`}
+      >
+        <span className="relative flex h-5 w-5 shrink-0 items-center justify-center">
+          <RefreshCw className="h-[18px] w-[18px]" />
+          {available && (
+            <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-amber-500 ring-2 ring-card" />
+          )}
+        </span>
+        {expanded && <span className="truncate">{label}</span>}
+        {!expanded && (
+          <span className="pointer-events-none absolute left-16 z-50 ml-2 whitespace-nowrap rounded-md border bg-popover px-2 py-1 text-sm text-popover-foreground opacity-0 shadow-md transition-opacity group-hover:opacity-100">
+            {label}
+          </span>
         )}
       </button>
+    );
+
+  return (
+    <>
+      {trigger}
 
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent>
