@@ -351,7 +351,7 @@ const Finance = () => {
             value={
               statsLoading
                 ? "..."
-                : `${stats?.totalCost?.toLocaleString("de-DE") || 0} so'm`
+                : `${stats?.totalCost?.toLocaleString("en-US") || 0} so'm`
             }
             icon={Receipt}
             type="negative"
@@ -362,7 +362,7 @@ const Finance = () => {
           value={
             statsLoading
               ? "..."
-              : `${stats?.totalExpenses?.toLocaleString("de-DE") || 0} so'm`
+              : `${stats?.totalExpenses?.toLocaleString("en-US") || 0} so'm`
           }
           icon={TrendingDown}
           type="negative"
