@@ -1,0 +1,21 @@
+# Cloudflare Tunnel sozlamasi.
+# Buni  C:\Users\<foydalanuvchi>\.cloudflared\config.yml  ga nusxalang
+# va <...> joylarni to'ldiring.
+#
+# TUNNEL_ID va credentials fayli `cloudflared tunnel create kassa` buyrug'idan keyin paydo bo'ladi.
+
+tunnel: <TUNNEL_ID>
+credentials-file: C:\Users\<FOYDALANUVCHI>\.cloudflared\<TUNNEL_ID>.json
+
+# Ulanish barqarorligi
+originRequest:
+  connectTimeout: 30s
+  noTLSVerify: false
+
+ingress:
+  # Butun tizim bitta manzildan (frontend + /api + /uploads)
+  - hostname: kassa.<SIZNING-DOMEN>
+    service: http://localhost:8080
+
+  # Majburiy oxirgi qoida
+  - service: http_status:404

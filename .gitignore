@@ -89,3 +89,8 @@ backend/.env
 # Local uploaded files
 backend/uploads/
 
+# Deploy runtime (pid/log fayllar) — lekin deploy/env/*.example saqlanadi
+deploy/run/
+!deploy/env/
+!deploy/env/*.example
+
