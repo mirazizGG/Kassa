@@ -138,6 +138,7 @@ class SaleItem(Base):
     product_id = Column(Integer, ForeignKey("products.id"))
     quantity = Column(Float) # Nechta?
     price = Column(Float) # Qanchadan sotildi?
+    buy_price = Column(Float, nullable=True) # Sotuv paytidagi tannarx (foyda hisobi uchun snapshot)
     
     # Relationships
     sale = relationship("Sale", back_populates="items")
@@ -305,10 +306,23 @@ def ensure_employee_session_columns(sync_connection):
         sync_connection.exec_driver_sql("ALTER TABLE employees ADD COLUMN session_expires_at DATETIME")
 
 
+def ensure_sale_item_columns(sync_connection):
+    columns = {column["name"] for column in inspect(sync_connection).get_columns("sale_items")}
+    if "buy_price" not in columns:
+        sync_connection.exec_driver_sql("ALTER TABLE sale_items ADD COLUMN buy_price FLOAT")
+        # Eski satrlar uchun hozirgi tannarxni boshlang'ich qiymat sifatida yozamiz.
+        sync_connection.exec_driver_sql(
+            "UPDATE sale_items SET buy_price = ("
+            "SELECT products.buy_price FROM products WHERE products.id = sale_items.product_id"
+            ") WHERE buy_price IS NULL"
+        )
+
+
 async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await conn.run_sync(ensure_employee_session_columns)
+        await conn.run_sync(ensure_sale_item_columns)
 
 async def get_db():
     async with SessionLocal() as db:
