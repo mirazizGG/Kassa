@@ -9,7 +9,23 @@ from sqlalchemy import select
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-limiter = Limiter(key_func=get_remote_address)
+
+def _real_client_ip(request: Request) -> str:
+    """Rate-limit key that works behind a reverse proxy (Caddy) and Cloudflare.
+
+    Without this every request looks like it comes from 127.0.0.1 and the whole
+    shop shares one rate-limit bucket.
+    """
+    cf_ip = request.headers.get("cf-connecting-ip")
+    if cf_ip:
+        return cf_ip.strip()
+    xff = request.headers.get("x-forwarded-for")
+    if xff:
+        return xff.split(",")[0].strip()
+    return get_remote_address(request)
+
+
+limiter = Limiter(key_func=_real_client_ip)
 
 from database import get_db, Employee
 
