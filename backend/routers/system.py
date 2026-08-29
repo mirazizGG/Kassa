@@ -156,4 +156,6 @@ async def start_update(
             stdin=subprocess.DEVNULL, stdout=_spawn_log, stderr=subprocess.STDOUT,
         )
 
+    # Bola jarayon o'z nusxasini oldi — bizniki yopilaveradi
+    _spawn_log.close()
     return {"started": True}
