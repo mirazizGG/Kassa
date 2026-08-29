@@ -120,14 +120,25 @@ git commit -m "..."
 git push
 ```
 
-**Do'kondagi SERVER kompyuterda** (savdo vaqti emas, tanaffusda yoki kechqurun):
+**Yangilashning 2 usuli:**
+
+**A) Ilova ichidan (oson) —** `backend\.env` da `ALLOW_SELF_UPDATE=true` bo'lsa.
+Ekranning chap-pastida **"Yangilash"** tugmasi chiqadi (GitHub'da yangi versiya
+bo'lsa — sariq "Yangilanish bor"). Istalgan xodim bosadi → ogohlantirish →
+"kuting" oynasi → tugagach barcha kompyuterlar o'zi yangilanadi. Serverga
+qo'l tekkizish shart emas.
+
+**B) Qo'lda (server kompyuterda):**
 ```powershell
 cd C:\SmartKassa\deploy\scripts
 .\update.ps1
 ```
 
-`update.ps1` o'zi hal qiladi: `git pull` → kerak bo'lsa `pip install` / `npm build` →
-faqat backendni qayta ishga tushiradi (5-10 soniya). Yangilik bo'lmasa hech narsa qilmaydi.
+Ikkalasi ham bir xil ishni qiladi: `git pull` → kerak bo'lsa `pip install` /
+`npm build` → backendni qayta ishga tushiradi (5-10 soniya). Yangilik bo'lmasa
+hech narsa qilmaydi.
+
+> **Savdo gavjum vaqtida yangilamang** — o'sha 5-10 soniyada chek yopib bo'lmaydi.
 
 > SERVER kompyuterda **hech qachon kod o'zgartirmang** — faqat `update.ps1`.
 > Aks holda `git pull` konflikt beradi.

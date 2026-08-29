@@ -1,4 +1,4 @@
-# SmartKassa — hamma xizmatlarni ishga tushirish (backend + Caddy + Cloudflare Tunnel).
+# SmartKassa - hamma xizmatlarni ishga tushirish (backend + Caddy + Cloudflare Tunnel).
 # Kompyuter yonganda avtomatik ishlashi uchun: install-autostart.ps1 ni bir marta bajaring.
 
 . "$PSScriptRoot\_paths.ps1"
@@ -43,14 +43,14 @@ if (Get-PidFromFile $CaddyPid) {
 		-RedirectStandardOutput (Join-Path $RunDir "caddy.out.log") `
 		-RedirectStandardError  (Join-Path $RunDir "caddy.err.log")
 	$p.Id | Out-File $CaddyPid -Encoding ascii
-	Write-Ok "Caddy ishga tushdi (PID $($p.Id)) — http://localhost:$CaddyPort"
+	Write-Ok "Caddy ishga tushdi (PID $($p.Id)) - http://localhost:$CaddyPort"
 }
 
 # --- 3. Cloudflare Tunnel ---
 if (Get-PidFromFile $CloudflaredPid) {
 	Write-Warn2 "Cloudflared allaqachon ishlayapti"
 } elseif (-not (Get-Command cloudflared -ErrorAction SilentlyContinue)) {
-	Write-Warn2 "cloudflared topilmadi — tashqi kirish ishlamaydi (lokal LAN ishlayveradi)."
+	Write-Warn2 "cloudflared topilmadi - tashqi kirish ishlamaydi (lokal LAN ishlayveradi)."
 	Write-Warn2 "O'rnatish: winget install Cloudflare.cloudflared"
 } else {
 	$p = Start-Process -FilePath "cloudflared" -ArgumentList "tunnel run" `

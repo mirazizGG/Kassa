@@ -1,4 +1,4 @@
-# SmartKassa — hamma xizmatlarni to'xtatish.
+# SmartKassa - hamma xizmatlarni to'xtatish.
 
 . "$PSScriptRoot\_paths.ps1"
 

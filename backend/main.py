@@ -13,7 +13,7 @@ from slowapi.errors import RateLimitExceeded
 from database import init_db, engine, Base, SessionLocal, Employee
 from core import get_password_hash, limiter
 from bot import bot, dp, check_debts
-from routers import auth, inventory, pos, crm, finance, tasks, sales, audit, settings, suppliers
+from routers import auth, inventory, pos, crm, finance, tasks, sales, audit, settings, suppliers, system
 from fastapi.staticfiles import StaticFiles
 
 # Configure Rate Limiting - MOVED TO core.py
@@ -121,6 +121,7 @@ app.include_router(sales.router)
 app.include_router(audit.router)
 app.include_router(settings.router)
 app.include_router(suppliers.router)
+app.include_router(system.router)
 
 # Static files for invoices
 if not os.path.exists("uploads"):

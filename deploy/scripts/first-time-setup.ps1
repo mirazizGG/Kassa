@@ -1,4 +1,4 @@
-# SmartKassa — SERVER kompyuterda bir marta bajariladigan sozlash.
+# SmartKassa - SERVER kompyuterda bir marta bajariladigan sozlash.
 
 . "$PSScriptRoot\_paths.ps1"
 
@@ -29,7 +29,7 @@ if (-not (Test-Path $beEnv)) {
 	Write-Ok "backend\.env allaqachon mavjud"
 }
 
-# frontend/.env.production repo bilan birga keladi (VITE_API_URL=/api) — o'zgartirish shart emas.
+# frontend/.env.production repo bilan birga keladi (VITE_API_URL=/api) - o'zgartirish shart emas.
 
 # --- Kutubxonalar ---
 Write-Step "Backend kutubxonalari (pip install)..."

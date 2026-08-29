@@ -1,4 +1,4 @@
-# SmartKassa — kompyuter yonganda avtomatik ishga tushishi uchun
+# SmartKassa - kompyuter yonganda avtomatik ishga tushishi uchun
 # Windows "Scheduled Task" yaratadi.
 #
 # Administrator PowerShell'da bajaring.

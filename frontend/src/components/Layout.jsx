@@ -17,6 +17,9 @@ import { Button } from "@/components/ui/button";
 import { ModeToggle } from "@/components/mode-toggle";
 import api from "../api/axios";
 import { toast } from "sonner";
+import UpdateButton from "./UpdateButton";
+import UpdateOverlay from "./UpdateOverlay";
+import { useAppVersion } from "../hooks/useAppVersion";
 
 const Layout = () => {
   const navigate = useNavigate();
@@ -82,8 +85,13 @@ const Layout = () => {
       : []),
   ];
 
+  // Boshqa kompyuterda yangilanish bo'lsa, bu oynani ham avtomatik yangilaydi
+  useAppVersion();
+
   return (
     <div className="flex h-full w-full bg-background transition-colors duration-300">
+      <UpdateOverlay />
+      <UpdateButton isCashier={role === "cashier"} />
       {/* Sidebar */}
       {/* Sidebar - Hide for Cashier */}
       {role !== "cashier" && (

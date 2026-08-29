@@ -1,4 +1,4 @@
-# SmartKassa — xizmatlar holati.
+# SmartKassa - xizmatlar holati.
 
 . "$PSScriptRoot\_paths.ps1"
 
