@@ -126,7 +126,11 @@ async def get_client_history(
     }
 
 @router.get("/clients/{client_id}", response_model=ClientOut)
-async def get_client(client_id: int, db: AsyncSession = Depends(get_db)):
+async def get_client(
+    client_id: int,
+    current_user: Employee = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     result = await db.execute(select(Client).where(Client.id == client_id))
     client = result.scalars().first()
     if not client:

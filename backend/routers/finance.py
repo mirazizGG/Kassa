@@ -3,6 +3,26 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, case
 from typing import List, Optional
 from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
+
+LOCAL_TZ = ZoneInfo("Asia/Tashkent")
+
+
+def local_today_start() -> datetime:
+    """Mahalliy (Toshkent) vaqt bo'yicha bugungi kun boshini naive UTC ko'rinishida qaytaradi."""
+    now_local = datetime.now(LOCAL_TZ)
+    start_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+    return start_local.astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def local_day_bounds(day):
+    """Mahalliy taqvim kuni uchun [boshi, oxiri) ni naive UTC ko'rinishida qaytaradi."""
+    start_local = datetime(day.year, day.month, day.day, tzinfo=LOCAL_TZ)
+    end_local = start_local + timedelta(days=1)
+    return (
+        start_local.astimezone(timezone.utc).replace(tzinfo=None),
+        end_local.astimezone(timezone.utc).replace(tzinfo=None),
+    )
 
 from database import get_db, Expense, Payment, Employee, Client, Product, Sale, SaleItem, StoreSetting, Task
 from schemas import ExpenseCreate, ExpenseOut, PaymentCreate
@@ -58,10 +78,9 @@ async def get_stats(
     end_date = parse_date(end_date, datetime.max.time())
     # 1. Daily Sales or custom range
     if not start_date:
-        today = datetime.now(timezone.utc).date()
-        start_date = datetime.combine(today, datetime.min.time())
+        start_date = local_today_start()
     if not end_date:
-        end_date = datetime.now(timezone.utc)
+        end_date = datetime.now(timezone.utc).replace(tzinfo=None)
     
     sales_query = select(func.sum(Sale.total_amount)).where(
         Sale.created_at >= start_date,
@@ -74,9 +93,9 @@ async def get_stats(
     sales_result = await db.execute(sales_query)
     sales_total = sales_result.scalar() or 0
     
-    # 1.1 Total Cost (Buy Price * Quantity)
+    # 1.1 Total Cost (sotuv paytidagi tannarx * miqdor; eski satrlar uchun joriy narx zaxira)
     cost_query = (
-        select(func.sum(SaleItem.quantity * Product.buy_price))
+        select(func.sum(SaleItem.quantity * func.coalesce(SaleItem.buy_price, Product.buy_price)))
         .join(Product, SaleItem.product_id == Product.id)
         .join(Sale, SaleItem.sale_id == Sale.id)
         .where(
@@ -246,19 +265,18 @@ async def get_profit_chart(
     if current_user.role not in ["admin", "manager"]:
         raise HTTPException(status_code=403, detail="Ruxsat berilmagan")
     # Returns last N days profit/revenue/expense
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(LOCAL_TZ).date()
     start_date = today - timedelta(days=days-1)
-    
+
     results = []
     for i in range(days):
         day = start_date + timedelta(days=i)
-        day_start = datetime.combine(day, datetime.min.time())
-        day_end = datetime.combine(day, datetime.max.time())
-        
+        day_start, day_end = local_day_bounds(day)
+
         # Revenue
         rev_query = select(func.sum(Sale.total_amount)).where(
             Sale.created_at >= day_start,
-            Sale.created_at <= day_end,
+            Sale.created_at < day_end,
             Sale.status == "completed"
         )
         rev_result = await db.execute(rev_query)
@@ -267,19 +285,19 @@ async def get_profit_chart(
         # Expenses
         exp_query = select(func.sum(Expense.amount)).where(
             Expense.created_at >= day_start,
-            Expense.created_at <= day_end
+            Expense.created_at < day_end
         )
         exp_result = await db.execute(exp_query)
         expenses = exp_result.scalar() or 0
         
-        # Cost of Goods Sold (COGS)
+        # Cost of Goods Sold (COGS) — sotuv paytidagi tannarx bo'yicha
         cost_query = (
-            select(func.sum(SaleItem.quantity * Product.buy_price))
+            select(func.sum(SaleItem.quantity * func.coalesce(SaleItem.buy_price, Product.buy_price)))
             .join(Product, SaleItem.product_id == Product.id)
             .join(Sale, SaleItem.sale_id == Sale.id)
             .where(
                 Sale.created_at >= day_start,
-                Sale.created_at <= day_end,
+                Sale.created_at < day_end,
                 Sale.status == "completed"
             )
         )
@@ -312,20 +330,19 @@ async def get_dashboard_chart(
     if current_user.role == "cashier":
         employee_id = current_user.id
     # Returns last 7 days sales
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(LOCAL_TZ).date()
     start_date = today - timedelta(days=6) # 7 days including today
-    
+
     labels = []
     data = []
-    
+
     for i in range(7):
         day = start_date + timedelta(days=i)
-        day_start = datetime.combine(day, datetime.min.time())
-        day_end = datetime.combine(day, datetime.max.time())
-        
+        day_start, day_end = local_day_bounds(day)
+
         query = select(func.sum(Sale.total_amount)).where(
             Sale.created_at >= day_start,
-            Sale.created_at <= day_end,
+            Sale.created_at < day_end,
             Sale.status == "completed"
         )
         if employee_id:
@@ -345,8 +362,11 @@ async def get_top_products(
     employee_id: Optional[int] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
+    current_user: Employee = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    if current_user.role == "cashier":
+        employee_id = current_user.id
     start_date = parse_date(start_date, datetime.min.time())
     end_date = parse_date(end_date, datetime.max.time())
     query = (
@@ -375,8 +395,11 @@ async def get_expenses(
     employee_id: Optional[int] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
+    current_user: Employee = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    if current_user.role == "cashier":
+        employee_id = current_user.id
     start_date = parse_date(start_date, datetime.min.time())
     end_date = parse_date(end_date, datetime.max.time())
     query = select(Expense).options(joinedload(Expense.creator))
@@ -418,10 +441,15 @@ async def create_payment(
     db: AsyncSession = Depends(get_db)
 ):
     # Payment usually means client paying back debt
+    from database import Shift
+    open_shift = await db.scalar(
+        select(Shift).where(Shift.cashier_id == current_user.id, Shift.status == "open")
+    )
     db_payment = Payment(
         **payment.model_dump(),
         created_by=current_user.id,
-        created_at=datetime.now(timezone.utc)
+        created_at=datetime.now(timezone.utc),
+        shift_id=open_shift.id if open_shift else None,
     )
     db.add(db_payment)
     
@@ -551,7 +579,10 @@ async def export_sales_excel(
     )
 
 @router.get("/categories")
-async def get_expense_categories(db: AsyncSession = Depends(get_db)):
+async def get_expense_categories(
+    current_user: Employee = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     # You might have an ExpenseCategory table, let's check database.py
     # From database.py: class ExpenseCategory(Base): __tablename__ = "expense_categories"
     from database import ExpenseCategory
