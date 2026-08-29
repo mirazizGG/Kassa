@@ -140,7 +140,7 @@ class SaleItemOut(SaleItemBase):
     model_config = ConfigDict(from_attributes=True)
 
 class SaleCreate(BaseModel):
-    total_amount: float
+    total_amount: float = Field(gt=0)
     payment_method: str
     client_id: Optional[int] = None
     items: List[SaleItemBase]
@@ -211,7 +211,7 @@ class ShiftOut(BaseModel):
 class ExpenseBase(BaseModel):
     reason: str
     category: str = "Boshqa"
-    amount: float
+    amount: float = Field(gt=0, description="Xarajat summasi musbat bo'lishi kerak")
 
 class ExpenseCreate(ExpenseBase):
     pass
@@ -224,7 +224,7 @@ class ExpenseOut(ExpenseBase):
     model_config = ConfigDict(from_attributes=True)
 
 class PaymentCreate(BaseModel):
-    amount: float
+    amount: float = Field(gt=0, description="To'lov summasi musbat bo'lishi kerak")
     payment_method: str = "cash"
     note: Optional[str] = None
     client_id: int

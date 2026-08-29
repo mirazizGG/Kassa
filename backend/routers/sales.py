@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, func
 from typing import List, Optional
@@ -31,6 +31,7 @@ def parse_date(date_val: Optional[str], default_time=datetime.min.time()):
 @router.post("/", response_model=SaleOut)
 async def create_sale(
     sale: SaleCreate,
+    background_tasks: BackgroundTasks,
     current_user: Employee = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
@@ -53,6 +54,9 @@ async def create_sale(
         if not product:
             raise HTTPException(status_code=404, detail=f"Product {item.product_id} not found")
 
+        if item.price <= 0 or item.quantity <= 0:
+            raise HTTPException(status_code=400, detail=f"Narx va miqdor musbat bo'lishi kerak: {product.name}")
+
         if item.price < product.sell_price:
             if not manager_approved:
                 if not sale.manager_username or not sale.manager_password:
@@ -66,17 +70,37 @@ async def create_sale(
 
         if product.stock < item.quantity:
             raise HTTPException(status_code=400, detail=f"Mahsulot yetarli emas: {product.name}. Mavjud: {product.stock}")
-        
+
         # Deduct stock
         product.stock -= item.quantity
         total_amount_check += item.quantity * item.price
-        
-        # Prepare item data for DB
+
+        # Prepare item data for DB (tannarxni sotuv paytida muzlatib qo'yamiz)
         sale_items_data.append(SaleItem(
             product_id=product.id,
             quantity=item.quantity,
-            price=item.price
+            price=item.price,
+            buy_price=product.buy_price,
         ))
+
+    # Chek summasi mahsulotlar yig'indisiga mos kelishini tekshiramiz (1 so'mgacha xatolik ruxsat).
+    if abs(total_amount_check - sale.total_amount) > 1:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Chek summasi mahsulotlarga mos emas. Hisoblangan: {total_amount_check:,.0f}, kelgan: {sale.total_amount:,.0f}",
+        )
+
+    # To'lov qismlari yig'indisi chek summasiga teng bo'lishi kerak.
+    payments_sum = (
+        sale.card_amount + sale.transfer_amount + sale.debt_amount
+        + sale.bonus_spent + sale.cash_amount
+    )
+    # cash_amount ko'pincha qaytim bilan kiritiladi — u yetarli bo'lsa qoldig'i naqd deb hisoblanadi.
+    non_cash_sum = sale.card_amount + sale.transfer_amount + sale.debt_amount + sale.bonus_spent
+    if non_cash_sum - sale.total_amount > 1:
+        raise HTTPException(status_code=400, detail="Naqd bo'lmagan to'lovlar chek summasidan oshib ketdi")
+    if sale.cash_amount and payments_sum + 1 < sale.total_amount:
+        raise HTTPException(status_code=400, detail="To'lovlar yig'indisi chek summasidan kam")
 
     # Cash entered by the buyer can include change; persist only the net amount left in the drawer.
     net_cash_amount = max(
@@ -151,14 +175,16 @@ async def create_sale(
     await log_action(db, current_user.id, "YANGI_SOTUV", f"Summa: {db_sale.total_amount:,.0f} so'm. Usul: {db_sale.payment_method}. Chek ID: {db_sale.id}")
     
     await db.commit()
-    
-    # 6. Safety Backup (Automatic)
-    try:
-        from utils.backup import create_backup
-        create_backup()
-    except:
-        pass
-    
+
+    # 6. Safety Backup — savdoni sekinlashtirmaslik uchun fon vazifasi sifatida
+    def _safe_backup():
+        try:
+            from utils.backup import create_backup
+            create_backup()
+        except Exception:
+            pass
+    background_tasks.add_task(_safe_backup)
+
     # Reload with relationships for response_model
     result = await db.execute(
         select(Sale)
@@ -280,6 +306,7 @@ async def get_sales(
 @router.post("/{sale_id}/refund", response_model=SaleOut)
 async def refund_sale(
     sale_id: int,
+    approval: RefundApproval,
     current_user: Employee = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
@@ -323,14 +350,18 @@ async def refund_sale(
             )
             db.add(db_move)
     
-    # 3. Handle Client Balance and Bonuses (Deduct earned bonuses)
+    # 3. Handle Client Balance and Bonuses
     if db_sale.client:
         if db_sale.debt_amount > 0:
-            db_sale.client.balance += db_sale.debt_amount 
-        
-        # Deduct earned bonus
+            db_sale.client.balance += db_sale.debt_amount
+
+        # Bu savdodan olingan bonusni qaytarib olamiz
         if db_sale.bonus_earned > 0:
             db_sale.client.bonus_balance -= db_sale.bonus_earned
+
+        # Bu savdoda ishlatilgan bonusni mijozga qaytaramiz
+        if db_sale.bonus_spent > 0:
+            db_sale.client.bonus_balance += db_sale.bonus_spent
 
     # 4. Update Sale Status
     db_sale.status = "refunded"

@@ -8,12 +8,26 @@ from zoneinfo import ZoneInfo
 
 
 # ... (imports)
-from database import get_db, Sale, SaleItem, Product, Shift, Employee, Client
+from database import get_db, Sale, SaleItem, Product, Shift, Employee, Client, Payment
 from schemas import SaleCreate, SaleOut, ShiftOpen, ShiftClose, ShiftOut
 from core import get_current_user
 from routers.audit import log_action
 
 router = APIRouter(prefix="/pos", tags=["pos"])
+
+CASH_METHODS = ("cash", "naqd")
+
+
+async def shift_cash_payments_total(db, shift_id: int) -> float:
+    """Smena davomida naqd qabul qilingan mijoz qarz to'lovlari yig'indisi."""
+    from sqlalchemy import func
+    total = await db.scalar(
+        select(func.coalesce(func.sum(Payment.amount), 0)).where(
+            Payment.shift_id == shift_id,
+            Payment.payment_method.in_(CASH_METHODS),
+        )
+    )
+    return total or 0
 
 
 def local_time_to_sale_timestamp(value: datetime) -> datetime:
@@ -79,7 +93,7 @@ async def get_shifts_history(
         shift.total_card = totals.total_card or 0
         shift.total_transfer = totals.total_transfer or 0
         shift.total_debt = totals.total_debt or 0
-        shift.expected_cash = shift.opening_balance + shift.total_cash
+        shift.expected_cash = shift.opening_balance + shift.total_cash + await shift_cash_payments_total(db, shift.id)
 
     return shifts
 
@@ -118,7 +132,11 @@ async def get_active_shift(
         shift.total_card = totals.total_card or 0
         shift.total_transfer = totals.total_transfer or 0
         shift.total_debt = totals.total_debt or 0
-        
+        shift.expected_cash = (
+            shift.opening_balance + shift.total_cash
+            + await shift_cash_payments_total(db, shift.id)
+        )
+
     return shift
 
 @router.post("/shifts/open", response_model=ShiftOut)
@@ -176,7 +194,8 @@ async def close_shift(
             Sale.status == "completed",
         )
     )
-    expected_cash = db_shift.opening_balance + (cash_total or 0)
+    debt_cash = await shift_cash_payments_total(db, db_shift.id)
+    expected_cash = db_shift.opening_balance + (cash_total or 0) + debt_cash
     cash_difference = shift_data.closing_balance - expected_cash
     if abs(cash_difference) > 0.01 and not (shift_data.note or "").strip():
         raise HTTPException(status_code=400, detail="Kassa farqi uchun sabab yozing")
