@@ -1,0 +1,35 @@
+# SmartKassa — bitta manzildan frontend + backend (reverse proxy).
+# Caddy 127.0.0.1:8080 va LAN IP:8080 da tinglaydi.
+# Cloudflare Tunnel ham, do'kon ichidagi kompyuterlar ham shu portga ulanadi.
+#
+# Frontend `/api` ga so'rov yuboradi -> Caddy `/api` ni olib tashlab backendga uzatadi.
+# Shu tufayli CORS umuman kerak emas (hammasi bitta origin).
+
+:8080 {
+	encode gzip zstd
+
+	# Backend API
+	handle /api/* {
+		uri strip_prefix /api
+		reverse_proxy 127.0.0.1:8000
+	}
+
+	# Nakladnoy rasmlari va boshqa yuklamalar ham backenddan
+	handle /uploads/* {
+		reverse_proxy 127.0.0.1:8000
+	}
+
+	# Frontend (statik build) — noma'lum yo'llar index.html ga (SPA routing)
+	handle {
+		root * {$KASSA_DIST}
+		try_files {path} /index.html
+		file_server
+	}
+
+	log {
+		output file {$KASSA_DEPLOY}/run/caddy.log {
+			roll_size 10MB
+			roll_keep 5
+		}
+	}
+}
