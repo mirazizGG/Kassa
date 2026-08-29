@@ -73,7 +73,7 @@ export default function UpdateButton({ isCashier = false }) {
         type="button"
         onClick={() => setConfirmOpen(true)}
         title="Dasturni yangilash"
-        className={`fixed left-3 z-40 flex items-center gap-2 rounded-full border bg-card px-3 py-2 text-xs font-semibold shadow-lg transition-all hover:scale-105 ${
+        className={`fixed right-4 z-[60] flex items-center gap-2 rounded-full border bg-card px-3 py-2 text-xs font-semibold shadow-lg transition-all hover:scale-105 ${
           isCashier ? "bottom-20" : "bottom-4"
         } ${available ? "border-amber-400 text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}
       >
