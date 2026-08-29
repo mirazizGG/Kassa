@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import api from "../api/axios";
 
 /**
@@ -24,9 +25,14 @@ export function useAppVersion({ pollMs = 60000 } = {}) {
         if (firstCommit.current == null) {
           firstCommit.current = data.commit;
         } else if (data.commit !== firstCommit.current && data.commit !== "?") {
-          // Versiya o'zgardi — sahifani yangilaymiz
+          // Versiya o'zgardi — foydalanuvchini ogohlantirib, sahifani yangilaymiz.
+          // Tugallanmagan savdo POS'da localStorage'ga saqlanadi va tiklanadi.
           setReloadSoon(true);
-          setTimeout(() => window.location.reload(), 3000);
+          toast.info("Yangi versiya o'rnatildi", {
+            description: "Sahifa hozir yangilanadi...",
+            duration: 4000,
+          });
+          setTimeout(() => window.location.reload(), 4000);
           return; // pollingni to'xtatamiz
         }
       } catch {
