@@ -88,7 +88,9 @@ const POS = () => {
     perevod: "",
     qarz: "",
   });
-  const [selectedClient, setSelectedClient] = useState(initialDraft.selectedClient);
+  const [selectedClient, setSelectedClient] = useState(
+    initialDraft.selectedClient,
+  );
   const [debtClientSearch, setDebtClientSearch] = useState("");
   const [isQuickClientOpen, setIsQuickClientOpen] = useState(false);
   const [newClient, setNewClient] = useState({ name: "", phone: "" });
@@ -108,8 +110,6 @@ const POS = () => {
   const [weightInput, setWeightInput] = useState("");
   const [amountInput, setAmountInput] = useState("");
   const [bonusSpent, setBonusSpent] = useState(initialDraft.bonusSpent);
-  // TODO: chegirma uchun menejer tasdig'i oynasi hali ulanmagan — hozircha null
-  const [managerApproval] = useState(null);
   const posContainerRef = useRef(null);
   const searchInputRef = useRef(null);
   const role = localStorage.getItem("role");
@@ -271,7 +271,8 @@ const POS = () => {
   }, [cart, selectedClient, bonusSpent]);
 
   const favoriteMutation = useMutation({
-    mutationFn: (productId) => api.post(`/inventory/products/${productId}/toggle-favorite`),
+    mutationFn: (productId) =>
+      api.post(`/inventory/products/${productId}/toggle-favorite`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["products"] }),
     onError: () => toast.error("Saralangan holatni o'zgartirib bo'lmadi"),
   });
@@ -299,12 +300,14 @@ const POS = () => {
     if (cart.length > 0) {
       toast.error("Avval joriy savdoni saqlang!", {
         description:
-          "Hozirgi mijozning savatida mahsulotlar bor. Uni \"Saqlash\" tugmasi bilan kutishga qo'yib, keyin kutayotgan mijozning savdosini bajaring.",
+          'Hozirgi mijozning savatida mahsulotlar bor. Uni "Saqlash" tugmasi bilan kutishga qo\'yib, keyin kutayotgan mijozning savdosini bajaring.',
       });
       return;
     }
     setCart(heldCart.cart);
-    setHeldCarts((current) => current.filter((item) => item.id !== heldCart.id));
+    setHeldCarts((current) =>
+      current.filter((item) => item.id !== heldCart.id),
+    );
     setIsHeldCartsOpen(false);
     toast.success("Kutilayotgan savat tiklandi");
   };
@@ -526,7 +529,6 @@ const POS = () => {
       transfer_amount: Number(paymentAmounts.perevod) || 0,
       debt_amount: Number(paymentAmounts.qarz) || 0,
       bonus_spent: Number(bonusSpent) || 0,
-      ...managerApproval,
     };
     saleMutation.mutate(saleData);
   };
@@ -619,10 +621,19 @@ const POS = () => {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => setIsHeldCartsOpen(true)}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsHeldCartsOpen(true)}
+            >
               Kutayotgan ({heldCarts.length})
             </Button>
-            <Button variant="outline" size="sm" disabled={!cart.length} onClick={holdCurrentCart}>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!cart.length}
+              onClick={holdCurrentCart}
+            >
               Saqlash
             </Button>
           </div>
@@ -697,7 +708,9 @@ const POS = () => {
                     size="icon"
                     className={cn(
                       "absolute right-1.5 top-1.5 z-10 h-7 w-7 rounded-full bg-background/80 hover:bg-background",
-                      product.is_favorite ? "text-amber-500" : "text-muted-foreground/50",
+                      product.is_favorite
+                        ? "text-amber-500"
+                        : "text-muted-foreground/50",
                     )}
                     title="Saralangan mahsulot"
                     onClick={(event) => {
@@ -705,7 +718,12 @@ const POS = () => {
                       favoriteMutation.mutate(product.id);
                     }}
                   >
-                    <Star className={cn("h-4 w-4", product.is_favorite && "fill-current")} />
+                    <Star
+                      className={cn(
+                        "h-4 w-4",
+                        product.is_favorite && "fill-current",
+                      )}
+                    />
                   </Button>
                   <div className="flex h-20 items-center justify-center bg-gradient-to-br from-primary/10 to-primary/5 p-4">
                     <div className="text-4xl font-bold text-primary/20">
@@ -775,7 +793,9 @@ const POS = () => {
                   <div className="mt-1 flex min-w-0 items-center justify-between gap-2">
                     <div className="min-w-0 truncate text-sm text-muted-foreground">
                       {item.price.toLocaleString("de-DE")} x {item.quantity} ={" "}
-                      {Math.round(item.price * item.quantity).toLocaleString("de-DE")}
+                      {Math.round(item.price * item.quantity).toLocaleString(
+                        "de-DE",
+                      )}
                     </div>
                     <div className="flex shrink-0 items-center gap-1 rounded-md border bg-background shadow-sm">
                       <Button
@@ -795,7 +815,9 @@ const POS = () => {
                         )}
                       </Button>
                       <div className="min-w-[56px] select-none px-1 text-center text-base font-bold">
-                        {Math.round(item.price * item.quantity).toLocaleString("de-DE")}
+                        {Math.round(item.price * item.quantity).toLocaleString(
+                          "de-DE",
+                        )}
                       </div>
                       <Button
                         variant="ghost"
@@ -1240,7 +1262,10 @@ const POS = () => {
                 id="quick-client-name"
                 value={newClient.name}
                 onChange={(event) =>
-                  setNewClient((current) => ({ ...current, name: event.target.value }))
+                  setNewClient((current) => ({
+                    ...current,
+                    name: event.target.value,
+                  }))
                 }
                 placeholder="Masalan: Ali Valiyev"
                 autoFocus
@@ -1253,14 +1278,20 @@ const POS = () => {
                 type="tel"
                 value={newClient.phone}
                 onChange={(event) =>
-                  setNewClient((current) => ({ ...current, phone: event.target.value }))
+                  setNewClient((current) => ({
+                    ...current,
+                    phone: event.target.value,
+                  }))
                 }
                 placeholder="998901234567"
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsQuickClientOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setIsQuickClientOpen(false)}
+            >
               Bekor qilish
             </Button>
             <Button
@@ -1272,7 +1303,9 @@ const POS = () => {
                 })
               }
             >
-              {quickClientMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {quickClientMutation.isPending && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
               Mijozni qo'shish
             </Button>
           </DialogFooter>
@@ -1283,28 +1316,49 @@ const POS = () => {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Kutilayotgan savatlar</DialogTitle>
-            <DialogDescription>Saqlangan savatni tanlab, savdoni davom ettiring.</DialogDescription>
+            <DialogDescription>
+              Saqlangan savatni tanlab, savdoni davom ettiring.
+            </DialogDescription>
           </DialogHeader>
           <div className="max-h-80 space-y-2 overflow-y-auto">
             {heldCarts.length === 0 ? (
-              <p className="py-6 text-center text-sm text-muted-foreground">Saqlangan savat yo'q</p>
-            ) : heldCarts.map((heldCart, index) => (
-              <div key={heldCart.id} className="flex items-center justify-between gap-3 rounded-lg border p-3">
-                <div className="min-w-0">
-                  <p className="font-semibold">Savatcha #{index + 1}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {heldCart.cart.length} tur mahsulot
-                  </p>
-                  <p className="truncate text-[11px] text-muted-foreground/80">
-                    {heldCart.cart.map((item) => item.name).join(", ")}
-                  </p>
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                Saqlangan savat yo'q
+              </p>
+            ) : (
+              heldCarts.map((heldCart, index) => (
+                <div
+                  key={heldCart.id}
+                  className="flex items-center justify-between gap-3 rounded-lg border p-3"
+                >
+                  <div className="min-w-0">
+                    <p className="font-semibold">Savatcha #{index + 1}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {heldCart.cart.length} tur mahsulot
+                    </p>
+                    <p className="truncate text-[11px] text-muted-foreground/80">
+                      {heldCart.cart.map((item) => item.name).join(", ")}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={() => restoreHeldCart(heldCart)}>
+                      Davom ettirish
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() =>
+                        setHeldCarts((current) =>
+                          current.filter((item) => item.id !== heldCart.id),
+                        )
+                      }
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex gap-2">
-                  <Button size="sm" onClick={() => restoreHeldCart(heldCart)}>Davom ettirish</Button>
-                  <Button size="icon" variant="ghost" onClick={() => setHeldCarts((current) => current.filter((item) => item.id !== heldCart.id))}><Trash2 className="h-4 w-4" /></Button>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </DialogContent>
       </Dialog>
@@ -1318,8 +1372,8 @@ const POS = () => {
                 variant="outline"
                 className="text-sm py-0.5 px-2 border-primary-foreground/30 text-primary-foreground font-mono"
               >
-                {selectedProductForWeight?.sell_price.toLocaleString("de-DE")} s /{" "}
-                {selectedProductForWeight?.unit}
+                {selectedProductForWeight?.sell_price.toLocaleString("de-DE")} s
+                / {selectedProductForWeight?.unit}
               </Badge>
             </DialogTitle>
           </DialogHeader>
@@ -1466,10 +1520,7 @@ const POS = () => {
         </DialogContent>
       </Dialog>
       {/* Shift Modal */}
-      <Dialog
-        open={isShiftModalOpen}
-        onOpenChange={setIsShiftModalOpen}
-      >
+      <Dialog open={isShiftModalOpen} onOpenChange={setIsShiftModalOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
@@ -1505,7 +1556,8 @@ const POS = () => {
                 <div className="flex justify-between text-sm text-violet-600">
                   <span>Perevod:</span>
                   <span className="font-bold">
-                    {activeShift.total_transfer?.toLocaleString("de-DE") || 0} so'm
+                    {activeShift.total_transfer?.toLocaleString("de-DE") || 0}{" "}
+                    so'm
                   </span>
                 </div>
                 <div className="flex justify-between text-sm text-amber-600">
@@ -1515,11 +1567,28 @@ const POS = () => {
                   </span>
                 </div>
                 <div className="mt-3 rounded-md border bg-background/70 px-3 py-2 text-xs text-muted-foreground">
-                  Bugun: <span className="font-bold text-foreground">{dailySummary?.sales_count || 0} savdo</span>
-                  <span className="ml-2">N: {(dailySummary?.cash_amount || 0).toLocaleString("de-DE")}</span>
-                  <span className="ml-2">T: {(dailySummary?.card_amount || 0).toLocaleString("de-DE")}</span>
-                  <span className="ml-2">P: {(dailySummary?.transfer_amount || 0).toLocaleString("de-DE")}</span>
-                  <span className="ml-2">Q: {(dailySummary?.debt_amount || 0).toLocaleString("de-DE")}</span>
+                  Bugun:{" "}
+                  <span className="font-bold text-foreground">
+                    {dailySummary?.sales_count || 0} savdo
+                  </span>
+                  <span className="ml-2">
+                    N:{" "}
+                    {(dailySummary?.cash_amount || 0).toLocaleString("de-DE")}
+                  </span>
+                  <span className="ml-2">
+                    T:{" "}
+                    {(dailySummary?.card_amount || 0).toLocaleString("de-DE")}
+                  </span>
+                  <span className="ml-2">
+                    P:{" "}
+                    {(dailySummary?.transfer_amount || 0).toLocaleString(
+                      "de-DE",
+                    )}
+                  </span>
+                  <span className="ml-2">
+                    Q:{" "}
+                    {(dailySummary?.debt_amount || 0).toLocaleString("de-DE")}
+                  </span>
                 </div>
                 <div className="border-t pt-2 flex justify-between font-bold text-lg">
                   <span>Kassada bo'lishi kerak:</span>
@@ -1543,7 +1612,9 @@ const POS = () => {
                 type="text"
                 inputMode="numeric"
                 value={formatCashAmount(shiftBalance)}
-                onChange={(e) => setShiftBalance(e.target.value.replace(/\D/g, ""))}
+                onChange={(e) =>
+                  setShiftBalance(e.target.value.replace(/\D/g, ""))
+                }
                 placeholder="0"
                 autoFocus
               />
