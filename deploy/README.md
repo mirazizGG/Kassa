@@ -20,14 +20,14 @@ Uydagi komp ──git push──▶ GitHub ──update.ps1──▶ SERVER komp
 
 ## 0. Nima kerak (SERVER kompyuterda)
 
-| Dastur | O'rnatish |
-|---|---|
-| Git | https://git-scm.com |
-| Python 3.11+ | https://python.org (PATH ga qo'shing) |
-| Node.js 20+ | https://nodejs.org |
-| Caddy | `winget install CaddyServer.Caddy` |
-| cloudflared | `winget install Cloudflare.cloudflared` |
-| Domen | Cloudflare'ga ulangan domen (`.com` ~ $10/yil, arzonroq TLD'lar ham bor) |
+| Dastur       | O'rnatish                                                                |
+| ------------ | ------------------------------------------------------------------------ |
+| Git          | https://git-scm.com                                                      |
+| Python 3.11+ | https://python.org (PATH ga qo'shing)                                    |
+| Node.js 20+  | https://nodejs.org                                                       |
+| Caddy        | `winget install CaddyServer.Caddy`                                       |
+| cloudflared  | `winget install Cloudflare.cloudflared`                                  |
+| Domen        | Cloudflare'ga ulangan domen (`.com` ~ $10/yil, arzonroq TLD'lar ham bor) |
 
 ---
 
@@ -46,6 +46,7 @@ cd SmartKassa\deploy\scripts
 ```
 
 Bu skript:
+
 - dasturlarni tekshiradi
 - `backend\.env` yaratadi va `SECRET_KEY` ni avtomatik to'ldiradi
 - `frontend\.env.production` yaratadi
@@ -93,6 +94,7 @@ ingress:
 ```
 
 Tekshirish:
+
 - Do'kon ichidan: `http://SERVER-IP:8080`
 - Tashqaridan: `https://kassa.SIZNING-DOMEN`
 
@@ -114,6 +116,7 @@ Login: `admin` / `123` — **darhol parolni o'zgartiring** (Xodimlar bo'limida).
 ## Yangilanish kiritish (kundalik ish)
 
 **Uyda / boshqa kompyuterda:**
+
 ```powershell
 git add .
 git commit -m "..."
@@ -129,6 +132,7 @@ bo'lsa — sariq "Yangilanish bor"). Istalgan xodim bosadi → ogohlantirish →
 qo'l tekkizish shart emas.
 
 **B) Qo'lda (server kompyuterda):**
+
 ```powershell
 cd C:\SmartKassa\deploy\scripts
 .\update.ps1
@@ -160,12 +164,12 @@ summasi (savatning o'zi emas).
 
 ## Kundalik buyruqlar
 
-| Buyruq | Vazifa |
-|---|---|
-| `.\status.ps1` | xizmatlar holati + LAN manzili |
-| `.\start-all.ps1` | hammasini yoqish |
-| `.\stop-all.ps1` | hammasini o'chirish |
-| `.\update.ps1` | GitHub'dan yangilash |
+| Buyruq            | Vazifa                         |
+| ----------------- | ------------------------------ |
+| `.\status.ps1`    | xizmatlar holati + LAN manzili |
+| `.\start-all.ps1` | hammasini yoqish               |
+| `.\stop-all.ps1`  | hammasini o'chirish            |
+| `.\update.ps1`    | GitHub'dan yangilash           |
 
 Loglar: `deploy\run\*.log`
 
@@ -179,6 +183,8 @@ Loglar: `deploy\run\*.log`
 - [ ] Windows Firewall: faqat 8080 port LAN uchun ochiq (internetdan kirish faqat tunnel orqali)
 - [ ] Cloudflare dashboard'da domenga **proxy (to'q sariq bulut)** yoniq
 - [ ] Muntazam backup tekshirilyapti (`backend\backups\`)
+- [ ] `BACKUP_MIRROR_DIR` — tashqi disk yoki sinxron papkaga ikkinchi nusxa yoqilgan
+- [ ] `TELEGRAM_ADMIN_CHAT_ID` to'ldirilgan — kunlik backup Telegram'ga ham tushadi
 
 ---
 
@@ -194,6 +200,7 @@ docker run -d --name kassa-db --restart always `
 ```
 
 `backend\.env`:
+
 ```
 DATABASE_URL=postgresql://kassa:KUCHLI_PAROL@localhost:5432/kassa
 ```
@@ -204,10 +211,10 @@ Kod avtomatik `asyncpg` ga o'tadi. Eski SQLite ma'lumotini ko'chirish kerak bo'l
 
 ## Muammolar
 
-| Belgi | Yechim |
-|---|---|
+| Belgi                         | Yechim                                                                      |
+| ----------------------------- | --------------------------------------------------------------------------- |
 | `https://kassa...` ochilmaydi | `.\status.ps1` — cloudflared ishlayaptimi? `deploy\run\cloudflared.err.log` |
-| Do'kon ichidan ochilmaydi | Firewall'da 8080 portni oching; `http://SERVER-IP:8080` to'g'rimi? |
-| Login "boshqa qurilmada..." | Normal — dialogdan "Chiqarib, shu yerdan kirish" bosing |
-| `update.ps1` konflikt beradi | SERVER'da kod o'zgartirilgan. `git checkout -- .` keyin qayta |
-| Frontend eski ko'rinadi | Brauzerda `Ctrl+Shift+R` (kesh tozalash) |
+| Do'kon ichidan ochilmaydi     | Firewall'da 8080 portni oching; `http://SERVER-IP:8080` to'g'rimi?          |
+| Login "boshqa qurilmada..."   | Normal — dialogdan "Chiqarib, shu yerdan kirish" bosing                     |
+| `update.ps1` konflikt beradi  | SERVER'da kod o'zgartirilgan. `git checkout -- .` keyin qayta               |
+| Frontend eski ko'rinadi       | Brauzerda `Ctrl+Shift+R` (kesh tozalash)                                    |

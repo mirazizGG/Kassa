@@ -30,10 +30,14 @@ async def lifespan(app: FastAPI):
     scheduler.add_job(check_debts, 'cron', hour=9, minute=0, args=[bot])
 
     # SQLite backup runs daily unless explicitly disabled through the environment.
+    # run_daily_backup: lokal nusxa + BACKUP_MIRROR_DIR (bo'lsa) + Telegram (bo'lsa).
     if os.getenv("BACKUP_ENABLED", "true").lower() in {"1", "true", "yes"}:
-        from utils.backup import create_backup
+        from utils.backup import run_daily_backup
         backup_hour = int(os.getenv("BACKUP_HOUR", "2"))
-        scheduler.add_job(create_backup, 'cron', hour=backup_hour, minute=0, id="daily_backup", replace_existing=True)
+        scheduler.add_job(
+            run_daily_backup, 'cron', hour=backup_hour, minute=0,
+            id="daily_backup", replace_existing=True, kwargs={"bot": bot},
+        )
     scheduler.start()
     # Start Telegram only when a token is configured.
     bot_task = None
