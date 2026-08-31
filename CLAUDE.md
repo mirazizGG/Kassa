@@ -168,7 +168,9 @@ Uses TanStack Query (React Query) for data fetching:
 - `SECRET_KEY` - JWT signing key ([core.py](backend/core.py)); in `development` falls back to an insecure shared default
 - `DATABASE_URL` - defaults to local SQLite (`backend/market.db`); `postgres://`/`postgresql://` URLs are rewritten to use `asyncpg` automatically ([database.py](backend/database.py))
 - `ALLOWED_ORIGINS` - comma-separated CORS allowlist ([main.py](backend/main.py)); defaults to `*` if unset, but if you set it, every frontend origin you test from (including LAN IPs) must be listed explicitly or requests are blocked by CORS with no error detail beyond a browser console message
-- `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ADMIN_CHAT_ID` - bot credentials
+- `BACKUP_ENABLED`/`BACKUP_HOUR`/`BACKUP_RETENTION` - daily SQLite snapshot into `backend/backups/` ([utils/backup.py](backend/utils/backup.py)); the scheduler job is `run_daily_backup` in [main.py](backend/main.py)
+- `BACKUP_MIRROR_DIR` - optional second location every backup is copied to (external disk / synced folder); empty = local only
+- `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ADMIN_CHAT_ID` - bot credentials; when `TELEGRAM_ADMIN_CHAT_ID` is set the daily backup file is also sent to that chat
 
 **Frontend:**
 
