@@ -7,6 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Kassa is a full-stack Point of Sale (POS) system with Telegram bot integration. It manages sales, inventory, customers (CRM), employee shifts, finances, and tasks. The system supports role-based access control with three roles: admin, manager (menejer), and cashier (kassir).
 
 **Tech Stack:**
+
 - Backend: FastAPI (async), SQLAlchemy 2.0 (async mode), SQLite (aiosqlite), Aiogram 3.x (Telegram bot)
 - Frontend: React 19, Vite, React Router, TanStack Query, Tailwind CSS, Radix UI, shadcn/ui components
 - Authentication: JWT tokens with passlib (pbkdf2_sha256)
@@ -102,17 +103,20 @@ All timestamps use `datetime.utcnow()` and are stored as DateTime columns.
 ### Authentication & Authorization
 
 **Flow:**
+
 1. Login via `POST /auth/token` returns JWT with role/permissions
 2. Frontend stores token in localStorage
 3. All protected routes use `get_current_user` dependency which validates JWT
 4. Role checks are done in route handlers (e.g., `if current_user.role not in ["admin", "manager"]`)
 
 **Roles & Permissions:**
+
 - **admin** - Full access, can manage employees, view audit logs
 - **manager** (menejer) - Can manage products, sales, clients, expenses, view employees (read-only)
 - **cashier** (kassir) - Can make sales, open/close shifts, add clients, add expenses (limited delete rights)
 
 **Default Credentials:**
+
 - Username: `admin`
 - Password: `123` (created in [main.py](backend/main.py) on startup if the user doesn't already exist)
 
@@ -121,6 +125,7 @@ All timestamps use `datetime.utcnow()` and are stored as DateTime columns.
 ### Telegram Bot Integration
 
 The bot runs in the background via `asyncio.create_task()` in the app lifespan:
+
 - **Client registration** - Clients can register via Telegram using phone number
 - **Balance checking** - Clients can check their debt balance
 - **Automated debt reminders** - Sent at 3, 2, 1 days before due date, on due date, and after overdue
@@ -131,6 +136,7 @@ The bot and API share the same database, linking via `telegram_id` on Client and
 ### Async Patterns
 
 All database operations are async:
+
 - Use `await db.execute()` for queries with SQLAlchemy 2.0 style
 - Use `await db.commit()` to persist changes
 - Use `await db.refresh(obj)` to reload object after commit
@@ -138,6 +144,7 @@ All database operations are async:
 - Get all results: `result.scalars().all()`
 
 Example:
+
 ```python
 from sqlalchemy import select
 result = await db.execute(select(Employee).where(Employee.username == username))
@@ -147,6 +154,7 @@ user = result.scalars().first()
 ### Frontend API Integration
 
 Uses TanStack Query (React Query) for data fetching:
+
 - Query hooks for GET requests with automatic caching/refetching
 - Mutation hooks for POST/PUT/DELETE with optimistic updates
 - API base URL should be configurable (currently likely hardcoded in api client)
@@ -155,12 +163,15 @@ Uses TanStack Query (React Query) for data fetching:
 ## Important Configuration
 
 **Backend** — configured via `backend/.env` (loaded with `python-dotenv`):
-- `SECRET_KEY` - JWT signing key ([core.py](backend/core.py), falls back to an insecure dev default)
+
+- `APP_ENV` - `development` (default) or `production`. When `production`, [core.py](backend/core.py) raises on startup if `SECRET_KEY` is unset or still the sample dev key.
+- `SECRET_KEY` - JWT signing key ([core.py](backend/core.py)); in `development` falls back to an insecure shared default
 - `DATABASE_URL` - defaults to local SQLite (`backend/market.db`); `postgres://`/`postgresql://` URLs are rewritten to use `asyncpg` automatically ([database.py](backend/database.py))
 - `ALLOWED_ORIGINS` - comma-separated CORS allowlist ([main.py](backend/main.py)); defaults to `*` if unset, but if you set it, every frontend origin you test from (including LAN IPs) must be listed explicitly or requests are blocked by CORS with no error detail beyond a browser console message
 - `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ADMIN_CHAT_ID` - bot credentials
 
 **Frontend:**
+
 - **[vite.config.js](frontend/vite.config.js)** - Path alias `@` points to `src/`; dev server binds `0.0.0.0:5173` and proxies `/api` to `http://127.0.0.1:8000`
 - **[api/axios.jsx](frontend/src/api/axios.jsx)** - `VITE_API_URL` env var sets the API base URL (defaults to `http://localhost:8000`, which only works for same-machine access — set it to the backend host's LAN IP when testing from another device)
 
@@ -175,23 +186,27 @@ Uses TanStack Query (React Query) for data fetching:
 ## Key Business Logic
 
 **Shift Management:**
+
 - Cashiers must open shift before making sales
 - Only one open shift per cashier allowed
 - Opening balance tracks cash at start, closing balance at end
 - Discrepancy calculated on shift close
 
 **Sales & Inventory:**
+
 - Sales automatically decrement product stock
 - Refunds (admin/manager only) restore stock and mark sale as "refunded"
 - Supply/incoming stock tracked separately in Supply table
 
 **Client Debt:**
+
 - Negative balance = client owes money
 - Positive balance = client has prepaid
 - Debt due dates trigger Telegram reminders
 - Payment history tracked in Payment table
 
 **Audit Logging:**
+
 - Important actions logged to audit_logs table
 - Includes user_id (employee), action, details, timestamp
 
