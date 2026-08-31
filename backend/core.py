@@ -35,7 +35,26 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Security configurations
-SECRET_KEY = os.getenv("SECRET_KEY", "dev_secret_key_change_in_production_12345") # In production, use environment variables
+# APP_ENV=production bo'lsa, zaif/yo'q SECRET_KEY bilan dastur ishga tushmaydi.
+_DEV_SECRET_KEY = "dev_secret_key_change_in_production_12345"
+APP_ENV = os.getenv("APP_ENV", "development").strip().lower()
+SECRET_KEY = os.getenv("SECRET_KEY", "").strip()
+
+if not SECRET_KEY:
+    if APP_ENV == "production":
+        raise RuntimeError(
+            "SECRET_KEY o'rnatilmagan. Production'da bu majburiy. "
+            "backend/.env ga qo'shing. Yangi kalit: "
+            'python -c "import secrets; print(secrets.token_hex(32))"'
+        )
+    SECRET_KEY = _DEV_SECRET_KEY
+
+if APP_ENV == "production" and SECRET_KEY == _DEV_SECRET_KEY:
+    raise RuntimeError(
+        "Production'da namunaviy (default) SECRET_KEY ishlatib bo'lmaydi. "
+        "backend/.env da o'zingizning tasodifiy kalitingizni qo'ying."
+    )
+
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 600
 
