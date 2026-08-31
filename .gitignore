@@ -94,3 +94,7 @@ deploy/run/
 !deploy/env/
 !deploy/env/*.example
 
+# Mahalliy ishga tushirish skriptlari (mashinaga xos yo'llar bilan)
+start_backend_hidden.vbs
+start_frontend_hidden.vbs
+
