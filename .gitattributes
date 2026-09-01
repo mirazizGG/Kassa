@@ -1,0 +1,9 @@
+# Yig'ilgan frontend (repoda saqlanadi, serverda build qilinmaydi).
+# EOL o'zgartirilmasin, diff ko'rsatilmasin, GitHub "generated" deb belgilasin.
+frontend/dist/** -text -diff linguist-generated
+
+# PowerShell skriptlari Windows'da ishlaydi
+*.ps1 text eol=crlf
+*.psm1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf

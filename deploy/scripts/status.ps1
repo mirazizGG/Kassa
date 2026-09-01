@@ -14,21 +14,28 @@ Show "Cloudflared" $CloudflaredPid
 
 Write-Host ""
 try {
-	$h = Invoke-RestMethod "http://127.0.0.1:$BackendPort/health" -TimeoutSec 5
-	Write-Host "  Backend /health: OK" -ForegroundColor Green
+	$null = Invoke-WebRequest "http://127.0.0.1:$BackendPort/health" -TimeoutSec 5 -UseBasicParsing
+	Write-Host "  Backend /health:   OK" -ForegroundColor Green
 } catch {
-	Write-Host "  Backend /health: JAVOB YO'Q" -ForegroundColor Red
+	Write-Host "  Backend /health:   JAVOB YO'Q" -ForegroundColor Red
 }
 try {
-	$null = Invoke-WebRequest "http://127.0.0.1:$CaddyPort/" -TimeoutSec 5 -UseBasicParsing
-	Write-Host "  Frontend (Caddy): OK" -ForegroundColor Green
+	$r = Invoke-WebRequest "http://127.0.0.1:$BackendPort/" -TimeoutSec 5 -UseBasicParsing
+	if ($r.Content -match "<div id=`"root`"") {
+		Write-Host "  Frontend:          OK (backend beryapti)" -ForegroundColor Green
+	} else {
+		Write-Host "  Frontend:          index.html topilmadi - frontend\dist bo'sh?" -ForegroundColor Yellow
+	}
 } catch {
-	Write-Host "  Frontend (Caddy): JAVOB YO'Q" -ForegroundColor Red
+	Write-Host "  Frontend:          JAVOB YO'Q" -ForegroundColor Red
 }
 
 $ip = (Get-NetIPAddress -AddressFamily IPv4 -PrefixOrigin Dhcp,Manual -ErrorAction SilentlyContinue |
-	Where-Object { $_.IPAddress -notlike "169.*" } | Select-Object -First 1).IPAddress
+	Where-Object { $_.IPAddress -notlike "169.*" -and $_.IPAddress -ne "127.0.0.1" } | Select-Object -First 1).IPAddress
 if ($ip) {
 	Write-Host ""
-	Write-Host "  Do'kon ichidan kirish:  http://${ip}:$CaddyPort" -ForegroundColor Cyan
+	Write-Host "  Do'kon ichidan kirish:  http://${ip}:$BackendPort" -ForegroundColor Cyan
+	if (Get-PidFromFile $CaddyPid) {
+		Write-Host "  Caddy orqali (:8080):   http://${ip}:$CaddyPort" -ForegroundColor DarkGray
+	}
 }

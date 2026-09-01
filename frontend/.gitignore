@@ -8,7 +8,8 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
-dist
+# dist — ataylab repoda: server Node'siz frontendni backend orqali beradi.
+# Uyda `deploy/publish.ps1` build qilib commit qiladi.
 dist-ssr
 *.local
 

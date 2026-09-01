@@ -34,3 +34,6 @@ pydantic>=2.0
 # Reporting exports
 pandas
 openpyxl
+
+# Windows'da zoneinfo (Asia/Tashkent) uchun IANA tz bazasi
+tzdata

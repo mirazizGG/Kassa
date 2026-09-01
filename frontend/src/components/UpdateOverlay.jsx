@@ -38,7 +38,7 @@ export default function UpdateOverlay() {
 
     (async () => {
       try {
-        const res = await fetch("/api/system/version", { headers: authHeaders() });
+        const res = await fetch("/system/version", { headers: authHeaders() });
         if (res.ok) {
           const v = await res.json();
           if (v.updating) {
@@ -62,7 +62,7 @@ export default function UpdateOverlay() {
     const loop = async () => {
       while (!cancelled) {
         try {
-          const res = await fetch("/api/system/update-status", { headers: authHeaders() });
+          const res = await fetch("/system/update-status", { headers: authHeaders() });
           if (res.ok) {
             const data = await res.json();
             if (!cancelled) setStatus(data);

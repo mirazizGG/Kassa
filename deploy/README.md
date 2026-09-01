@@ -1,28 +1,28 @@
 # SmartKassa — Deploy qo'llanmasi (tekin, do'kon kompyuterida)
 
-Bu qo'llanma loyihani **do'kondagi bitta doim yoniq kompyuterda** ishga tushiradi va
-uni **Cloudflare Tunnel** orqali internetga chiqaradi. Natijada:
+Loyiha **do'kondagi bitta doim yoniq kompyuterda** ishlaydi. Kassir kompyuterlariga
+hech narsa o'rnatilmaydi — ular faqat brauzer bilan kiradi.
 
-- **Do'kon ichidan** — `http://SERVER-IP:8080` (tez, LAN)
-- **Uydan / boshqa shahardan** — `https://kassa.SIZNING-DOMEN` (tunnel orqali)
-- Bitta baza, bitta tizim. Kassir kompyuterlariga hech narsa o'rnatilmaydi — ular faqat brauzer.
+- **Do'kon ichidan (LAN)** — `http://SERVER-IP:8000` (Caddy/Node kerak emas)
+- **Uydan / tashqaridan** — `https://kassa.SIZNING-DOMEN` (ixtiyoriy, Cloudflare Tunnel)
 
 ```
-Uydagi komp ──git push──▶ GitHub ──update.ps1──▶ SERVER komp ──▶ kassirlar (brauzer)
-                                                     │
-                                     Caddy :8080 ◀───┤ (frontend + /api)
-                                     uvicorn :8000 ◀─┘ (backend)
-                                          ▲
-                                   Cloudflare Tunnel ──▶ https://kassa.domen
+Uyda:  kod o'zgartirish ──▶ publish.ps1 (build + push) ──▶ GitHub
+                                                             │
+Do'konda:  "Yangilash" tugmasi / update.ps1 ──git pull──────┘
+                                    │
+                     uvicorn :8000 ─┘   (backend API + frontend/dist + SPA)
+                            ▲
+        (ixtiyoriy)  Caddy :8080 ──▶ Cloudflare Tunnel ──▶ https://kassa.domen
 ```
+
+Frontend **serverda build qilinmaydi** — u repodagi tayyor `frontend/dist` dan
+olinadi (uyda `publish.ps1` build qiladi), backend uni o'zi beradi. Shu tufayli
+serverga **Node.js va Caddy kerak emas** — faqat **Python + Git**. Windows 8.1 da ham ishlaydi.
 
 ---
 
-## Eng oson yo'l — bir tugmali o'rnatuvchi (faqat LAN)
-
-Do'kon ichidan kirish yetarli bo'lsa (tashqi domen shart emas), quyidagi
-**bitta fayl** hamma ishni qiladi: Git/Python/Node/Caddy o'rnatadi, loyihani
-yuklaydi, sozlaydi, ishga tushiradi va avtomatik ishga tushirishni o'rnatadi.
+## Eng oson yo'l — bir fayllik o'rnatuvchi (LAN)
 
 Server kompyuterda PowerShell'da (Administrator shart emas — skript o'zi so'raydi):
 
@@ -31,27 +31,40 @@ irm https://raw.githubusercontent.com/mirazizGG/Kassa/main/deploy/install-smartk
 & "$env:USERPROFILE\Desktop\install-smartkassa.ps1"
 ```
 
-Tugagach: `http://SERVER-IP:8080`, login `admin` / `123` (darhol o'zgartiring).
-Yangilash — ekrandagi **"Yangilash"** tugmasi (`ALLOW_SELF_UPDATE=true` avtomat qo'yiladi).
+O'rnatuvchi: Python + Git ni yuklaydi (yo'q bo'lsa) · loyihani klon qiladi ·
+`pip install` · `backend\.env` (+ tasodifiy `SECRET_KEY`) · `APP_ENV=production` +
+`ALLOW_SELF_UPDATE=true` · ishga tushiradi · kompyuter yonganda avtomat ishlashini o'rnatadi.
+
+Tugagach: `http://SERVER-IP:8000`, login `admin` / `123` (**darhol o'zgartiring**).
 
 Internet orqali kirish (Cloudflare Tunnel) kerak bo'lsa — pastdagi to'liq qo'llanma.
+
+### Uyda: o'zgarishni chiqarish
+
+```powershell
+.\deploy\publish.ps1 "nima o'zgardi"
+```
+
+Bu build qiladi, `dist` bilan birga commit qiladi va push qiladi. Keyin do'konda
+ekrandagi **"Yangilash"** tugmasi (yoki `update.ps1`) o'sha versiyani tortadi.
 
 ---
 
 ## 0. Nima kerak (SERVER kompyuterda)
 
-| Dastur       | O'rnatish                                                                |
-| ------------ | ------------------------------------------------------------------------ |
-| Git          | https://git-scm.com                                                      |
-| Python 3.11+ | https://python.org (PATH ga qo'shing)                                    |
-| Node.js 20+  | https://nodejs.org                                                       |
-| Caddy        | `winget install CaddyServer.Caddy`                                       |
-| cloudflared  | `winget install Cloudflare.cloudflared`                                  |
-| Domen        | Cloudflare'ga ulangan domen (`.com` ~ $10/yil, arzonroq TLD'lar ham bor) |
+| Dastur      | Izoh                                                                           |
+| ----------- | ------------------------------------------------------------------------------ |
+| Git         | https://git-scm.com (Win 7+ ishlaydi) — o'rnatuvchi o'zi yuklaydi              |
+| Python 3.9+ | https://python.org — o'rnatuvchi o'zi yuklaydi (Win 8.1 → 3.9, Win 10+ → 3.12) |
+| cloudflared | _faqat_ internet orqali kirish uchun: `winget install Cloudflare.cloudflared`  |
+| Caddy       | _faqat_ internet orqali kirish uchun: `winget install CaddyServer.Caddy`       |
+| Domen       | _faqat_ internet uchun: Cloudflare'ga ulangan domen                            |
+
+Node.js **kerak emas**.
 
 ---
 
-## 1. Loyihani olish
+## 1. Loyihani olish (qo'lda, o'rnatuvchisiz)
 
 ```powershell
 cd C:\
@@ -65,21 +78,21 @@ cd SmartKassa\deploy\scripts
 .\first-time-setup.ps1
 ```
 
-Bu skript:
+Bu skript: Git/Python borligini tekshiradi · `backend\.env` yaratadi va
+`SECRET_KEY` ni avtomatik to'ldiradi · `pip install` qiladi · `frontend\dist`
+repodan kelganini tasdiqlaydi (Node bo'lsa — o'zi build qiladi).
 
-- dasturlarni tekshiradi
-- `backend\.env` yaratadi va `SECRET_KEY` ni avtomatik to'ldiradi
-- `frontend\.env.production` yaratadi
-- kutubxonalarni o'rnatadi (`pip install`, `npm ci`)
-- frontendni build qiladi
+**LAN uchun shu yetadi** — `.\start-all.ps1` ga o'ting (4-bo'lim).
 
-Keyin **`backend\.env`** ni oching va shu qatorni to'g'rilang:
+Internet orqali kirish kerak bo'lsa, **`backend\.env`** da:
 
 ```
 ALLOWED_ORIGINS=https://kassa.SIZNING-DOMEN
 ```
 
-## 3. Cloudflare Tunnel sozlash
+va Caddy + cloudflared o'rnating (`winget install CaddyServer.Caddy Cloudflare.cloudflared`).
+
+## 3. Cloudflare Tunnel sozlash (faqat internet kerak bo'lsa)
 
 ```powershell
 # 3.1 Cloudflare'ga kirish (brauzer ochiladi, domeningizni tanlaysiz)
@@ -103,7 +116,7 @@ credentials-file: C:\Users\<siz>\.cloudflared\xxxxxxxx-....json
 
 ingress:
   - hostname: kassa.SIZNING-DOMEN
-    service: http://localhost:8080
+    service: http://localhost:8000 # to'g'ridan-to'g'ri backendga, Caddysiz
   - service: http_status:404
 ```
 
@@ -115,7 +128,7 @@ ingress:
 
 Tekshirish:
 
-- Do'kon ichidan: `http://SERVER-IP:8080`
+- Do'kon ichidan: `http://SERVER-IP:8000` (Caddy ishlasa `:8080` ham)
 - Tashqaridan: `https://kassa.SIZNING-DOMEN`
 
 Login: `admin` / `123` — **darhol parolni o'zgartiring** (Xodimlar bo'limida).
@@ -159,8 +172,9 @@ cd C:\SmartKassa\deploy\scripts
 ```
 
 Ikkalasi ham bir xil ishni qiladi: **bazadan zahira nusxa oladi** →
-`git pull` → kerak bo'lsa `pip install` / `npm build` → backendni qayta ishga
-tushiradi (5-10 soniya). Yangilik bo'lmasa hech narsa qilmaydi.
+`git pull` (tayyor `dist` ham keladi) → kerak bo'lsa `pip install` → backendni
+qayta ishga tushiradi (5-10 soniya). Yangilik bo'lmasa hech narsa qilmaydi.
+Serverda `npm`/build ishlamaydi — frontend uyda `publish.ps1` da tayyorlanadi.
 
 ### Ma'lumotlar xavfsizmi?
 
@@ -200,7 +214,8 @@ Loglar: `deploy\run\*.log`
 - [ ] `backend\.env` da `SECRET_KEY` — tasodifiy (setup avtomatik qildi)
 - [ ] `backend\.env` da `ALLOWED_ORIGINS` — faqat o'z domeningiz, `*` emas
 - [ ] `admin` / `123` paroli o'zgartirilgan
-- [ ] Windows Firewall: faqat 8080 port LAN uchun ochiq (internetdan kirish faqat tunnel orqali)
+- [ ] `backend\.env` da `APP_ENV=production` (zaif `SECRET_KEY` bilan ishga tushmaydi)
+- [ ] Windows Firewall: LAN uchun 8000 port ochiq (internetdan kirish faqat tunnel orqali)
 - [ ] Cloudflare dashboard'da domenga **proxy (to'q sariq bulut)** yoniq
 - [ ] Muntazam backup tekshirilyapti (`backend\backups\`)
 - [ ] `BACKUP_MIRROR_DIR` — tashqi disk yoki sinxron papkaga ikkinchi nusxa yoqilgan
@@ -231,10 +246,12 @@ Kod avtomatik `asyncpg` ga o'tadi. Eski SQLite ma'lumotini ko'chirish kerak bo'l
 
 ## Muammolar
 
-| Belgi                         | Yechim                                                                      |
-| ----------------------------- | --------------------------------------------------------------------------- |
-| `https://kassa...` ochilmaydi | `.\status.ps1` — cloudflared ishlayaptimi? `deploy\run\cloudflared.err.log` |
-| Do'kon ichidan ochilmaydi     | Firewall'da 8080 portni oching; `http://SERVER-IP:8080` to'g'rimi?          |
-| Login "boshqa qurilmada..."   | Normal — dialogdan "Chiqarib, shu yerdan kirish" bosing                     |
-| `update.ps1` konflikt beradi  | SERVER'da kod o'zgartirilgan. `git checkout -- .` keyin qayta               |
-| Frontend eski ko'rinadi       | Brauzerda `Ctrl+Shift+R` (kesh tozalash)                                    |
+| Belgi                                        | Yechim                                                                          |
+| -------------------------------------------- | ------------------------------------------------------------------------------- |
+| `https://kassa...` ochilmaydi                | `.\status.ps1` — cloudflared ishlayaptimi? `deploy\run\cloudflared.err.log`     |
+| Do'kon ichidan ochilmaydi                    | Firewall'da 8000 portni oching; `http://SERVER-IP:8000` to'g'rimi?              |
+| Frontend bo'sh / oq ekran                    | `frontend\dist` bo'sh — uyda `deploy\publish.ps1` bilan build qilib push qiling |
+| `SECRET_KEY` xatosi, backend ishga tushmaydi | `backend\.env` da `SECRET_KEY` bo'sh — `first-time-setup.ps1` qayta             |
+| Login "boshqa qurilmada..."                  | Normal — dialogdan "Chiqarib, shu yerdan kirish" bosing                         |
+| `update.ps1` konflikt beradi                 | SERVER'da kod o'zgartirilgan. `git checkout -- .` keyin qayta                   |
+| Frontend eski ko'rinadi                      | Brauzerda `Ctrl+Shift+R` (kesh tozalash)                                        |
