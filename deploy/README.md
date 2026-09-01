@@ -18,6 +18,26 @@ Uydagi komp ──git push──▶ GitHub ──update.ps1──▶ SERVER komp
 
 ---
 
+## Eng oson yo'l — bir tugmali o'rnatuvchi (faqat LAN)
+
+Do'kon ichidan kirish yetarli bo'lsa (tashqi domen shart emas), quyidagi
+**bitta fayl** hamma ishni qiladi: Git/Python/Node/Caddy o'rnatadi, loyihani
+yuklaydi, sozlaydi, ishga tushiradi va avtomatik ishga tushirishni o'rnatadi.
+
+Server kompyuterda PowerShell'da (Administrator shart emas — skript o'zi so'raydi):
+
+```powershell
+irm https://raw.githubusercontent.com/mirazizGG/Kassa/main/deploy/install-smartkassa.ps1 -OutFile "$env:USERPROFILE\Desktop\install-smartkassa.ps1"
+& "$env:USERPROFILE\Desktop\install-smartkassa.ps1"
+```
+
+Tugagach: `http://SERVER-IP:8080`, login `admin` / `123` (darhol o'zgartiring).
+Yangilash — ekrandagi **"Yangilash"** tugmasi (`ALLOW_SELF_UPDATE=true` avtomat qo'yiladi).
+
+Internet orqali kirish (Cloudflare Tunnel) kerak bo'lsa — pastdagi to'liq qo'llanma.
+
+---
+
 ## 0. Nima kerak (SERVER kompyuterda)
 
 | Dastur       | O'rnatish                                                                |
