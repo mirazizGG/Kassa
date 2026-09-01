@@ -32,7 +32,10 @@ python-dotenv
 pydantic>=2.0
 
 # Reporting exports
-pandas
+# Python 3.9 (Windows 8.1 serveri) uchun cheklangan: numpy>=2.1 va pandas>=2.3
+# faqat Python 3.10+ talab qiladi. Bu chегаралар Win 10/11 (Python 3.12) da ham ishlaydi.
+numpy<2.1
+pandas>=2.0,<2.3
 openpyxl
 
 # Windows'da zoneinfo (Asia/Tashkent) uchun IANA tz bazasi
