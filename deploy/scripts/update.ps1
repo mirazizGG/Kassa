@@ -89,16 +89,19 @@ try {
 	}
 
 	# --- Frontend ---
-	if ($changed | Select-String "^frontend/") {
-		if ($FromApp) { Set-Status -Phase "qurilmoqda" -Message "Frontend qurilmoqda (biroz vaqt oladi)..." -Running }
-		Write-Step "Frontend o'zgardi - npm ci + build..."
+	# frontend/dist repo bilan birga keladi (uyda `deploy\publish.ps1` build qilgan).
+	# Shuning uchun serverda npm/build KERAK EMAS - `git pull` yangi dist'ni ham oldi.
+	if ($changed | Select-String "^frontend/dist/") {
+		Write-Ok "Frontend yangilandi (tayyor dist repodan keldi)"
+	} elseif (($changed | Select-String "^frontend/") -and (Get-Command npm -ErrorAction SilentlyContinue)) {
+		if ($FromApp) { Set-Status -Phase "qurilmoqda" -Message "Frontend qurilmoqda..." -Running }
+		Write-Step "Frontend manbasi o'zgardi, dist yangilanmagan - npm build..."
 		Push-Location $FrontendDir
 		if ($changed | Select-String "frontend/package-lock.json") { npm ci }
 		npm run build
 		$buildOk = $LASTEXITCODE -eq 0
 		Pop-Location
 		if (-not $buildOk) { Fail-Status "Frontend build xato berdi" }
-		Write-Ok "Frontend qayta yig'ildi"
 	}
 
 	# --- Backendni qayta ishga tushirish ---

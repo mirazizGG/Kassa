@@ -15,6 +15,7 @@ from core import get_password_hash, limiter
 from bot import bot, dp, check_debts
 from routers import auth, inventory, pos, crm, finance, tasks, sales, audit, settings, suppliers, system
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 # Configure Rate Limiting - MOVED TO core.py
 
@@ -136,13 +137,40 @@ app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 async def favicon():
     return Response(content=b"", media_type="image/x-icon")
 
-@app.get("/")
-async def root():
-    return {"message": "Kassa API is running", "version": "2.0.0"}
-
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+# --- Frontend (yig'ilgan statik fayllar) ---
+# Caddy/Node kerak emas: backend'ning o'zi frontendni ham beradi.
+# frontend/dist repo bilan birga keladi (uyda `deploy/publish.ps1` build qiladi).
+_FRONTEND_DIST = os.path.normpath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "frontend", "dist")
+)
+
+
+class SPAStaticFiles(StaticFiles):
+    """Noma'lum yo'llar (React Router sahifalari) uchun index.html qaytaradi."""
+
+    async def get_response(self, path, scope):
+        try:
+            response = await super().get_response(path, scope)
+        except StarletteHTTPException as exc:
+            if exc.status_code == 404:
+                return await super().get_response("index.html", scope)
+            raise
+        if response.status_code == 404:
+            return await super().get_response("index.html", scope)
+        return response
+
+
+if os.path.isfile(os.path.join(_FRONTEND_DIST, "index.html")):
+    app.mount("/", SPAStaticFiles(directory=_FRONTEND_DIST, html=True), name="frontend")
+else:
+    @app.get("/")
+    async def root():
+        return {"message": "Kassa API is running", "version": "2.0.0"}
 
 if __name__ == "__main__":
     import uvicorn

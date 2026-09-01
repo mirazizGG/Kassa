@@ -13,9 +13,11 @@ originRequest:
   noTLSVerify: false
 
 ingress:
-  # Butun tizim bitta manzildan (frontend + /api + /uploads)
+  # Butun tizim bitta manzildan (backend'ning o'zi frontend + API + /uploads beradi).
+  # To'g'ridan-to'g'ri :8000 ga - Caddy KERAK EMAS.
+  # (Caddy ishlatilsa: http://localhost:8080)
   - hostname: kassa.<SIZNING-DOMEN>
-    service: http://localhost:8080
+    service: http://localhost:8000
 
   # Majburiy oxirgi qoida
   - service: http_status:404

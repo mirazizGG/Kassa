@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from database import SessionLocal as AsyncSessionLocal, Client, Employee, Attendance, StoreSetting, Product, Category, Supplier, Sale, SaleItem, Expense
 from datetime import datetime, timezone
 import os
