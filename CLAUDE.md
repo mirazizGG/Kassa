@@ -202,6 +202,7 @@ Uses TanStack Query (React Query) for data fetching:
 - Sales automatically decrement product stock
 - Refunds (admin/manager only) restore stock and mark sale as "refunded"
 - Supply/incoming stock tracked separately in Supply table
+- Barcode name lookup: `GET /inventory/barcode-lookup/{barcode}` ([routers/inventory.py](backend/routers/inventory.py)) checks the local catalog first, then the Open Food Facts public API; returns `{found, exists, name, brand, image_url, source}` and never errors on a miss / no internet (in-process cache for hits). The Inventory add-product form calls it on barcode blur / Enter / a search button and prefills the name when empty.
 
 **Client Debt:**
 

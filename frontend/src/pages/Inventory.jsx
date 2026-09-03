@@ -78,6 +78,36 @@ const Inventory = () => {
     unit: "dona",
   });
 
+  const [barcodeLookupLoading, setBarcodeLookupLoading] = useState(false);
+
+  // Shtrix-kod bo'yicha internetdan (Open Food Facts) mahsulot nomini topish.
+  const lookupBarcode = async (rawCode) => {
+    const code = (rawCode || "").trim();
+    if (code.length < 6) return;
+    setBarcodeLookupLoading(true);
+    try {
+      const res = await api.get(
+        `/inventory/barcode-lookup/${encodeURIComponent(code)}`
+      );
+      const data = res.data || {};
+      if (data.exists) {
+        toast.warning(`Bu shtrix-kod allaqachon bor: "${data.name}"`);
+      } else if (data.found && data.name) {
+        setFormData((prev) => ({
+          ...prev,
+          name: prev.name?.trim() ? prev.name : data.name,
+        }));
+        toast.success(`Internetdan topildi: ${data.name}`);
+      } else {
+        toast.info("Bu shtrix-kod internetdan topilmadi — nomini qo'lda yozing");
+      }
+    } catch {
+      toast.info("Internetdan qidirib bo'lmadi — nomini qo'lda yozing");
+    } finally {
+      setBarcodeLookupLoading(false);
+    }
+  };
+
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isStockLogOpen, setIsStockLogOpen] = useState(false);
 
@@ -630,17 +660,39 @@ const Inventory = () => {
                   <Label htmlFor="barcode" className="text-right">
                     Shtrix Kod
                   </Label>
-                  <Input
-                    id="barcode"
-                    className="col-span-3"
-                    value={formData.barcode}
-                    onChange={(e) =>
-                      setFormData({ ...formData, barcode: e.target.value })
-                    }
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") e.preventDefault();
-                    }}
-                  />
+                  <div className="col-span-3 flex gap-2">
+                    <Input
+                      id="barcode"
+                      className="flex-1"
+                      value={formData.barcode}
+                      onChange={(e) =>
+                        setFormData({ ...formData, barcode: e.target.value })
+                      }
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          lookupBarcode(e.target.value);
+                        }
+                      }}
+                      onBlur={(e) => {
+                        if (!editingProduct) lookupBarcode(e.target.value);
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      title="Nomini internetdan topish"
+                      disabled={barcodeLookupLoading}
+                      onClick={() => lookupBarcode(formData.barcode)}
+                    >
+                      {barcodeLookupLoading ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Search className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="buy_price" className="text-right">
