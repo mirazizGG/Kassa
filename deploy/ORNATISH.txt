@@ -75,7 +75,7 @@ ular faqat brauzer bilan kiradi.
 
   Kirish:
       Login:  miraziz
-      Parol:  8434
+      Parol:  changeme-dev
 
   >>> Darhol yangi (kuchli) parol qo'ying yoki o'zingizga alohida
       admin hisobi qo'shing. <<<
