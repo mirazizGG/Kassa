@@ -4,6 +4,8 @@ from sqlalchemy import select, update, delete
 from sqlalchemy.orm import joinedload
 from typing import List, Optional
 
+import httpx
+
 from database import get_db, Product, Category, Employee, Supply, StockMove
 from schemas import ProductCreate, ProductOut, CategoryCreate, CategoryOut, SupplyCreate, SupplyOut, StockMoveOut, StockReturn
 from core import get_current_user
@@ -162,6 +164,81 @@ async def get_products(
     
     result = await db.execute(stmt)
     return result.scalars().all()
+
+# Shtrix-kod bo'yicha internetdan qidiruv natijalari uchun oddiy kesh
+# (bir sessiya davomida bir kod ikki marta so'ralsa — internetga qayta chiqmaymiz).
+_BARCODE_CACHE: dict[str, dict] = {}
+
+
+@router.get("/barcode-lookup/{barcode}")
+async def barcode_lookup(
+    barcode: str,
+    current_user: Employee = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Shtrix-kod -> mahsulot nomi.
+
+    1) Avval o'z bazamizda qaraymiz (mahsulot allaqachon bor bo'lsa — bildiramiz).
+    2) Topilmasa Open Food Facts (ochiq, bepul) bazasidan nomni olamiz.
+    Internet yo'q / topilmasa — `found: false` qaytadi, xato bermaydi.
+    """
+    barcode = (barcode or "").strip()
+    if not barcode:
+        raise HTTPException(status_code=422, detail="Shtrix-kod bo'sh")
+
+    existing = (
+        await db.execute(select(Product).where(Product.barcode == barcode))
+    ).scalars().first()
+    if existing:
+        return {
+            "found": True,
+            "exists": True,
+            "source": "local",
+            "product_id": existing.id,
+            "name": existing.name,
+            "brand": None,
+            "image_url": None,
+        }
+
+    if barcode in _BARCODE_CACHE:
+        return _BARCODE_CACHE[barcode]
+
+    result = {"found": False, "exists": False, "source": None, "name": "", "brand": None, "image_url": None}
+    url = f"https://world.openfoodfacts.org/api/v2/product/{barcode}.json"
+    params = {"fields": "product_name,product_name_ru,product_name_uz,brands,image_front_small_url,quantity"}
+    try:
+        async with httpx.AsyncClient(
+            timeout=6.0, headers={"User-Agent": "SmartKassa POS (self-hosted)"}
+        ) as client:
+            resp = await client.get(url, params=params)
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get("status") == 1:
+                p = data.get("product", {}) or {}
+                name = (
+                    p.get("product_name_ru")
+                    or p.get("product_name")
+                    or p.get("product_name_uz")
+                    or ""
+                ).strip()
+                qty = (p.get("quantity") or "").strip()
+                if name and qty and qty.lower() not in name.lower():
+                    name = f"{name} {qty}"
+                result = {
+                    "found": bool(name),
+                    "exists": False,
+                    "source": "openfoodfacts",
+                    "name": name,
+                    "brand": (p.get("brands") or "").strip() or None,
+                    "image_url": p.get("image_front_small_url"),
+                }
+    except (httpx.HTTPError, ValueError):
+        pass
+
+    if result["found"]:
+        _BARCODE_CACHE[barcode] = result
+    return result
+
 
 @router.post("/products", response_model=ProductOut)
 async def create_product(
