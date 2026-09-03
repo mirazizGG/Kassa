@@ -108,6 +108,19 @@ ular faqat brauzer bilan kiradi.
       .\stop-all.ps1     - to'xtatish
       .\update.ps1       - GitHub'dan yangilash
 
-  Admin parolini unutib qolsangiz (faqat o'shanda):
+----------------------------------------------------------------
+  MIRAZIZ PAROLINI KUCHAYTIRISH (yoki unutilganда tiklash)
+----------------------------------------------------------------
+
+  "miraziz" hisobi himoyalangan — uni saytdan (Xodimlar bo'limidan)
+  o'zgartirib bo'lmaydi. Parolini FAQAT server kompyuterda o'zgartiriladi:
+
       cd C:\SmartKassa\backend
-      python reset_admin.py
+      python reset_admin.py "BuYergaKuchliParol"
+
+  Buyruqda parol yozmasangiz — skript so'raydi.
+  Skript parolni hech qayerga saqlab qo'ymaydi.
+
+  Muqobil yo'l: "miraziz" ni tegmай qo'ying, o'zingizga Xodimlar
+  bo'limidan alohida admin hisobi (kuchli parol bilan) qo'shing va
+  kundalik ishда o'shandan foydalaning.
