@@ -114,8 +114,10 @@ All timestamps use `datetime.utcnow()` and are stored as DateTime columns.
 
 **Default Credentials:**
 
-- Username: `admin`
-- Password: `123` (created in [main.py](backend/main.py) on startup if the user doesn't already exist)
+- Username: `miraziz`
+- Password: `8434` (created in [main.py](backend/main.py) on startup only if no admin account exists at all)
+
+An admin/manager resets a forgotten employee password from the Employees page — edit the employee, type a new password in "Yangi Parol", the eye icon reveals it. Backend: `PATCH /auth/employees/{id}` with a `password` field. Stored passwords are hashed and cannot be read back — only replaced.
 
 **Single active session per user:** logging in while a previous session token hasn't expired returns `409 Conflict` ("boshqa qurilmada tizimga kirgan"). This is enforced via `Employee.session_token`/`session_expires_at` in [routers/auth.py](backend/routers/auth.py) — not a bug. Sessions expire after `ACCESS_TOKEN_EXPIRE_MINUTES` (600 min) or clear on logout.
 

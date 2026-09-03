@@ -207,7 +207,7 @@ async def delete_employee(
     if not db_user:
         raise HTTPException(status_code=404, detail="Employee not found")
 
-    if db_user.username == "admin":
+    if db_user.username in ("admin", "miraziz"):
         raise HTTPException(status_code=400, detail="Asosiy administratorni o'chirib bo'lmaydi")
         
     await db.delete(db_user)
