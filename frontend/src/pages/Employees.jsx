@@ -76,6 +76,12 @@ const roleLabel = (role) => ROLE_LABELS[role] || role;
 const Employees = () => {
   const role = localStorage.getItem("role");
   const currentUserId = parseInt(localStorage.getItem("userId")); // Assuming userId is stored
+  const isPrimaryAdmin = localStorage.getItem("username") === "miraziz"; // bosh admin
+  // Bosh admin (miraziz) hisobiga hech kim tegmaydi; boshqa admin hisoblarini
+  // faqat bosh admin boshqaradi (o'zini tahrirlash bundan mustasno).
+  const canManageEmp = (emp) =>
+    emp.username !== "miraziz" &&
+    (isPrimaryAdmin || emp.role !== "admin" || emp.id === currentUserId);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [isEmployeeModalOpen, setIsEmployeeModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -459,7 +465,7 @@ const Employees = () => {
                           <SelectValue placeholder="Lavozimni tanlang" />
                         </SelectTrigger>
                         <SelectContent>
-                          {role === "admin" && (
+                          {isPrimaryAdmin && (
                             <SelectItem value="admin">Admin</SelectItem>
                           )}
                           {(role === "admin" || role === "manager") && (
@@ -559,7 +565,7 @@ const Employees = () => {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              {emp.username !== "miraziz" &&
+                              {canManageEmp(emp) &&
                                 (role === "admin" ||
                                   (role === "manager" &&
                                     emp.role === "cashier")) && (
@@ -576,7 +582,7 @@ const Employees = () => {
                                   Tahrirlash
                                 </DropdownMenuItem>
                               )}
-                              {emp.username !== "miraziz" &&
+                              {canManageEmp(emp) &&
                                 ((role === "admin" &&
                                   emp.id !== currentUserId) ||
                                   (role === "manager" &&
@@ -609,7 +615,7 @@ const Employees = () => {
                               {role === "admin" &&
                                 emp.id !== currentUserId &&
                                 emp.username !== "admin" &&
-                                emp.username !== "miraziz" && (
+                                canManageEmp(emp) && (
                                   <DropdownMenuItem
                                     className="text-rose-500 focus:text-rose-500"
                                     onClick={() => {
@@ -1000,7 +1006,10 @@ const Employees = () => {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="admin">Admin</SelectItem>
+                        {(isPrimaryAdmin ||
+                          editingEmployee.role === "admin") && (
+                          <SelectItem value="admin">Admin</SelectItem>
+                        )}
                         <SelectItem value="manager">Menejer</SelectItem>
                         <SelectItem value="warehouse">Omborchi</SelectItem>
                         <SelectItem value="cashier">Kassir</SelectItem>

@@ -100,7 +100,11 @@ async def create_employee(
     
     if current_user.role == "manager" and user.role != "cashier":
         raise HTTPException(status_code=403, detail="Menejer faqat kassir yarata oladi")
-    
+
+    # Yangi admin qo'shishni faqat bosh admin (miraziz) qila oladi.
+    if user.role == "admin" and current_user.username != PRIMARY_ADMIN_USERNAME:
+        raise HTTPException(status_code=403, detail="Yangi admin qo'shishni faqat bosh admin qila oladi")
+
     hashed_password = get_password_hash(user.password)
     db_user = Employee(
         username=user.username,
@@ -160,7 +164,23 @@ async def update_employee(
             detail="Bosh administrator hisobini o'zgartirib bo'lmaydi.",
         )
 
+    # Boshqa admin hisobini faqat bosh admin (miraziz) tahrirlay oladi.
+    if (
+        db_user.role == "admin"
+        and db_user.id != current_user.id
+        and current_user.username != PRIMARY_ADMIN_USERNAME
+    ):
+        raise HTTPException(status_code=403, detail="Boshqa admin hisobini faqat bosh admin tahrirlay oladi")
+
     update_data = user_update.model_dump(exclude_unset=True)
+
+    # Admin rolini berishni faqat bosh admin qila oladi.
+    if (
+        update_data.get("role") == "admin"
+        and db_user.role != "admin"
+        and current_user.username != PRIMARY_ADMIN_USERNAME
+    ):
+        raise HTTPException(status_code=403, detail="Admin rolini faqat bosh admin bera oladi")
     
     if "password" in update_data and update_data["password"]:
         update_data["hashed_password"] = get_password_hash(update_data.pop("password"))
@@ -215,6 +235,9 @@ async def delete_employee(
 
     if db_user.username == PRIMARY_ADMIN_USERNAME:
         raise HTTPException(status_code=400, detail="Bosh administratorni o'chirib bo'lmaydi")
+
+    if db_user.role == "admin" and current_user.username != PRIMARY_ADMIN_USERNAME:
+        raise HTTPException(status_code=403, detail="Boshqa admin hisobini faqat bosh admin o'chira oladi")
         
     await db.delete(db_user)
     
