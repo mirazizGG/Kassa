@@ -24,16 +24,32 @@ serverga **Node.js va Caddy kerak emas** — faqat **Python + Git**. Windows 8.1
 
 ## Eng oson yo'l — bir fayllik o'rnatuvchi (LAN)
 
-Server kompyuterda PowerShell'da (Administrator shart emas — skript o'zi so'raydi):
+Server kompyuterda oddiy PowerShell oynasida (Administrator shart emas — skript o'zi so'raydi).
+Ikki yo'l, ikkalasi ham bir xil natija beradi:
+
+**A) Loyihani o'zingiz yuklab olib (tavsiya etiladi)**
 
 ```powershell
-irm https://raw.githubusercontent.com/mirazizGG/Kassa/main/deploy/install-smartkassa.ps1 -OutFile "$env:USERPROFILE\Desktop\install-smartkassa.ps1"
-& "$env:USERPROFILE\Desktop\install-smartkassa.ps1"
+git clone https://github.com/mirazizGG/Kassa.git C:\SmartKassa
+cd C:\SmartKassa
+.\deploy\install-smartkassa.ps1
 ```
 
-O'rnatuvchi: Python + Git ni yuklaydi (yo'q bo'lsa) · loyihani klon qiladi ·
+Skript o'sha papkani (`C:\SmartKassa`) ishlatadi — boshqa joyga qayta klon qilmaydi.
+(Git hali yo'q bo'lsa — 1-buyruq ishlamaydi; u holda B yo'lini ishlating, skript Git ni o'zi o'rnatadi.)
+
+**B) Hech narsa yuklamasdan, bitta buyruq bilan**
+
+```powershell
+irm https://raw.githubusercontent.com/mirazizGG/Kassa/main/deploy/install-smartkassa.ps1 | iex
+```
+
+Bu holda loyiha `C:\SmartKassa` ga klon qilinadi.
+
+O'rnatuvchi: Python + Git ni yuklaydi (yo'q bo'lsa) · kodni tayyorlaydi ·
 `pip install` · `backend\.env` (+ tasodifiy `SECRET_KEY`) · `APP_ENV=production` +
 `ALLOW_SELF_UPDATE=true` · ishga tushiradi · kompyuter yonganda avtomat ishlashini o'rnatadi.
+Qayta ishga tushirish xavfsiz — faqat yangilaydi.
 
 Tugagach: `http://SERVER-IP:8000`, login `miraziz` / `8434` (**darhol o'zgartiring**).
 

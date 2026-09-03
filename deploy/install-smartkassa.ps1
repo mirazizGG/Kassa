@@ -7,19 +7,27 @@
 
   Bu fayl:
     1. Python va Git ni o'rnatadi (yo'q bo'lsa)
-    2. Loyihani GitHub'dan klon qiladi  -> C:\SmartKassa
-    3. Kutubxonalarni o'rnatadi, backend\.env yaratadi
+    2. Loyiha kodini tayyorlaydi:
+         - agar shu skript loyiha ichidan (klon qilingan papkadan) ishga
+           tushirilsa -> o'sha papkani ishlatadi, git pull qiladi
+         - aks holda GitHub'dan C:\SmartKassa ga klon qiladi
+    3. Kutubxonalarni o'rnatadi, backend\.env yaratadi (tasodifiy SECRET_KEY)
     4. LAN rejimiga moslaydi (APP_ENV=production, ALLOW_SELF_UPDATE=true)
     5. Ishga tushiradi + kompyuter yonganda avtomat ishlashini o'rnatadi
 
   Frontend serverda BUILD QILINMAYDI - u repodagi tayyor `frontend/dist` dan
   olinadi va backend'ning o'zi beradi (bitta port: 8000).
 
-  ISHLATISH (do'kon serveri kompyuterida):
-    PowerShell'da (oddiy oynada ham bo'ladi - skript o'zi Administrator so'raydi):
+  ISHLATISH (do'kon serveri kompyuterida) - ikki yo'l, ikkalasi ham bir xil:
 
-      powershell -NoProfile -ExecutionPolicy Bypass -File "<shu fayl yo'li>"
+    A) Loyihani GitHub'dan yuklab oling (ZIP yoki `git clone`), keyin:
+         PowerShell'da  ->  .\deploy\install-smartkassa.ps1
+       (loyiha o'sha joyda sozlanadi)
 
+    B) Hech narsa yuklamasdan, bitta buyruq bilan (C:\SmartKassa ga o'rnatadi):
+         irm https://raw.githubusercontent.com/mirazizGG/Kassa/main/deploy/install-smartkassa.ps1 | iex
+
+  Oddiy PowerShell oynasi yetarli - skript o'zi Administrator so'raydi.
   QAYTA ISHLATISH xavfsiz: bor narsani buzmaydi, faqat yangilaydi.
 ================================================================================
 #>
@@ -41,6 +49,15 @@ try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::
 $SelfUrl = "https://raw.githubusercontent.com/mirazizGG/Kassa/main/deploy/install-smartkassa.ps1"
 $PyWin10 = "https://www.python.org/ftp/python/3.12.7/python-3.12.7-amd64.exe"
 $PyWin81 = "https://www.python.org/ftp/python/3.9.13/python-3.9.13-amd64.exe"
+
+# Agar shu skript loyiha ichidan ishga tushirilgan bo'lsa (deploy\ papkasi
+# haqiqiy klon ichida) - o'sha joyni ishlatamiz, C:\SmartKassa ga klon qilmaymiz.
+if (-not $PSBoundParameters.ContainsKey('InstallDir') -and $PSScriptRoot) {
+    $repoRoot = Split-Path $PSScriptRoot -Parent
+    if ((Test-Path (Join-Path $repoRoot ".git")) -and (Test-Path (Join-Path $repoRoot "backend\main.py"))) {
+        $InstallDir = $repoRoot
+    }
+}
 
 function Step($m) { Write-Host "`n==> $m" -ForegroundColor Cyan }
 function Ok($m)   { Write-Host "  OK  $m" -ForegroundColor Green }
