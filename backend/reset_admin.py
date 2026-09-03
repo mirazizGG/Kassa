@@ -5,7 +5,7 @@ Ishlatish (backend/ papkasidan):
     python reset_admin.py                  -> yangi parolni so'raydi
     python reset_admin.py "YangiKuchliParol"  -> parolni to'g'ridan-to'g'ri beradi
 
-Parolni bermasangiz va hech narsa kiritmasangiz — "8434" qo'yiladi.
+Parolni bermasangiz va hech narsa kiritmasangiz — "8038434" qo'yiladi.
 Bu skript parolni hech qayerga yozib qo'ymaydi (faqat bazadagi hash yangilanadi).
 """
 
@@ -16,7 +16,7 @@ from database import SessionLocal, Employee, init_db
 from core import get_password_hash, PRIMARY_ADMIN_USERNAME
 
 ADMIN_USERNAME = PRIMARY_ADMIN_USERNAME
-DEFAULT_PASSWORD = "8434"
+DEFAULT_PASSWORD = "8038434"
 
 
 def _get_password() -> str:

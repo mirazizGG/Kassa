@@ -140,7 +140,7 @@ Server ishga tushgach:
 
 **Standart admin ma'lumotlari:**
 - Login: `miraziz`
-- Parol: `8434`
+- Parol: `8038434`
 
 ⚠️ **MUHIM**: Birinchi kirishdan keyin admin parolini o'zgartiring!
 

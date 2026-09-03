@@ -115,7 +115,7 @@ All timestamps use `datetime.utcnow()` and are stored as DateTime columns.
 **Default Credentials:**
 
 - Username: `miraziz`
-- Password: `8434` (created in [main.py](backend/main.py) on startup only if no admin account exists at all)
+- Password: `8038434` (created in [main.py](backend/main.py) on startup only if no admin account exists at all)
 
 An admin/manager resets a forgotten employee password from the Employees page — edit the employee, type a new password in "Yangi Parol", the eye icon reveals it. Backend: `PATCH /auth/employees/{id}` with a `password` field. Stored passwords are hashed and cannot be read back — only replaced.
 

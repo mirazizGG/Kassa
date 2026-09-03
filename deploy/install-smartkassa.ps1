@@ -242,7 +242,7 @@ else {
     Write-Host "   Manzil:  http://localhost:8000   (IP'ni  .\status.ps1  ko'rsatadi)" -ForegroundColor White
 }
 Write-Host ""
-Write-Host "   Login:  miraziz  /  8434     <---  DARHOL parolni o'zgartiring!" -ForegroundColor Yellow
+Write-Host "   Login:  miraziz  /  8038434     <---  DARHOL parolni o'zgartiring!" -ForegroundColor Yellow
 Write-Host ""
 Write-Host "   Kundalik:  cd `"$scripts`"" -ForegroundColor DarkGray
 Write-Host "     .\status.ps1   .\start-all.ps1   .\stop-all.ps1   .\update.ps1" -ForegroundColor DarkGray
