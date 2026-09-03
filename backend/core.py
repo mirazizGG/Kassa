@@ -58,6 +58,10 @@ if APP_ENV == "production" and SECRET_KEY == _DEV_SECRET_KEY:
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 600
 
+# Bosh administrator — bu hisobni API orqali o'zgartirib yoki o'chirib bo'lmaydi.
+# Parolni faqat serverda `python reset_admin.py` bilan tiklash mumkin.
+PRIMARY_ADMIN_USERNAME = "miraziz"
+
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/token")
 

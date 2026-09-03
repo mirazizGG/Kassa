@@ -11,7 +11,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 from database import init_db, engine, Base, SessionLocal, Employee
-from core import get_password_hash, limiter
+from core import get_password_hash, limiter, PRIMARY_ADMIN_USERNAME
 from bot import bot, dp, check_debts
 from routers import auth, inventory, pos, crm, finance, tasks, sales, audit, settings, suppliers, system
 from fastapi.staticfiles import StaticFiles
@@ -54,9 +54,9 @@ async def lifespan(app: FastAPI):
         result = await db.execute(select(Employee).where(Employee.role == "admin"))
         admin = result.scalars().first()
         if not admin:
-            print("Admin yaratilmoqda: miraziz / 8434")
+            print(f"Admin yaratilmoqda: {PRIMARY_ADMIN_USERNAME} / 8434")
             new_admin = Employee(
-                username="miraziz",
+                username=PRIMARY_ADMIN_USERNAME,
                 hashed_password=get_password_hash("8434"),
                 role="admin",
                 permissions="all"

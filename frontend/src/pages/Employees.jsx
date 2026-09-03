@@ -559,9 +559,10 @@ const Employees = () => {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              {(role === "admin" ||
-                                (role === "manager" &&
-                                  emp.role === "cashier")) && (
+                              {emp.username !== "miraziz" &&
+                                (role === "admin" ||
+                                  (role === "manager" &&
+                                    emp.role === "cashier")) && (
                                 <DropdownMenuItem
                                   onClick={() => {
                                     setEditingEmployee({
@@ -575,10 +576,11 @@ const Employees = () => {
                                   Tahrirlash
                                 </DropdownMenuItem>
                               )}
-                              {((role === "admin" &&
-                                emp.id !== currentUserId) ||
-                                (role === "manager" &&
-                                  emp.role === "cashier")) && (
+                              {emp.username !== "miraziz" &&
+                                ((role === "admin" &&
+                                  emp.id !== currentUserId) ||
+                                  (role === "manager" &&
+                                    emp.role === "cashier")) && (
                                 <DropdownMenuItem
                                   onClick={() => {
                                     updateEmployeeMutation.mutate({
@@ -606,7 +608,8 @@ const Employees = () => {
                               )}
                               {role === "admin" &&
                                 emp.id !== currentUserId &&
-                                emp.username !== "admin" && (
+                                emp.username !== "admin" &&
+                                emp.username !== "miraziz" && (
                                   <DropdownMenuItem
                                     className="text-rose-500 focus:text-rose-500"
                                     onClick={() => {
