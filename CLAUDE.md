@@ -27,13 +27,10 @@ python main.py
 uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
 # Database utilities (run from backend/)
-python check_db_users.py      # View all employees
-python reset_admin.py         # Reset admin password
-python check_all.py           # View employees and shifts
-python check_shifts.py        # Check open shifts
-python fix_shifts.py          # Close all open shifts (emergency only)
-python seed_data.py           # Seed initial data
+python reset_admin.py         # Reset admin password (lockout recovery)
 ```
+
+Schema changes (new tables/columns) are applied automatically on `main.py` startup — there are no separate migration scripts.
 
 ### Frontend
 

@@ -208,20 +208,8 @@ Ma'lumotlar bazasi `market.db` faylida saqlanadi. Avtomatik migratsiyalar mavjud
 **Yordamchi Skriptlar:**
 
 ```bash
-# Barcha xodimlarni ko'rish
-python check_db_users.py
-
-# Admin parolini qayta o'rnatish
+# Admin parolini qayta o'rnatish (parolni unutib qolganda)
 python reset_admin.py
-
-# Barcha xodimlar va smenalarni ko'rish
-python check_all.py
-
-# Ochiq smenalarni tekshirish
-python check_shifts.py
-
-# Barcha ochiq smenalarni yopish (faqat muammo bo'lganda!)
-python fix_shifts.py
 ```
 
 ## Xavfsizlik
@@ -324,20 +312,9 @@ python main.py --port 8001
 ```bash
 # Bazani backup qiling
 copy market.db market_backup.db
-
-# Migratsiya skriptlarini ishga tushiring
-python migrate_expenses.py
 ```
 
-### Smena ochilmayapti
-
-```bash
-# Ochiq smenalarni tekshiring
-python check_shifts.py
-
-# Agar kerak bo'lsa, yoping
-python fix_shifts.py
-```
+Jadval/ustun o'zgarishlari `main.py` ishga tushganda avtomatik qo'llanadi.
 
 ## Kelajakda Qo'shilishi Kerak
 
