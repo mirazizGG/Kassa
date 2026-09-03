@@ -1,0 +1,113 @@
+================================================================
+  SMARTKASSA — DO'KON KOMPYUTERIGA O'RNATISH
+================================================================
+
+Bu ishlar FAQAT do'kondagi doim yoniq turadigan bitta kompyuterda
+bajariladi. Kassirlarning kompyuteriga hech narsa o'rnatilmaydi —
+ular faqat brauzer bilan kiradi.
+
+
+----------------------------------------------------------------
+  1-QADAM.  PowerShell ni ochish
+----------------------------------------------------------------
+
+  - "Start" tugmasini bosing
+  - "PowerShell" deb yozing
+  - "Windows PowerShell" ni oching (oddiy oyna, Administrator shart emas)
+
+
+----------------------------------------------------------------
+  2-QADAM.  Buyruqlarni kiritish
+----------------------------------------------------------------
+
+  Quyidagi 3 qatorni BIRMA-BIR ko'chirib qo'ying, har biridan keyin
+  ENTER bosing:
+
+      git clone https://github.com/mirazizGG/Kassa.git C:\SmartKassa
+      cd C:\SmartKassa
+      .\deploy\install-smartkassa.ps1
+
+
+  AGAR 1-qator "git ... topilmadi" (yoki "not recognized") desa —
+  demak Git hali yo'q. U holda yuqoridagilar o'rniga SHU BITTA
+  qatorni kiriting:
+
+      irm https://raw.githubusercontent.com/mirazizGG/Kassa/main/deploy/install-smartkassa.ps1 | iex
+
+  (bu Git ni ham o'zi o'rnatadi va kodni C:\SmartKassa ga oladi)
+
+
+----------------------------------------------------------------
+  3-QADAM.  Ruxsat berish va kutish
+----------------------------------------------------------------
+
+  - "Administrator huquqi kerak" degan oyna chiqsa — "Ha" (Yes) deng
+  - Yangi oyna ochiladi va o'rnatish boshlanadi
+  - 10-20 daqiqa kuting (Python va Git yuklab olinadi)
+
+  AGAR "kompyuterni QAYTA YOQING" degan yozuv chiqsa:
+      - kompyuterni o'chirib-yoqing
+      - PowerShell ni qayta oching
+      - quyidagini kiriting:
+            cd C:\SmartKassa
+            .\deploy\install-smartkassa.ps1
+
+
+----------------------------------------------------------------
+  O'RNATUVCHI O'ZI BAJARADIGAN ISHLAR
+----------------------------------------------------------------
+
+  1. Python bor-yo'qligini tekshiradi -> yo'q bo'lsa o'rnatadi
+  2. Git bor-yo'qligini tekshiradi   -> yo'q bo'lsa o'rnatadi
+  3. Loyiha kodini tayyorlaydi (klon / yangilash)
+  4. Kutubxonalarni o'rnatadi (pip install)
+  5. backend\.env faylini yaratadi (maxfiy kalit bilan)
+  6. Do'kon (LAN) rejimiga sozlaydi
+  7. Dasturni ishga tushiradi (port 8000)
+  8. Kompyuter yonganda avtomat ishga tushishini o'rnatadi
+
+
+----------------------------------------------------------------
+  TUGAGACH
+----------------------------------------------------------------
+
+  Ekranda manzil ko'rsatiladi, masalan:  http://192.168.1.50:8000
+
+  Kirish:
+      Login:  miraziz
+      Parol:  8434
+
+  >>> Darhol yangi (kuchli) parol qo'ying yoki o'zingizga alohida
+      admin hisobi qo'shing. <<<
+
+  Kassirlar o'z kompyuterlaridan brauzerga o'sha manzilni yozib
+  kiradi (masalan  http://192.168.1.50:8000 ).
+
+
+----------------------------------------------------------------
+  KEYINCHALIK — DASTURNI YANGILASH
+----------------------------------------------------------------
+
+  Uyda (dasturchi kompyuterida):
+      .\deploy\publish.ps1 "nima o'zgardi"
+
+  Do'konda:
+      dastur ichidagi "Yangilash" tugmasini bosish
+      (yoki:  cd C:\SmartKassa\deploy\scripts  ;  .\update.ps1 )
+
+  MUHIM: yangilashni savdo vaqtida qilmang — dastur 5-10 soniyaga
+  to'xtaydi.
+
+
+----------------------------------------------------------------
+  KUNDALIK BUYRUQLAR  (cd C:\SmartKassa\deploy\scripts)
+----------------------------------------------------------------
+
+      .\status.ps1       - holатни ko'rish (ishlayaptimi, IP manzil)
+      .\start-all.ps1    - ishga tushirish
+      .\stop-all.ps1     - to'xtatish
+      .\update.ps1       - GitHub'dan yangilash
+
+  Admin parolini unutib qolsangiz (faqat o'shanda):
+      cd C:\SmartKassa\backend
+      python reset_admin.py
