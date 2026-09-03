@@ -35,7 +35,7 @@ O'rnatuvchi: Python + Git ni yuklaydi (yo'q bo'lsa) · loyihani klon qiladi ·
 `pip install` · `backend\.env` (+ tasodifiy `SECRET_KEY`) · `APP_ENV=production` +
 `ALLOW_SELF_UPDATE=true` · ishga tushiradi · kompyuter yonganda avtomat ishlashini o'rnatadi.
 
-Tugagach: `http://SERVER-IP:8000`, login `admin` / `123` (**darhol o'zgartiring**).
+Tugagach: `http://SERVER-IP:8000`, login `miraziz` / `8434` (**darhol o'zgartiring**).
 
 Internet orqali kirish (Cloudflare Tunnel) kerak bo'lsa — pastdagi to'liq qo'llanma.
 
@@ -131,7 +131,9 @@ Tekshirish:
 - Do'kon ichidan: `http://SERVER-IP:8000` (Caddy ishlasa `:8080` ham)
 - Tashqaridan: `https://kassa.SIZNING-DOMEN`
 
-Login: `admin` / `123` — **darhol parolni o'zgartiring** (Xodimlar bo'limida).
+Login: `miraziz` / `8434` — **darhol parolni o'zgartiring** (Xodimlar bo'limida).
+
+Xodim parolini unutsa: Xodimlar bo'limi → xodimni tahrirlash → "Yangi Parol" ga yangi parol yozing → ko'z belgisi bilan ko'rib, xodimga aytasiz. Eski parolni tizim ko'rsata olmaydi (u shifrlangan), faqat yangisini qo'yish mumkin.
 
 ## 5. Avtomatik ishga tushirish (kompyuter yonganda)
 
@@ -213,7 +215,7 @@ Loglar: `deploy\run\*.log`
 
 - [ ] `backend\.env` da `SECRET_KEY` — tasodifiy (setup avtomatik qildi)
 - [ ] `backend\.env` da `ALLOWED_ORIGINS` — faqat o'z domeningiz, `*` emas
-- [ ] `admin` / `123` paroli o'zgartirilgan
+- [ ] `miraziz` / `8434` paroli o'zgartirilgan
 - [ ] `backend\.env` da `APP_ENV=production` (zaif `SECRET_KEY` bilan ishga tushmaydi)
 - [ ] Windows Firewall: LAN uchun 8000 port ochiq (internetdan kirish faqat tunnel orqali)
 - [ ] Cloudflare dashboard'da domenga **proxy (to'q sariq bulut)** yoniq

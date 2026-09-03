@@ -139,8 +139,8 @@ Server ishga tushgach:
 ### 7. Birinchi Kirish
 
 **Standart admin ma'lumotlari:**
-- Login: `admin`
-- Parol: `admin123`
+- Login: `miraziz`
+- Parol: `8434`
 
 ⚠️ **MUHIM**: Birinchi kirishdan keyin admin parolini o'zgartiring!
 
