@@ -1,9 +1,9 @@
 import asyncio
 from sqlalchemy import select
 from database import SessionLocal, Employee, init_db
-from core import get_password_hash
+from core import get_password_hash, PRIMARY_ADMIN_USERNAME
 
-ADMIN_USERNAME = "miraziz"
+ADMIN_USERNAME = PRIMARY_ADMIN_USERNAME
 ADMIN_PASSWORD = "8434"
 
 

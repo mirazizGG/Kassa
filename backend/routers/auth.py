@@ -8,7 +8,7 @@ from typing import List, Optional
 
 from database import get_db, Employee
 from schemas import Token, EmployeeCreate, EmployeeOut, EmployeeUpdate
-from core import verify_password, get_password_hash, create_access_token, get_current_user, ACCESS_TOKEN_EXPIRE_MINUTES, limiter
+from core import verify_password, get_password_hash, create_access_token, get_current_user, ACCESS_TOKEN_EXPIRE_MINUTES, limiter, PRIMARY_ADMIN_USERNAME
 from routers.audit import log_action
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -153,7 +153,13 @@ async def update_employee(
     
     if not db_user:
         raise HTTPException(status_code=404, detail="Employee not found")
-    
+
+    if db_user.username == PRIMARY_ADMIN_USERNAME:
+        raise HTTPException(
+            status_code=403,
+            detail="Bosh administrator hisobini o'zgartirib bo'lmaydi.",
+        )
+
     update_data = user_update.model_dump(exclude_unset=True)
     
     if "password" in update_data and update_data["password"]:
@@ -207,8 +213,8 @@ async def delete_employee(
     if not db_user:
         raise HTTPException(status_code=404, detail="Employee not found")
 
-    if db_user.username in ("admin", "miraziz"):
-        raise HTTPException(status_code=400, detail="Asosiy administratorni o'chirib bo'lmaydi")
+    if db_user.username == PRIMARY_ADMIN_USERNAME:
+        raise HTTPException(status_code=400, detail="Bosh administratorni o'chirib bo'lmaydi")
         
     await db.delete(db_user)
     

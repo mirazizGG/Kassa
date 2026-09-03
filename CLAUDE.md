@@ -119,6 +119,8 @@ All timestamps use `datetime.utcnow()` and are stored as DateTime columns.
 
 An admin/manager resets a forgotten employee password from the Employees page — edit the employee, type a new password in "Yangi Parol", the eye icon reveals it. Backend: `PATCH /auth/employees/{id}` with a `password` field. Stored passwords are hashed and cannot be read back — only replaced.
 
+**Primary admin lock:** the account named `PRIMARY_ADMIN_USERNAME` ([core.py](backend/core.py), `miraziz`) cannot be edited or deleted through the API — `PATCH`/`DELETE /auth/employees/{id}` refuse it (403/400) and the frontend hides those actions for that row. Change its password only on the server with `python reset_admin.py`. Other admin accounts can be freely added, edited, and deleted by an admin.
+
 **Single active session per user:** logging in while a previous session token hasn't expired returns `409 Conflict` ("boshqa qurilmada tizimga kirgan"). This is enforced via `Employee.session_token`/`session_expires_at` in [routers/auth.py](backend/routers/auth.py) — not a bug. Sessions expire after `ACCESS_TOKEN_EXPIRE_MINUTES` (600 min) or clear on logout.
 
 ### Telegram Bot Integration
