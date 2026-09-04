@@ -23,6 +23,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { UPDATE_INITIATOR_KEY } from "@/components/UpdateOverlay";
 
 const Login = () => {
   const [username, setUsername] = useState("");
@@ -62,6 +63,19 @@ const Login = () => {
       toast.success("Muvaffaqiyatli kirildi!", {
         description: `Xush kelibsiz, ${user}`,
       });
+
+      // GitHub'da yangi versiya bor-yo'qligini bir marta tekshiramiz; bo'lsa
+      // ilovaga kirishdan oldin avtomatik yuklab olamiz (self-update yoqilgan
+      // bo'lsagina). "Kuting" oynasini dashboard Layout ko'rsatadi.
+      try {
+        const { data: check } = await api.get("/system/update-check");
+        if (check.enabled && check.update_available) {
+          localStorage.setItem(UPDATE_INITIATOR_KEY, "1");
+          await api.post("/system/update");
+        }
+      } catch {
+        /* tekshirib bo'lmadi — login baribir davom etadi */
+      }
 
       if (role === "cashier") {
         navigate("/pos");
@@ -213,10 +227,10 @@ const Login = () => {
           <DialogHeader>
             <DialogTitle>Boshqa qurilmada aktiv sessiya</DialogTitle>
             <DialogDescription>
-              Bu foydalanuvchi hozir boshqa qurilmada tizimga kirgan. Agar
-              o'sha yerdan chiqishni unutgan bo'lsangiz, uni majburan
-              chiqarib, shu qurilmadan kirishingiz mumkin. Boshqa qurilmadagi
-              sessiya darhol yopiladi.
+              Bu foydalanuvchi hozir boshqa qurilmada tizimga kirgan. Agar o'sha
+              yerdan chiqishni unutgan bo'lsangiz, uni majburan chiqarib, shu
+              qurilmadan kirishingiz mumkin. Boshqa qurilmadagi sessiya darhol
+              yopiladi.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

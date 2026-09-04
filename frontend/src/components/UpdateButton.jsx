@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { UPDATE_INITIATOR_KEY } from "./UpdateOverlay";
 
 /**
  * "Dasturni yangilash" boshqaruvi. Barcha xodimlarga ko'rinadi, lekin faqat
@@ -51,15 +52,18 @@ export default function UpdateButton({ variant = "sidebar", expanded = true }) {
     setStarting(true);
     try {
       await api.post("/system/update");
+      localStorage.setItem(UPDATE_INITIATOR_KEY, "1");
       setConfirmOpen(false);
       window.dispatchEvent(new Event("smartkassa:update-started"));
     } catch (err) {
       if (err.response?.status === 409) {
+        localStorage.setItem(UPDATE_INITIATOR_KEY, "1");
         setConfirmOpen(false);
         window.dispatchEvent(new Event("smartkassa:update-started"));
       } else {
         toast.error("Xatolik", {
-          description: err.response?.data?.detail || "Yangilanishni boshlab bo'lmadi",
+          description:
+            err.response?.data?.detail || "Yangilanishni boshlab bo'lmadi",
         });
       }
     } finally {
@@ -85,7 +89,9 @@ export default function UpdateButton({ variant = "sidebar", expanded = true }) {
             : "text-muted-foreground"
         }`}
       >
-        <RefreshCw className={`h-4 w-4 ${available ? "animate-[spin_3s_linear_infinite]" : ""}`} />
+        <RefreshCw
+          className={`h-4 w-4 ${available ? "animate-[spin_3s_linear_infinite]" : ""}`}
+        />
         {available && <span>{label}</span>}
       </button>
     ) : (
@@ -126,14 +132,19 @@ export default function UpdateButton({ variant = "sidebar", expanded = true }) {
             <DialogTitle>Dasturni yangilash</DialogTitle>
             <DialogDescription>
               Yangilanish <b>30–60 soniya</b> davom etadi va shu vaqtda savdo
-              qilib bo'lmaydi. Barcha kompyuterlar avtomatik yangilanadi.
+              qilib bo'lmaydi. Boshqa kompyuterlarda savdo shu payt uzilib
+              qolishi mumkin, lekin "kuting" oynasi faqat sizga chiqadi.
               <br />
               <br />
               Savdo gavjum bo'lmagan vaqtda bajaring. Hozir davom etilsinmi?
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmOpen(false)} disabled={starting}>
+            <Button
+              variant="outline"
+              onClick={() => setConfirmOpen(false)}
+              disabled={starting}
+            >
               Bekor qilish
             </Button>
             <Button onClick={startUpdate} disabled={starting}>
