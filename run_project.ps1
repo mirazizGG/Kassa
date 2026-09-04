@@ -18,7 +18,7 @@ if (-not (Test-Path "backend/market.db")) {
 
 # 3. Start Backend
 Write-Host "Back-end ishga tushirilmoqda..." -ForegroundColor Green
-Start-Process -FilePath "python" -ArgumentList "backend/main.py" -WorkingDirectory "$PSScriptRoot" -WindowStyle Minimized
+Start-Process -FilePath "python" -ArgumentList "main.py" -WorkingDirectory "$PSScriptRoot/backend" -WindowStyle Hidden
 
 # Wait for backend to initialize
 Start-Sleep -Seconds 5
@@ -30,7 +30,7 @@ if (-not (Test-Path "node_modules")) {
     Write-Host "Node modules o'rnatilmoqda..." -ForegroundColor Yellow
     npm install
 }
-Start-Process -FilePath "npm" -ArgumentList "run dev" -WorkingDirectory "$PSScriptRoot/frontend"
+Start-Process -FilePath "cmd.exe" -ArgumentList "/c npm run dev" -WorkingDirectory "$PSScriptRoot/frontend" -WindowStyle Hidden
 
 Write-Host "Tizim ishga tushdi!" -ForegroundColor Cyan
 Write-Host "Backend: http://localhost:8000"

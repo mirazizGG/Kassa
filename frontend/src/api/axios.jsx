@@ -29,7 +29,8 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    const isLoginRequest = error.config?.url?.includes("/auth/token");
+    if (error.response?.status === 401 && !isLoginRequest) {
       // Clear stored auth data
       localStorage.removeItem("token");
       localStorage.removeItem("role");
