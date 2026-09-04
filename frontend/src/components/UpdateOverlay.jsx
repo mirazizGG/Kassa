@@ -3,6 +3,8 @@ import { Loader2, CheckCircle2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import api from "../api/axios";
 
+export const UPDATE_INITIATOR_KEY = "smartkassa_update_initiator";
+
 const PHASE_TEXT = {
   boshlanmoqda: "Boshlanmoqda...",
   tekshirilmoqda: "GitHub tekshirilmoqda...",
@@ -15,8 +17,10 @@ const PHASE_TEXT = {
 
 /**
  * Butun ekranni yopadigan "Yangilanmoqda, kuting" oynasi.
- * Ishga tushadi: `smartkassa:update-started` hodisasi kelganda (shu kompda tugma),
- * yoki sahifa ochilganda server "updating" desa (boshqa kompda bosilgan).
+ * Faqat yangilanishni BOSHLAGAN brauzer/akkauntda ko'rinadi (localStorage
+ * bayrog'i orqali) — boshqa kassirlar sahifani shu vaqt ichida ochsa ham
+ * bu oynani ko'rmaydi, backend qayta ishga tushganda ularning so'rovlari
+ * bir necha soniyaga ishlamay, so'ng o'zi tiklanadi.
  */
 export default function UpdateOverlay() {
   const [active, setActive] = useState(false);
@@ -34,11 +38,14 @@ export default function UpdateOverlay() {
     window.addEventListener("smartkassa:update-started", onEvent);
 
     (async () => {
+      if (localStorage.getItem(UPDATE_INITIATOR_KEY) !== "1") return;
       try {
         const { data: v } = await api.get("/system/version");
         if (v.updating) {
           startedAt.current = Date.now();
           setActive(true);
+        } else {
+          localStorage.removeItem(UPDATE_INITIATOR_KEY);
         }
       } catch {
         /* e'tibor bermaymiz */
@@ -60,11 +67,13 @@ export default function UpdateOverlay() {
           const { data } = await api.get("/system/update-status");
           if (!cancelled) setStatus(data);
           if (data.running === false && data.ok === true) {
+            localStorage.removeItem(UPDATE_INITIATOR_KEY);
             if (!cancelled) setDone("ok");
             setTimeout(() => window.location.reload(), 1500);
             return;
           }
           if (data.running === false && data.ok === false) {
+            localStorage.removeItem(UPDATE_INITIATOR_KEY);
             if (!cancelled) setDone("error");
             return;
           }
@@ -74,6 +83,7 @@ export default function UpdateOverlay() {
             setStatus((s) => ({ ...s, phase: "qayta_ishga_tushmoqda" }));
         }
         if (Date.now() - startedAt.current > 6 * 60 * 1000) {
+          localStorage.removeItem(UPDATE_INITIATOR_KEY);
           if (!cancelled) {
             setStatus({
               message: "Yangilanish juda uzoq cho'zildi. Serverni tekshiring.",
