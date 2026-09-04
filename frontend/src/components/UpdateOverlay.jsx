@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Loader2, CheckCircle2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import api from "../api/axios";
 
 const PHASE_TEXT = {
   boshlanmoqda: "Boshlanmoqda...",
@@ -11,10 +12,6 @@ const PHASE_TEXT = {
   qurilmoqda: "Dastur qurilmoqda (biroz vaqt oladi)...",
   qayta_ishga_tushmoqda: "Qayta ishga tushmoqda...",
 };
-
-const authHeaders = () => ({
-  Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
-});
 
 /**
  * Butun ekranni yopadigan "Yangilanmoqda, kuting" oynasi.
@@ -38,20 +35,18 @@ export default function UpdateOverlay() {
 
     (async () => {
       try {
-        const res = await fetch("/system/version", { headers: authHeaders() });
-        if (res.ok) {
-          const v = await res.json();
-          if (v.updating) {
-            startedAt.current = Date.now();
-            setActive(true);
-          }
+        const { data: v } = await api.get("/system/version");
+        if (v.updating) {
+          startedAt.current = Date.now();
+          setActive(true);
         }
       } catch {
         /* e'tibor bermaymiz */
       }
     })();
 
-    return () => window.removeEventListener("smartkassa:update-started", onEvent);
+    return () =>
+      window.removeEventListener("smartkassa:update-started", onEvent);
   }, []);
 
   // Faol bo'lganда holatni so'rab turish
@@ -62,27 +57,27 @@ export default function UpdateOverlay() {
     const loop = async () => {
       while (!cancelled) {
         try {
-          const res = await fetch("/system/update-status", { headers: authHeaders() });
-          if (res.ok) {
-            const data = await res.json();
-            if (!cancelled) setStatus(data);
-            if (data.running === false && data.ok === true) {
-              if (!cancelled) setDone("ok");
-              setTimeout(() => window.location.reload(), 1500);
-              return;
-            }
-            if (data.running === false && data.ok === false) {
-              if (!cancelled) setDone("error");
-              return;
-            }
+          const { data } = await api.get("/system/update-status");
+          if (!cancelled) setStatus(data);
+          if (data.running === false && data.ok === true) {
+            if (!cancelled) setDone("ok");
+            setTimeout(() => window.location.reload(), 1500);
+            return;
+          }
+          if (data.running === false && data.ok === false) {
+            if (!cancelled) setDone("error");
+            return;
           }
         } catch {
           // backend qayta ishga tushayotgan bo'lishi mumkin
-          if (!cancelled) setStatus((s) => ({ ...s, phase: "qayta_ishga_tushmoqda" }));
+          if (!cancelled)
+            setStatus((s) => ({ ...s, phase: "qayta_ishga_tushmoqda" }));
         }
         if (Date.now() - startedAt.current > 6 * 60 * 1000) {
           if (!cancelled) {
-            setStatus({ message: "Yangilanish juda uzoq cho'zildi. Serverni tekshiring." });
+            setStatus({
+              message: "Yangilanish juda uzoq cho'zildi. Serverni tekshiring.",
+            });
             setDone("error");
           }
           return;
@@ -106,7 +101,9 @@ export default function UpdateOverlay() {
           <>
             <CheckCircle2 className="mx-auto h-14 w-14 text-emerald-500" />
             <h3 className="mt-4 text-lg font-bold">Yangilandi!</h3>
-            <p className="mt-1 text-sm text-muted-foreground">Sahifa yangilanmoqda...</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Sahifa yangilanmoqda...
+            </p>
           </>
         ) : done === "error" ? (
           <>
@@ -115,7 +112,10 @@ export default function UpdateOverlay() {
             <p className="mt-1 break-words text-sm text-muted-foreground">
               {status.message || "Noma'lum xato"}
             </p>
-            <Button className="mt-5 w-full" onClick={() => window.location.reload()}>
+            <Button
+              className="mt-5 w-full"
+              onClick={() => window.location.reload()}
+            >
               Sahifani yangilash
             </Button>
           </>
@@ -124,7 +124,9 @@ export default function UpdateOverlay() {
             <Loader2 className="mx-auto h-14 w-14 animate-spin text-primary" />
             <h3 className="mt-4 text-lg font-bold">Yangilanmoqda, kuting...</h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              {PHASE_TEXT[status.phase] || status.message || "Iltimos kuting..."}
+              {PHASE_TEXT[status.phase] ||
+                status.message ||
+                "Iltimos kuting..."}
             </p>
             <p className="mt-4 text-xs text-muted-foreground">
               Bu oynani yopmang. Bir necha soniya vaqt oladi.
