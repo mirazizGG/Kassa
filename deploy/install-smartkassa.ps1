@@ -14,6 +14,7 @@
     3. Kutubxonalarni o'rnatadi, backend\.env yaratadi (tasodifiy SECRET_KEY)
     4. LAN rejimiga moslaydi (APP_ENV=production, ALLOW_SELF_UPDATE=true)
     5. Ishga tushiradi + kompyuter yonganda avtomat ishlashini o'rnatadi
+       + ish stolida (Desktop) "SmartKassa" yorlig'ini yaratadi
 
   Frontend serverda BUILD QILINMAYDI - u repodagi tayyor `frontend/dist` dan
   olinadi va backend'ning o'zi beradi (bitta port: 8000).
@@ -237,6 +238,8 @@ else {
         Step "Kompyuter yonganda avtomat ishlashini o'rnatish"
         Invoke-Child "install-autostart.ps1" $false
     }
+    Step "Ish stoli (Desktop) yorlig'ini yaratish"
+    Invoke-Child "create-desktop-shortcut.ps1" $false
 }
 
 # ---------- Xulosa ----------
@@ -259,6 +262,8 @@ if ($ip) {
 else {
     Write-Host "   Manzil:  http://localhost:8000   (IP'ni  .\status.ps1  ko'rsatadi)" -ForegroundColor White
 }
+Write-Host ""
+Write-Host "   Ish stolida 'SmartKassa' yorlig'i yaratildi - uni ikki marta bosib oching." -ForegroundColor White
 Write-Host ""
 Write-Host "   Login:  miraziz  /  changeme-dev     <---  DARHOL parolni o'zgartiring!" -ForegroundColor Yellow
 Write-Host ""
