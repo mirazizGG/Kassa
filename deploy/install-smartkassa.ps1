@@ -132,13 +132,31 @@ if (Get-Command git -ErrorAction SilentlyContinue) {
     Ok "Git bor: $(git --version)"
 }
 else {
-    Step "Git yuklanmoqda (GitHub'dan eng oxirgi versiya)..."
+    # Barqaror (pinned) versiya - GitHub API'siz (rate-limit'siz) to'g'ridan-to'g'ri.
+    # 2.47.x - Windows 7/8/8.1 ni qo'llaydigan OXIRGI versiya, Win10/11'da ham ishlaydi.
+    $gitExe = "Git-2.47.1-64-bit.exe"
+    $gitUrl = "https://github.com/git-for-windows/git/releases/download/v2.47.1.windows.1/$gitExe"
+
+    # Win 10/11'da imkoni bo'lsa eng oxirgi versiyani olamiz (releases sahifasidan, API'siz).
+    if ($isWin10Plus) {
+        try {
+            $resp = Invoke-WebRequest "https://github.com/git-for-windows/git/releases/latest" -UseBasicParsing -MaximumRedirection 5
+            $final = $resp.BaseResponse.ResponseUri.AbsoluteUri
+            if ($final -match "/tag/(v[0-9.]+\.windows\.[0-9]+)") {
+                $tag = $matches[1]
+                $page = Invoke-WebRequest "https://github.com/git-for-windows/git/releases/expanded_assets/$tag" -UseBasicParsing
+                if ($page.Content -match '(/git-for-windows/git/releases/download/\S+?64-bit\.exe)') {
+                    $gitUrl = "https://github.com" + $matches[1]
+                }
+            }
+        }
+        catch { Warn "Eng oxirgi versiya aniqlanmadi - barqaror 2.47.1 ishlatiladi" }
+    }
+
+    Step "Git yuklanmoqda..."
+    $exe = Join-Path $env:TEMP "git-setup.exe"
     try {
-        $rel = Invoke-RestMethod "https://api.github.com/repos/git-for-windows/git/releases/latest" -UseBasicParsing
-        $asset = $rel.assets | Where-Object { $_.name -match "64-bit\.exe$" -and $_.name -notmatch "rc" } | Select-Object -First 1
-        if (-not $asset) { throw "64-bit .exe topilmadi" }
-        $exe = Join-Path $env:TEMP "git-setup.exe"
-        Download $asset.browser_download_url $exe
+        Download $gitUrl $exe
         Start-Process $exe -Wait -ArgumentList "/VERYSILENT /NORESTART /SP- /NOCANCEL"
         Remove-Item $exe -ErrorAction SilentlyContinue
         Sync-Path
