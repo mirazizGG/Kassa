@@ -401,7 +401,7 @@ async def admin_backup_handler(message: Message) -> None:
                     "Kategoriya": category_names.get(p.category_id, "-"),
                     "Kelish narxi": p.buy_price,
                     "Sotish narxi": p.sell_price,
-                    "Qoldiq": p.stock,
+                    "Qoldiq": "∞" if p.is_infinite else p.stock,
                     "Birlik": p.unit,
                 }
                 for p in products

@@ -96,6 +96,30 @@ async def send_backup_to_telegram(bot, admin_id: int) -> None:
     )
 
 
+def _latest_backup_age_seconds() -> float | None:
+    """Eng yangi zaxira nusxa necha soniya oldin olingan (yo'q bo'lsa None)."""
+    if not BACKUP_DIR.exists():
+        return None
+    backups = sorted(
+        BACKUP_DIR.glob("backup_*.db"),
+        key=lambda item: item.stat().st_mtime,
+        reverse=True,
+    )
+    if not backups:
+        return None
+    return datetime.now(timezone.utc).timestamp() - backups[0].stat().st_mtime
+
+
+async def run_startup_backup(bot=None, min_gap_seconds: int = 3600) -> None:
+    """Ishga tushganda nusxa — lekin oxirgi nusxa juda yaqin bo'lsa o'tkazib yuboradi
+    (tez-tez qayta ishga tushirishda zaxira papkasi to'lib ketmasligi uchun)."""
+    age = _latest_backup_age_seconds()
+    if age is not None and age < min_gap_seconds:
+        print(f"Startup backup: o'tkazib yuborildi (oxirgi nusxa {int(age // 60)} daqiqa oldin).")
+        return
+    await run_daily_backup(bot)
+
+
 async def run_daily_backup(bot=None) -> None:
     """Scheduler job: lokal + (sozlangan bo'lsa) tashqi papka + Telegram nusxa.
 

@@ -68,11 +68,12 @@ async def create_sale(
                     raise HTTPException(status_code=403, detail="Menejer tasdig'i noto'g'ri")
                 manager_approved = True
 
-        if product.stock < item.quantity:
+        if not product.is_infinite and product.stock < item.quantity:
             raise HTTPException(status_code=400, detail=f"Mahsulot yetarli emas: {product.name}. Mavjud: {product.stock}")
 
-        # Deduct stock
-        product.stock -= item.quantity
+        # Deduct stock (cheksiz qoldiqli mahsulotlar kamaymaydi)
+        if not product.is_infinite:
+            product.stock -= item.quantity
         total_amount_check += item.quantity * item.price
 
         # Prepare item data for DB (tannarxni sotuv paytida muzlatib qo'yamiz)

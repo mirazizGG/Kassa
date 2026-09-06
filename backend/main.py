@@ -30,15 +30,25 @@ async def lifespan(app: FastAPI):
     # Har kuni ertalab soat 9:00 da qarzni tekshirish
     scheduler.add_job(check_debts, 'cron', hour=9, minute=0, args=[bot])
 
-    # SQLite backup runs daily unless explicitly disabled through the environment.
+    # SQLite backup — kun davomida bir necha marta + har ishga tushganda.
     # run_daily_backup: lokal nusxa + BACKUP_MIRROR_DIR (bo'lsa) + Telegram (bo'lsa).
+    backup_task = None
     if os.getenv("BACKUP_ENABLED", "true").lower() in {"1", "true", "yes"}:
-        from utils.backup import run_daily_backup
-        backup_hour = int(os.getenv("BACKUP_HOUR", "2"))
+        from utils.backup import run_daily_backup, run_startup_backup
+        # Standart: har kuni soat 12:00 va 22:00 + har ishga tushganda.
+        # BACKUP_HOURS="9,14,22" bilan .env dan o'zgartirish mumkin.
+        raw_hours = os.getenv("BACKUP_HOURS", "12,22")
+        backup_hours = sorted({
+            int(h) for h in raw_hours.replace(" ", "").split(",")
+            if h.strip().isdigit() and 0 <= int(h) <= 23
+        }) or [12, 22]
         scheduler.add_job(
-            run_daily_backup, 'cron', hour=backup_hour, minute=0,
+            run_daily_backup, 'cron', hour=",".join(str(h) for h in backup_hours), minute=0,
             id="daily_backup", replace_existing=True, kwargs={"bot": bot},
         )
+        print(f"Startup: Backup rejalashtirildi - har kuni soat {backup_hours} + ishga tushganda.")
+        # Har ishga tushganda darhol bitta nusxa (kechasi o'chirilgan kunlar uchun kafolat).
+        backup_task = asyncio.create_task(run_startup_backup(bot))
     scheduler.start()
     # Start Telegram only when a token is configured.
     bot_task = None
@@ -70,6 +80,11 @@ async def lifespan(app: FastAPI):
     finally:
         print("Shutdown: Stopping scheduler and bot...")
         scheduler.shutdown()
+        if backup_task and not backup_task.done():
+            try:
+                await asyncio.wait_for(backup_task, timeout=10.0)
+            except Exception as e:
+                print(f"Startup backup cleanup: {e}")
         if bot_task:
             bot_task.cancel()
             try:

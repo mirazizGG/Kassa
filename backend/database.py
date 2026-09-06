@@ -80,6 +80,7 @@ class Product(Base):
     buy_price = Column(Float) # Kelish narxi
     sell_price = Column(Float) # Sotish narxi
     stock = Column(Float, default=0) # Qoldiq
+    is_infinite = Column(Boolean, default=False) # Cheksiz qoldiq (sotuvda kamaymaydi)
     unit = Column(String, default="dona") # dona, kg, litr
     category_id = Column(Integer, ForeignKey("categories.id"), nullable=True)
     is_favorite = Column(Boolean, default=False) # Sevimli mahsulot (kassada yuqorida)
@@ -318,11 +319,20 @@ def ensure_sale_item_columns(sync_connection):
         )
 
 
+def ensure_product_columns(sync_connection):
+    columns = {column["name"] for column in inspect(sync_connection).get_columns("products")}
+    if "is_infinite" not in columns:
+        sync_connection.exec_driver_sql(
+            "ALTER TABLE products ADD COLUMN is_infinite BOOLEAN DEFAULT 0"
+        )
+
+
 async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await conn.run_sync(ensure_employee_session_columns)
         await conn.run_sync(ensure_sale_item_columns)
+        await conn.run_sync(ensure_product_columns)
 
 async def get_db():
     async with SessionLocal() as db:

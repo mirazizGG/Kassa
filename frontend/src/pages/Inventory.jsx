@@ -15,6 +15,7 @@ import {
   Truck,
   FolderPlus,
   History,
+  Infinity as InfinityIcon,
 } from "lucide-react";
 import { format } from "date-fns";
 import {
@@ -75,6 +76,7 @@ const Inventory = () => {
     buy_price: "",
     sell_price: "",
     stock: 0,
+    is_infinite: false,
     unit: "dona",
   });
 
@@ -87,7 +89,7 @@ const Inventory = () => {
     setBarcodeLookupLoading(true);
     try {
       const res = await api.get(
-        `/inventory/barcode-lookup/${encodeURIComponent(code)}`
+        `/inventory/barcode-lookup/${encodeURIComponent(code)}`,
       );
       const data = res.data || {};
       if (data.exists) {
@@ -99,7 +101,9 @@ const Inventory = () => {
         }));
         toast.success(`Internetdan topildi: ${data.name}`);
       } else {
-        toast.info("Bu shtrix-kod internetdan topilmadi — nomini qo'lda yozing");
+        toast.info(
+          "Bu shtrix-kod internetdan topilmadi — nomini qo'lda yozing",
+        );
       }
     } catch {
       toast.info("Internetdan qidirib bo'lmadi — nomini qo'lda yozing");
@@ -163,7 +167,7 @@ const Inventory = () => {
   });
   const threshold = settings?.low_stock_threshold ?? 5;
   const lowStockCount = products.filter(
-    (product) => product.stock < threshold,
+    (product) => !product.is_infinite && product.stock < threshold,
   ).length;
 
   const productMutation = useMutation({
@@ -224,6 +228,7 @@ const Inventory = () => {
       buy_price: "",
       sell_price: "",
       stock: 0,
+      is_infinite: false,
       unit: "dona",
     });
   };
@@ -237,6 +242,7 @@ const Inventory = () => {
       buy_price: product.buy_price ? String(product.buy_price) : "",
       sell_price: product.sell_price ? String(product.sell_price) : "",
       stock: product.stock,
+      is_infinite: !!product.is_infinite,
       unit: product.unit,
     });
     setIsModalOpen(true);
@@ -264,7 +270,7 @@ const Inventory = () => {
       toast.error("Sotish narxini kiriting");
       return;
     }
-    if (!formData.stock || formData.stock <= 0) {
+    if (!formData.is_infinite && (!formData.stock || formData.stock <= 0)) {
       toast.error("Kirim sonini kiriting");
       return;
     }
@@ -276,7 +282,7 @@ const Inventory = () => {
       ...formData,
       buy_price: Number(formData.buy_price) || 0,
       sell_price: Number(formData.sell_price) || 0,
-      stock: Number(formData.stock) || 0,
+      stock: formData.is_infinite ? 0 : Number(formData.stock) || 0,
     });
   };
 
@@ -297,9 +303,15 @@ const Inventory = () => {
         case "price-desc":
           return b.sell_price - a.sell_price;
         case "stock-asc":
-          return a.stock - b.stock;
+          return (
+            (a.is_infinite ? Infinity : a.stock) -
+            (b.is_infinite ? Infinity : b.stock)
+          );
         case "stock-desc":
-          return b.stock - a.stock;
+          return (
+            (b.is_infinite ? Infinity : b.stock) -
+            (a.is_infinite ? Infinity : a.stock)
+          );
         case "name-asc":
           return a.name.localeCompare(b.name);
         default:
@@ -331,470 +343,493 @@ const Inventory = () => {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-        <Dialog
-          open={isModalOpen}
-          onOpenChange={(open) => {
-            setIsModalOpen(open);
-            if (!open) {
-              setEditingProduct(null);
-              resetForm();
-            }
-          }}
-        >
-          <DialogTrigger asChild>
-            <Button
-              className="gap-2 shadow-lg shadow-primary/20"
-              onClick={() => {
+          <Dialog
+            open={isModalOpen}
+            onOpenChange={(open) => {
+              setIsModalOpen(open);
+              if (!open) {
                 setEditingProduct(null);
                 resetForm();
-              }}
-            >
-              <Plus className="w-4 h-4" /> Yangi Mahsulot
-            </Button>
-          </DialogTrigger>
-
-          <Dialog
-            open={isCategoryModalOpen}
-            onOpenChange={setIsCategoryModalOpen}
+              }
+            }}
           >
             <DialogTrigger asChild>
-              <Button variant="outline" className="gap-2">
-                <FolderPlus className="w-4 h-4" /> Kategoriya
+              <Button
+                className="gap-2 shadow-lg shadow-primary/20"
+                onClick={() => {
+                  setEditingProduct(null);
+                  resetForm();
+                }}
+              >
+                <Plus className="w-4 h-4" /> Yangi Mahsulot
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[400px]">
-              <form onSubmit={handleCategorySubmit}>
+
+            <Dialog
+              open={isCategoryModalOpen}
+              onOpenChange={setIsCategoryModalOpen}
+            >
+              <DialogTrigger asChild>
+                <Button variant="outline" className="gap-2">
+                  <FolderPlus className="w-4 h-4" /> Kategoriya
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[400px]">
+                <form onSubmit={handleCategorySubmit}>
+                  <DialogHeader>
+                    <DialogTitle>Yangi Kategoriya</DialogTitle>
+                    <DialogDescription>
+                      Yangi mahsulot kategoriyasi nomini kiriting.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="grid gap-4 py-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="cat-name">Nomi</Label>
+                      <Input
+                        id="cat-name"
+                        value={newCategoryName}
+                        onChange={(e) => setNewCategoryName(e.target.value)}
+                        placeholder="Masalan: Ichimliklar"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button type="submit" disabled={categoryMutation.isPending}>
+                      {categoryMutation.isPending && (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      )}
+                      Yaratish
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+
+            {/* Supply button removed */}
+
+            <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
+              <DialogTrigger asChild>
+                <Button variant="ghost" className="gap-2">
+                  <Truck className="w-4 h-4" /> Kirimlar
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[700px] max-h-[80vh] flex flex-col">
                 <DialogHeader>
-                  <DialogTitle>Yangi Kategoriya</DialogTitle>
+                  <DialogTitle>Kirimlar Tarixi</DialogTitle>
                   <DialogDescription>
-                    Yangi mahsulot kategoriyasi nomini kiriting.
+                    Barcha kirim qilingan mahsulotlar ro'yxati.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="flex-1 overflow-auto py-4">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Sana</TableHead>
+                        <TableHead>Mahsulot</TableHead>
+                        <TableHead>Soni</TableHead>
+                        <TableHead>Narx</TableHead>
+                        <TableHead className="text-right">Jami</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {historyLoading ? (
+                        [1, 2, 3].map((i) => (
+                          <TableRow key={i}>
+                            <TableCell
+                              colSpan={5}
+                              className="h-12 animate-pulse bg-muted/30"
+                            />
+                          </TableRow>
+                        ))
+                      ) : supplies.length === 0 ? (
+                        <TableRow>
+                          <TableCell
+                            colSpan={5}
+                            className="text-center text-muted-foreground h-24"
+                          >
+                            Hozircha kirimlar yo'q
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        supplies.map((item) => {
+                          const product = products.find(
+                            (p) => p.id === item.product_id,
+                          );
+                          return (
+                            <TableRow key={item.id}>
+                              <TableCell className="text-xs text-muted-foreground">
+                                {format(
+                                  new Date(item.created_at),
+                                  "dd.MM.yyyy HH:mm",
+                                )}
+                              </TableCell>
+                              <TableCell className="font-medium">
+                                {product ? product.name : `#${item.product_id}`}
+                              </TableCell>
+                              <TableCell>{item.quantity}</TableCell>
+                              <TableCell>
+                                {item.buy_price.toLocaleString("de-DE")}
+                              </TableCell>
+                              <TableCell className="text-right font-bold">
+                                {(
+                                  item.quantity * item.buy_price
+                                ).toLocaleString("de-DE")}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={isStockLogOpen} onOpenChange={setIsStockLogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="ghost" className="gap-2">
+                  <History className="w-4 h-4" /> Loglar
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[800px] max-h-[85vh] flex flex-col">
+                <DialogHeader>
+                  <DialogTitle>Ombor Harakati Tarixi</DialogTitle>
+                  <DialogDescription>
+                    Barcha mahsulotlarning kirim-chiqim va o'zgarishlar tarixi.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="flex-1 overflow-auto py-4">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Sana</TableHead>
+                        <TableHead>Mahsulot</TableHead>
+                        <TableHead>Turi</TableHead>
+                        <TableHead>Miqdor</TableHead>
+                        <TableHead>Sabab / Izoh</TableHead>
+                        <TableHead>Xodim</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {logsLoading ? (
+                        [1, 2, 3, 4, 5].map((i) => (
+                          <TableRow key={i}>
+                            <TableCell
+                              colSpan={6}
+                              className="h-12 animate-pulse bg-muted/30"
+                            />
+                          </TableRow>
+                        ))
+                      ) : stockLogs.length === 0 ? (
+                        <TableRow>
+                          <TableCell
+                            colSpan={6}
+                            className="text-center text-muted-foreground h-24"
+                          >
+                            Hozircha harakatlar yo'q
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        stockLogs.map((log) => (
+                          <TableRow key={log.id} className="text-sm">
+                            <TableCell className="text-xs text-muted-foreground">
+                              {format(new Date(log.created_at), "dd.MM HH:mm")}
+                            </TableCell>
+                            <TableCell className="font-medium">
+                              {log.product?.name || `#${log.product_id}`}
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  "capitalize font-normal",
+                                  log.type === "sale" &&
+                                    "text-blue-500 border-blue-500/20 bg-blue-500/5",
+                                  log.type === "restock" &&
+                                    "text-emerald-500 border-emerald-500/20 bg-emerald-500/5",
+                                  log.type === "refund" &&
+                                    "text-orange-500 border-orange-500/20 bg-orange-500/5",
+                                  log.type === "adjustment" &&
+                                    "text-purple-500 border-purple-500/20 bg-purple-500/5",
+                                )}
+                              >
+                                {log.type === "sale"
+                                  ? "Sotuv"
+                                  : log.type === "restock"
+                                    ? "Kirim"
+                                    : log.type === "refund"
+                                      ? "Vozvrat"
+                                      : "To'g'rilash"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell
+                              className={cn(
+                                "font-black text-base",
+                                log.quantity > 0
+                                  ? "text-emerald-600"
+                                  : "text-rose-600",
+                              )}
+                            >
+                              {log.quantity > 0
+                                ? `+${log.quantity?.toLocaleString("de-DE")}`
+                                : log.quantity?.toLocaleString("de-DE")}
+                            </TableCell>
+                            <TableCell
+                              className="max-w-[150px] truncate text-xs"
+                              title={log.reason}
+                            >
+                              {log.reason || "-"}
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              {log.user?.username || "-"}
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </DialogContent>
+            </Dialog>
+            <DialogContent className="sm:max-w-[500px]">
+              <form onSubmit={handleSubmit}>
+                <DialogHeader>
+                  <DialogTitle>
+                    {editingProduct
+                      ? "Mahsulotni Tahrirlash"
+                      : "Yangi Mahsulot Qo'shish"}
+                  </DialogTitle>
+                  <DialogDescription>
+                    Mahsulot ma'lumotlarini to'liq kiriting. Barcha maydonlar
+                    muhim.
                   </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="cat-name">Nomi</Label>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="name" className="text-right">
+                      Nomi
+                    </Label>
                     <Input
-                      id="cat-name"
-                      value={newCategoryName}
-                      onChange={(e) => setNewCategoryName(e.target.value)}
-                      placeholder="Masalan: Ichimliklar"
+                      id="name"
+                      className="col-span-3"
+                      value={formData.name}
+                      onChange={(e) =>
+                        setFormData({ ...formData, name: e.target.value })
+                      }
                       required
                     />
                   </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="category" className="text-right">
+                      Kategoriya
+                    </Label>
+                    <Select
+                      value={formData.category_id?.toString()}
+                      onValueChange={(val) =>
+                        setFormData({ ...formData, category_id: parseInt(val) })
+                      }
+                    >
+                      <SelectTrigger className="col-span-3">
+                        <SelectValue placeholder="Kategoriyani tanlang" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="null">Kategoriyasiz</SelectItem>
+                        {categories.map((c) => (
+                          <SelectItem key={c.id} value={c.id.toString()}>
+                            {c.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="new-category" className="text-right">
+                      Yangi kategoriya
+                    </Label>
+                    <div className="col-span-3 flex gap-2">
+                      <Input
+                        id="new-category"
+                        value={newCategoryName}
+                        onChange={(e) => setNewCategoryName(e.target.value)}
+                        placeholder="Masalan: Ichimliklar"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() =>
+                          categoryMutation.mutate(newCategoryName.trim())
+                        }
+                        disabled={
+                          !newCategoryName.trim() || categoryMutation.isPending
+                        }
+                      >
+                        Qo'shish
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="barcode" className="text-right">
+                      Shtrix Kod
+                    </Label>
+                    <div className="col-span-3 flex gap-2">
+                      <Input
+                        id="barcode"
+                        className="flex-1"
+                        value={formData.barcode}
+                        onChange={(e) =>
+                          setFormData({ ...formData, barcode: e.target.value })
+                        }
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            lookupBarcode(e.target.value);
+                          }
+                        }}
+                        onBlur={(e) => {
+                          if (!editingProduct) lookupBarcode(e.target.value);
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        title="Nomini internetdan topish"
+                        disabled={barcodeLookupLoading}
+                        onClick={() => lookupBarcode(formData.barcode)}
+                      >
+                        {barcodeLookupLoading ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Search className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="buy_price" className="text-right">
+                      Keltirilgan Narx
+                    </Label>
+                    <Input
+                      id="buy_price"
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="0"
+                      className="col-span-3"
+                      value={formatThousands(formData.buy_price)}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          buy_price: parseThousands(e.target.value),
+                        })
+                      }
+                      onFocus={(e) => e.target.select()}
+                      required
+                    />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="sell_price" className="text-right">
+                      Sotish Narxi
+                    </Label>
+                    <Input
+                      id="sell_price"
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="0"
+                      className="col-span-3"
+                      value={formatThousands(formData.sell_price)}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          sell_price: parseThousands(e.target.value),
+                        })
+                      }
+                      onFocus={(e) => e.target.select()}
+                      required
+                    />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="stock" className="text-right">
+                      Kirim soni
+                    </Label>
+                    <div className="col-span-3 flex items-center gap-2">
+                      <Input
+                        id="stock"
+                        type={formData.is_infinite ? "text" : "number"}
+                        min="0"
+                        step="0.001"
+                        className="flex-1"
+                        value={
+                          formData.is_infinite ? "∞ (cheksiz)" : formData.stock
+                        }
+                        readOnly={formData.is_infinite}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            is_infinite: false,
+                            stock: Number(e.target.value) || 0,
+                          })
+                        }
+                        onFocus={(e) => {
+                          if (!formData.is_infinite) e.target.select();
+                        }}
+                        required={!formData.is_infinite}
+                      />
+                      <Button
+                        type="button"
+                        variant={formData.is_infinite ? "default" : "outline"}
+                        size="icon"
+                        title="Cheksiz qoldiq (sotuvda kamaymaydi)"
+                        onClick={() =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            is_infinite: !prev.is_infinite,
+                            stock: !prev.is_infinite ? 0 : prev.stock,
+                          }))
+                        }
+                      >
+                        <InfinityIcon className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="unit" className="text-right">
+                      Birlik
+                    </Label>
+                    <Select
+                      value={formData.unit}
+                      onValueChange={(val) =>
+                        setFormData({ ...formData, unit: val })
+                      }
+                    >
+                      <SelectTrigger className="col-span-3">
+                        <SelectValue placeholder="Birlikni tanlang" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="dona">dona</SelectItem>
+                        <SelectItem value="kg">kg (vaznli)</SelectItem>
+                        <SelectItem value="litr">litr (vaznli)</SelectItem>
+                        <SelectItem value="metr">metr</SelectItem>
+                        <SelectItem value="pachka">pachka</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
                 <DialogFooter>
-                  <Button type="submit" disabled={categoryMutation.isPending}>
-                    {categoryMutation.isPending && (
+                  <Button
+                    type="submit"
+                    disabled={productMutation.isPending}
+                    className="w-full sm:w-auto"
+                  >
+                    {productMutation.isPending && (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     )}
-                    Yaratish
+                    {editingProduct ? "Saqlash" : "Qo'shish"}
                   </Button>
                 </DialogFooter>
               </form>
             </DialogContent>
           </Dialog>
-
-          {/* Supply button removed */}
-
-          <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
-            <DialogTrigger asChild>
-              <Button variant="ghost" className="gap-2">
-                <Truck className="w-4 h-4" /> Kirimlar
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[700px] max-h-[80vh] flex flex-col">
-              <DialogHeader>
-                <DialogTitle>Kirimlar Tarixi</DialogTitle>
-                <DialogDescription>
-                  Barcha kirim qilingan mahsulotlar ro'yxati.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="flex-1 overflow-auto py-4">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Sana</TableHead>
-                      <TableHead>Mahsulot</TableHead>
-                      <TableHead>Soni</TableHead>
-                      <TableHead>Narx</TableHead>
-                      <TableHead className="text-right">Jami</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {historyLoading ? (
-                      [1, 2, 3].map((i) => (
-                        <TableRow key={i}>
-                          <TableCell
-                            colSpan={5}
-                            className="h-12 animate-pulse bg-muted/30"
-                          />
-                        </TableRow>
-                      ))
-                    ) : supplies.length === 0 ? (
-                      <TableRow>
-                        <TableCell
-                          colSpan={5}
-                          className="text-center text-muted-foreground h-24"
-                        >
-                          Hozircha kirimlar yo'q
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      supplies.map((item) => {
-                        const product = products.find(
-                          (p) => p.id === item.product_id,
-                        );
-                        return (
-                          <TableRow key={item.id}>
-                            <TableCell className="text-xs text-muted-foreground">
-                              {format(
-                                new Date(item.created_at),
-                                "dd.MM.yyyy HH:mm",
-                              )}
-                            </TableCell>
-                            <TableCell className="font-medium">
-                              {product ? product.name : `#${item.product_id}`}
-                            </TableCell>
-                            <TableCell>{item.quantity}</TableCell>
-                            <TableCell>
-                              {item.buy_price.toLocaleString("de-DE")}
-                            </TableCell>
-                            <TableCell className="text-right font-bold">
-                              {(
-                                item.quantity * item.buy_price
-                              ).toLocaleString("de-DE")}
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            </DialogContent>
-          </Dialog>
-
-          <Dialog open={isStockLogOpen} onOpenChange={setIsStockLogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="ghost" className="gap-2">
-                <History className="w-4 h-4" /> Loglar
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[800px] max-h-[85vh] flex flex-col">
-              <DialogHeader>
-                <DialogTitle>Ombor Harakati Tarixi</DialogTitle>
-                <DialogDescription>
-                  Barcha mahsulotlarning kirim-chiqim va o'zgarishlar tarixi.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="flex-1 overflow-auto py-4">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Sana</TableHead>
-                      <TableHead>Mahsulot</TableHead>
-                      <TableHead>Turi</TableHead>
-                      <TableHead>Miqdor</TableHead>
-                      <TableHead>Sabab / Izoh</TableHead>
-                      <TableHead>Xodim</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {logsLoading ? (
-                      [1, 2, 3, 4, 5].map((i) => (
-                        <TableRow key={i}>
-                          <TableCell
-                            colSpan={6}
-                            className="h-12 animate-pulse bg-muted/30"
-                          />
-                        </TableRow>
-                      ))
-                    ) : stockLogs.length === 0 ? (
-                      <TableRow>
-                        <TableCell
-                          colSpan={6}
-                          className="text-center text-muted-foreground h-24"
-                        >
-                          Hozircha harakatlar yo'q
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      stockLogs.map((log) => (
-                        <TableRow key={log.id} className="text-sm">
-                          <TableCell className="text-xs text-muted-foreground">
-                            {format(new Date(log.created_at), "dd.MM HH:mm")}
-                          </TableCell>
-                          <TableCell className="font-medium">
-                            {log.product?.name || `#${log.product_id}`}
-                          </TableCell>
-                          <TableCell>
-                            <Badge
-                              variant="outline"
-                              className={cn(
-                                "capitalize font-normal",
-                                log.type === "sale" &&
-                                  "text-blue-500 border-blue-500/20 bg-blue-500/5",
-                                log.type === "restock" &&
-                                  "text-emerald-500 border-emerald-500/20 bg-emerald-500/5",
-                                log.type === "refund" &&
-                                  "text-orange-500 border-orange-500/20 bg-orange-500/5",
-                                log.type === "adjustment" &&
-                                  "text-purple-500 border-purple-500/20 bg-purple-500/5",
-                              )}
-                            >
-                              {log.type === "sale"
-                                ? "Sotuv"
-                                : log.type === "restock"
-                                  ? "Kirim"
-                                  : log.type === "refund"
-                                    ? "Vozvrat"
-                                    : "To'g'rilash"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell
-                            className={cn(
-                              "font-black text-base",
-                              log.quantity > 0
-                                ? "text-emerald-600"
-                                : "text-rose-600",
-                            )}
-                          >
-                            {log.quantity > 0
-                              ? `+${log.quantity?.toLocaleString("de-DE")}`
-                              : log.quantity?.toLocaleString("de-DE")}
-                          </TableCell>
-                          <TableCell
-                            className="max-w-[150px] truncate text-xs"
-                            title={log.reason}
-                          >
-                            {log.reason || "-"}
-                          </TableCell>
-                          <TableCell className="text-xs">
-                            {log.user?.username || "-"}
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            </DialogContent>
-          </Dialog>
-          <DialogContent className="sm:max-w-[500px]">
-            <form onSubmit={handleSubmit}>
-              <DialogHeader>
-                <DialogTitle>
-                  {editingProduct
-                    ? "Mahsulotni Tahrirlash"
-                    : "Yangi Mahsulot Qo'shish"}
-                </DialogTitle>
-                <DialogDescription>
-                  Mahsulot ma'lumotlarini to'liq kiriting. Barcha maydonlar
-                  muhim.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="name" className="text-right">
-                    Nomi
-                  </Label>
-                  <Input
-                    id="name"
-                    className="col-span-3"
-                    value={formData.name}
-                    onChange={(e) =>
-                      setFormData({ ...formData, name: e.target.value })
-                    }
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="category" className="text-right">
-                    Kategoriya
-                  </Label>
-                  <Select
-                    value={formData.category_id?.toString()}
-                    onValueChange={(val) =>
-                      setFormData({ ...formData, category_id: parseInt(val) })
-                    }
-                  >
-                    <SelectTrigger className="col-span-3">
-                      <SelectValue placeholder="Kategoriyani tanlang" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="null">Kategoriyasiz</SelectItem>
-                      {categories.map((c) => (
-                        <SelectItem key={c.id} value={c.id.toString()}>
-                          {c.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="new-category" className="text-right">
-                    Yangi kategoriya
-                  </Label>
-                  <div className="col-span-3 flex gap-2">
-                    <Input
-                      id="new-category"
-                      value={newCategoryName}
-                      onChange={(e) => setNewCategoryName(e.target.value)}
-                      placeholder="Masalan: Ichimliklar"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() =>
-                        categoryMutation.mutate(newCategoryName.trim())
-                      }
-                      disabled={
-                        !newCategoryName.trim() || categoryMutation.isPending
-                      }
-                    >
-                      Qo'shish
-                    </Button>
-                  </div>
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="barcode" className="text-right">
-                    Shtrix Kod
-                  </Label>
-                  <div className="col-span-3 flex gap-2">
-                    <Input
-                      id="barcode"
-                      className="flex-1"
-                      value={formData.barcode}
-                      onChange={(e) =>
-                        setFormData({ ...formData, barcode: e.target.value })
-                      }
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          lookupBarcode(e.target.value);
-                        }
-                      }}
-                      onBlur={(e) => {
-                        if (!editingProduct) lookupBarcode(e.target.value);
-                      }}
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      title="Nomini internetdan topish"
-                      disabled={barcodeLookupLoading}
-                      onClick={() => lookupBarcode(formData.barcode)}
-                    >
-                      {barcodeLookupLoading ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Search className="h-4 w-4" />
-                      )}
-                    </Button>
-                  </div>
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="buy_price" className="text-right">
-                    Keltirilgan Narx
-                  </Label>
-                  <Input
-                    id="buy_price"
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="0"
-                    className="col-span-3"
-                    value={formatThousands(formData.buy_price)}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        buy_price: parseThousands(e.target.value),
-                      })
-                    }
-                    onFocus={(e) => e.target.select()}
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="sell_price" className="text-right">
-                    Sotish Narxi
-                  </Label>
-                  <Input
-                    id="sell_price"
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="0"
-                    className="col-span-3"
-                    value={formatThousands(formData.sell_price)}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        sell_price: parseThousands(e.target.value),
-                      })
-                    }
-                    onFocus={(e) => e.target.select()}
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="stock" className="text-right">
-                    Kirim soni
-                  </Label>
-                  <Input
-                    id="stock"
-                    type="number"
-                    min="0"
-                    step="0.001"
-                    className="col-span-3"
-                    value={formData.stock}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        stock: Number(e.target.value) || 0,
-                      })
-                    }
-                    onFocus={(e) => e.target.select()}
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="unit" className="text-right">
-                    Birlik
-                  </Label>
-                  <Select
-                    value={formData.unit}
-                    onValueChange={(val) =>
-                      setFormData({ ...formData, unit: val })
-                    }
-                  >
-                    <SelectTrigger className="col-span-3">
-                      <SelectValue placeholder="Birlikni tanlang" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="dona">dona</SelectItem>
-                      <SelectItem value="kg">kg (vaznli)</SelectItem>
-                      <SelectItem value="litr">litr (vaznli)</SelectItem>
-                      <SelectItem value="metr">metr</SelectItem>
-                      <SelectItem value="pachka">pachka</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <DialogFooter>
-                <Button
-                  type="submit"
-                  disabled={productMutation.isPending}
-                  className="w-full sm:w-auto"
-                >
-                  {productMutation.isPending && (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  )}
-                  {editingProduct ? "Saqlash" : "Qo'shish"}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
         </div>
       </div>
 
@@ -902,12 +937,14 @@ const Inventory = () => {
                         variant="outline"
                         className={cn(
                           "font-semibold",
-                          product.stock < threshold
+                          !product.is_infinite && product.stock < threshold
                             ? "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300"
                             : "bg-background/50",
                         )}
                       >
-                        {product.stock?.toLocaleString("de-DE")} {product.unit}
+                        {product.is_infinite
+                          ? `∞ ${product.unit}`
+                          : `${product.stock?.toLocaleString("de-DE")} ${product.unit}`}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
@@ -927,9 +964,9 @@ const Inventory = () => {
                           : "text-rose-600",
                       )}
                     >
-                      {(
-                        product.sell_price - product.buy_price
-                      ).toLocaleString("de-DE")}{" "}
+                      {(product.sell_price - product.buy_price).toLocaleString(
+                        "de-DE",
+                      )}{" "}
                       so'm
                     </TableCell>
                     <TableCell className="text-muted-foreground">
@@ -952,7 +989,9 @@ const Inventory = () => {
                         >
                           <DropdownMenuLabel>Amallar</DropdownMenuLabel>
                           <DropdownMenuSeparator />
-                          {(role === "admin" || role === "manager" || role === "warehouse") && (
+                          {(role === "admin" ||
+                            role === "manager" ||
+                            role === "warehouse") && (
                             <>
                               <DropdownMenuItem
                                 className="gap-2 cursor-pointer"
@@ -961,20 +1000,20 @@ const Inventory = () => {
                                 <Edit className="w-4 h-4" /> Tahrirlash
                               </DropdownMenuItem>
                               {(role === "admin" || role === "manager") && (
-                              <DropdownMenuItem
-                                className="gap-2 cursor-pointer text-destructive focus:bg-destructive/10 focus:text-destructive"
-                                onClick={() => {
-                                  if (
-                                    confirm(
-                                      `${product.name} mahsulotini o'chirib tashlamoqchimisiz?`,
-                                    )
-                                  ) {
-                                    deleteMutation.mutate(product.id);
-                                  }
-                                }}
-                              >
-                                <Trash2 className="w-4 h-4" /> O'chirish
-                              </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  className="gap-2 cursor-pointer text-destructive focus:bg-destructive/10 focus:text-destructive"
+                                  onClick={() => {
+                                    if (
+                                      confirm(
+                                        `${product.name} mahsulotini o'chirib tashlamoqchimisiz?`,
+                                      )
+                                    ) {
+                                      deleteMutation.mutate(product.id);
+                                    }
+                                  }}
+                                >
+                                  <Trash2 className="w-4 h-4" /> O'chirish
+                                </DropdownMenuItem>
                               )}
                             </>
                           )}

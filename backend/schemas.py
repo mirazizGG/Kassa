@@ -68,6 +68,7 @@ class ProductBase(BaseModel):
     buy_price: float
     sell_price: float
     stock: float = 0
+    is_infinite: bool = False
     unit: str = "dona"
     category_id: Optional[int] = None
     is_favorite: bool = False

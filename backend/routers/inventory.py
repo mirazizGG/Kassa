@@ -28,7 +28,9 @@ async def get_purchase_list(
     threshold = max(settings.low_stock_threshold if settings else 5, 1)
     products = (
         await db.execute(
-            select(Product).where(Product.stock < threshold).order_by(Product.stock.asc())
+            select(Product)
+            .where(Product.stock < threshold, Product.is_infinite == False)
+            .order_by(Product.stock.asc())
         )
     ).scalars().all()
 
