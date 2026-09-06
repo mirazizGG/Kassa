@@ -85,6 +85,21 @@ ular faqat brauzer bilan kiradi.
 
 
 ----------------------------------------------------------------
+  KASSIR KOMPYUTERLARI  (ixtiyoriy - ish stoliga yorliq)
+----------------------------------------------------------------
+
+  Kassir kompga HECH NARSA o'rnatilmaydi - brauzer yetarli.
+  Lekin ish stoliga chiroyli "SmartKassa" yorlig'i kerak bo'lsa:
+
+      deploy\KASSIR.bat  faylini kassir kompga ko'chiring (USB/AnyDesk)
+      va ikki marta bosing. U server IP'ni so'raydi va yorliq yaratadi.
+
+  MUHIM: server (backend) FAQAT bitta kompyuterda ishlaydi.
+  Kassir kompga  ORNAT.bat / install-smartkassa.ps1  ni ISHLATMANG -
+  aks holda ikkinchi, bo'sh baza paydo bo'lib, ma'lumot ikkiga bo'linadi.
+
+
+----------------------------------------------------------------
   KEYINCHALIK — DASTURNI YANGILASH
 ----------------------------------------------------------------
 
