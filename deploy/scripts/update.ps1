@@ -39,9 +39,16 @@ Push-Location $RepoRoot
 try {
 	if ($FromApp) { Set-Status -Phase "tekshirilmoqda" -Message "GitHub tekshirilmoqda..." -Running }
 
+	# "dubious ownership" (papkani admin yaratgan, dastur oddiy user) - o'zini tuzatadi
+	$repoForGit = $RepoRoot -replace '\\', '/'
+	$safeDirs = (git config --global --get-all safe.directory) 2>$null
+	if ($safeDirs -notcontains $repoForGit) {
+		git config --global --add safe.directory "$repoForGit" 2>$null
+	}
+
 	Write-Step "GitHub'dan tekshirilmoqda..."
 	git fetch origin
-	if ($LASTEXITCODE -ne 0) { Fail-Status "GitHub bilan bog'lanib bo'lmadi (internet?)" }
+	if ($LASTEXITCODE -ne 0) { Fail-Status "GitHub bilan bog'lanib bo'lmadi (internet yoki git ruxsati?)" }
 
 	$branch = (git rev-parse --abbrev-ref HEAD).Trim()
 	$local  = (git rev-parse HEAD).Trim()

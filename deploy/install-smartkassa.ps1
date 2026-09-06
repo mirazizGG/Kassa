@@ -181,6 +181,13 @@ if ($stillMissing.Count -gt 0) {
 
 # ---------- Loyiha ----------
 Step "3/5 - Loyihani GitHub'dan olish"
+
+# Papkani Administrator yaratadi, lekin dastur oddiy foydalanuvchi sifatida
+# ishlaydi -> git "dubious ownership" deб bloklaydi. Barcha foydalanuvchilar
+# uchun ishonchli deb belgilaymiz (tizim konfiguratsiyasiga - installer admin).
+$gitInstallPath = $InstallDir -replace '\\', '/'
+try { git config --system --add safe.directory "$gitInstallPath" 2>$null } catch {}
+
 if (Test-Path (Join-Path $InstallDir ".git")) {
     Ok "Loyiha bor - yangilanmoqda"
     Push-Location $InstallDir
