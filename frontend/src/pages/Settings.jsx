@@ -11,7 +11,6 @@ import {
   Loader2,
   Image as ImageIcon,
   ShieldCheck,
-  DownloadCloud,
   History,
   Star,
 } from "lucide-react";
@@ -28,6 +27,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
+import BackupButton from "../components/BackupButton";
 
 const Settings = () => {
   const [formData, setFormData] = useState({
@@ -349,29 +349,15 @@ const Settings = () => {
             </div>
 
             <div className="flex flex-col gap-3">
-              <Button
-                type="button"
+              <BackupButton
                 variant="outline"
-                className="w-full justify-start gap-2 h-12 border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 transition-all dark:border-emerald-900 dark:hover:bg-emerald-900/50"
-                onClick={async () => {
-                  try {
-                    const res = await api.post("/settings/backup");
-                    toast.success("Muvaffaqiyatli!", {
-                      description: res.data.message,
-                    });
-                  } catch {
-                    toast.error("Xatolik!", {
-                      description: "Zahira olib bo'lmadi",
-                    });
-                  }
-                }}
-              >
-                <DownloadCloud className="w-4 h-4" />
-                Hozir zahira nusxasini olish (Manual Backup)
-              </Button>
+                className="w-full justify-start h-12 border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 transition-all dark:border-emerald-900 dark:hover:bg-emerald-900/50"
+                label="Hozir zahira nusxasini olish (Manual Backup)"
+              />
               <p className="text-[10px] text-muted-foreground px-1">
-                * Zahira nusxalari serverning <code>backups/</code> papkasida
-                saqlanadi.
+                * Zahira nusxasi serverning <code>backups/</code> papkasiga,
+                hamda sozlangan bo'lsa bulut papka, GitHub va Telegram'ga
+                yuboriladi.
               </p>
             </div>
           </CardContent>

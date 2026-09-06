@@ -17,6 +17,7 @@ import {
   History,
   Infinity as InfinityIcon,
 } from "lucide-react";
+import BackupButton from "../components/BackupButton";
 import { format } from "date-fns";
 import {
   Select,
@@ -830,6 +831,8 @@ const Inventory = () => {
               </form>
             </DialogContent>
           </Dialog>
+
+          <BackupButton variant="ghost" />
         </div>
       </div>
 

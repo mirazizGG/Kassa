@@ -60,15 +60,48 @@ async def update_settings(
 
 @router.post("/backup")
 async def manual_backup(
-    current_user: Employee = Depends(get_current_user)
+    current_user: Employee = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
-    """Qo'lda zahira nusxasini olish (Faqat Admin uchun)"""
-    if current_user.role != "admin":
+    """Qo'lda zahira nusxasi: lokal + bulut papka + GitHub + Telegram.
+
+    Admin, menejer va omborchi bosishi mumkin (kassir omborga kira olmaydi).
+    """
+    if current_user.role not in ["admin", "manager", "warehouse"]:
         raise HTTPException(status_code=403, detail="Ruxsat berilmagan")
-    
-    from utils.backup import create_backup
-    backup_path = create_backup()
-    if backup_path:
-        return {"status": "success", "message": "Zahira nusxasi yaratildi", "filename": os.path.basename(backup_path)}
-    else:
-        raise HTTPException(status_code=500, detail="Zahira olishda xatolik yuz berdi")
+
+    from utils.backup import run_full_backup
+    try:
+        from bot import bot as tg_bot
+    except Exception:
+        tg_bot = None
+
+    try:
+        res = await run_full_backup(tg_bot)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"Zahira olishda xatolik: {exc}")
+
+    parts = ["Lokal ✓"]
+    if res.get("mirror") is True:
+        parts.append("Bulut papka ✓")
+    elif res.get("mirror") is False:
+        parts.append("Bulut papka ✗")
+    if res.get("github") is True:
+        parts.append("GitHub ✓")
+    elif res.get("github") is False:
+        parts.append("GitHub ✗")
+    if res.get("telegram") is True:
+        parts.append("Telegram ✓")
+    elif res.get("telegram") is False:
+        parts.append("Telegram ✗")
+
+    filename = os.path.basename(res["local"])
+    await log_action(db, current_user.id, "ZAHIRA_NUSXA", f"Qo'lda zahira: {filename}. Manzillar: {', '.join(parts)}")
+    await db.commit()
+
+    return {
+        "status": "success",
+        "message": "Zahira nusxasi olindi — " + ", ".join(parts),
+        "filename": filename,
+        "detail": res,
+    }
