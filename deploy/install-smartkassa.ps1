@@ -95,6 +95,11 @@ Write-Host "   SmartKassa o'rnatuvchi" -ForegroundColor White
 Write-Host "   Windows $($osVer)  |  Papka: $InstallDir" -ForegroundColor DarkGray
 Write-Host "  ============================================" -ForegroundColor White
 
+# Keyinchalik  .\start-all.ps1  kabi skriptlarni qo'lda ishga tushirish uchun
+# (o'rnatuvchining o'zi Bypass bilan ishlaydi, bu faqat kelajakdagi qo'l ishlari uchun).
+try { Set-ExecutionPolicy -Scope CurrentUser RemoteSigned -Force -ErrorAction Stop } catch {}
+try { Set-ExecutionPolicy -Scope LocalMachine RemoteSigned -Force -ErrorAction Stop } catch {}
+
 function Sync-Path {
     $m = [Environment]::GetEnvironmentVariable("Path", "Machine")
     $u = [Environment]::GetEnvironmentVariable("Path", "User")

@@ -32,8 +32,23 @@ if (-not (Test-Path $beEnv)) {
 
 # --- Backend kutubxonalari ---
 Write-Step "Backend kutubxonalari (pip install)..."
-python -m pip install --upgrade pip
-python -m pip install -r (Join-Path $BackendDir "requirements.txt")
+$req = Join-Path $BackendDir "requirements.txt"
+python -m pip install --upgrade pip setuptools wheel
+if ($LASTEXITCODE -ne 0) { Write-Warn2 "pip yangilanmadi - davom etamiz" }
+
+# Windows 8.1 / kompilyatorsiz kompyuterlar uchun: FAQAT tayyor (compiled) g'ildiraklar.
+# Barcha kerakli paketlarning Python 3.9 win_amd64 g'ildiragi bor.
+python -m pip install --only-binary=:all: -r $req
+if ($LASTEXITCODE -ne 0) {
+	Write-Warn2 "--only-binary o'rnatib bo'lmadi, --prefer-binary bilan qayta urinilyapti..."
+	python -m pip install --prefer-binary -r $req
+}
+if ($LASTEXITCODE -ne 0) { Write-Err2 "Kutubxonalar o'rnatilmadi (pip xatosi). Yuqoridagi xabarlarni tekshiring."; exit 1 }
+
+# Nazorat: eng muhim paket haqiqatan o'rnatildimi?
+python -c "import fastapi, sqlalchemy, aiogram, pydantic" 2>$null
+if ($LASTEXITCODE -ne 0) { Write-Err2 "Kutubxonalar to'liq o'rnatilmadi (import xatosi)."; exit 1 }
+Write-Ok "Kutubxonalar o'rnatildi"
 
 # --- Frontend ---
 if (Test-Path (Join-Path $DistDir "index.html")) {

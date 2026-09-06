@@ -50,7 +50,7 @@ ular faqat brauzer bilan kiradi.
       - PowerShell ni qayta oching
       - quyidagini kiriting:
             cd C:\SmartKassa
-            .\deploy\install-smartkassa.ps1
+            powershell -ExecutionPolicy Bypass -File .\deploy\install-smartkassa.ps1
 
 
 ----------------------------------------------------------------
@@ -103,10 +103,14 @@ ular faqat brauzer bilan kiradi.
   KUNDALIK BUYRUQLAR  (cd C:\SmartKassa\deploy\scripts)
 ----------------------------------------------------------------
 
-      .\status.ps1       - holатни ko'rish (ishlayaptimi, IP manzil)
+      .\status.ps1       - holatni ko'rish (ishlayaptimi, IP manzil)
       .\start-all.ps1    - ishga tushirish
       .\stop-all.ps1     - to'xtatish
       .\update.ps1       - GitHub'dan yangilash
+
+  AGAR "running scripts is disabled" (skript ishlashi o'chirilgan) desa —
+  o'sha buyruq oldiga qo'shing, masalan:
+      powershell -ExecutionPolicy Bypass -File .\status.ps1
 
 ----------------------------------------------------------------
   MIRAZIZ PAROLINI KUCHAYTIRISH (yoki unutilganда tiklash)
