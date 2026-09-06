@@ -16,8 +16,11 @@ param(
 
 $StatusFile = Join-Path $RunDir "update-status.json"
 
+$script:LastRunning = $false
+
 function Set-Status {
 	param([string]$Phase, [string]$Message, $Ok = $null, [switch]$Running)
+	$script:LastRunning = [bool]$Running
 	$obj = [ordered]@{
 		running    = [bool]$Running
 		ok         = $Ok
@@ -26,18 +29,23 @@ function Set-Status {
 		updated_at = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
 		commit     = (git -C $RepoRoot rev-parse --short HEAD 2>$null)
 	}
-	$obj | ConvertTo-Json -Compress | Set-Content -Path $StatusFile -Encoding utf8
+	$json = $obj | ConvertTo-Json -Compress
+	# Backend faylni o'qiyotgan bo'lishi mumkin - bir necha marta urinamiz
+	for ($try = 0; $try -lt 5; $try++) {
+		try { Set-Content -Path $StatusFile -Value $json -Encoding utf8 -ErrorAction Stop; return }
+		catch { Start-Sleep -Milliseconds 200 }
+	}
 }
 
 function Fail-Status($msg) {
 	Write-Err2 $msg
-	if ($FromApp) { Set-Status -Phase "error" -Message $msg -Ok $false }
+	Set-Status -Phase "error" -Message $msg -Ok $false
 	exit 1
 }
 
 Push-Location $RepoRoot
 try {
-	if ($FromApp) { Set-Status -Phase "tekshirilmoqda" -Message "GitHub tekshirilmoqda..." -Running }
+	Set-Status -Phase "tekshirilmoqda" -Message "GitHub tekshirilmoqda..." -Running
 
 	# "dubious ownership" (papkani admin yaratgan, dastur oddiy user) - o'zini tuzatadi
 	$repoForGit = $RepoRoot -replace '\\', '/'
@@ -56,7 +64,7 @@ try {
 
 	if ($local -eq $remote) {
 		Write-Ok "Hammasi eng yangi. Yangilanish shart emas."
-		if ($FromApp) { Set-Status -Phase "done" -Message "Allaqachon eng yangi versiya" -Ok $true }
+		Set-Status -Phase "done" -Message "Allaqachon eng yangi versiya" -Ok $true
 		exit 0
 	}
 
@@ -69,7 +77,7 @@ try {
 	git --no-pager log --oneline "$local..$remote"
 
 	# --- Bazadan zahira nusxa (yangilanishdan oldin, ehtiyot uchun) ---
-	if ($FromApp) { Set-Status -Phase "zahira" -Message "Bazadan zahira nusxa olinmoqda..." -Running }
+	Set-Status -Phase "zahira" -Message "Bazadan zahira nusxa olinmoqda..." -Running
 	Write-Step "Zahira nusxa olinmoqda..."
 	Push-Location $BackendDir
 	$bk = python -c "from utils.backup import create_backup; p = create_backup(); print(p or '')" 2>&1
@@ -81,7 +89,7 @@ try {
 	}
 
 	# --- Kodni tortib olish ---
-	if ($FromApp) { Set-Status -Phase "yuklanmoqda" -Message "Yangi kod yuklanmoqda..." -Running }
+	Set-Status -Phase "yuklanmoqda" -Message "Yangi kod yuklanmoqda..." -Running
 	Write-Step "git pull..."
 	git pull --ff-only origin $branch
 	if ($LASTEXITCODE -ne 0) { Fail-Status "git pull xato berdi" }
@@ -90,9 +98,10 @@ try {
 
 	# --- Backend kutubxonalari ---
 	if ($changed | Select-String "backend/requirements.txt") {
-		if ($FromApp) { Set-Status -Phase "kutubxonalar" -Message "Kutubxonalar o'rnatilmoqda..." -Running }
+		Set-Status -Phase "kutubxonalar" -Message "Kutubxonalar o'rnatilmoqda..." -Running
 		Write-Step "requirements.txt o'zgardi - pip install..."
-		python -m pip install -r (Join-Path $BackendDir "requirements.txt")
+		python -m pip install --only-binary=:all: -r (Join-Path $BackendDir "requirements.txt")
+		if ($LASTEXITCODE -ne 0) { python -m pip install --prefer-binary -r (Join-Path $BackendDir "requirements.txt") }
 	}
 
 	# --- Frontend ---
@@ -101,7 +110,7 @@ try {
 	if ($changed | Select-String "^frontend/dist/") {
 		Write-Ok "Frontend yangilandi (tayyor dist repodan keldi)"
 	} elseif (($changed | Select-String "^frontend/") -and (Get-Command npm -ErrorAction SilentlyContinue)) {
-		if ($FromApp) { Set-Status -Phase "qurilmoqda" -Message "Frontend qurilmoqda..." -Running }
+		Set-Status -Phase "qurilmoqda" -Message "Frontend qurilmoqda..." -Running
 		Write-Step "Frontend manbasi o'zgardi, dist yangilanmagan - npm build..."
 		Push-Location $FrontendDir
 		if ($changed | Select-String "frontend/package-lock.json") { npm ci }
@@ -112,7 +121,7 @@ try {
 	}
 
 	# --- Backendni qayta ishga tushirish ---
-	if ($FromApp) { Set-Status -Phase "qayta_ishga_tushmoqda" -Message "Backend qayta ishga tushmoqda..." -Running }
+	Set-Status -Phase "qayta_ishga_tushmoqda" -Message "Backend qayta ishga tushmoqda..." -Running
 	Write-Step "Backend qayta ishga tushmoqda..."
 
 	# PID fayli bo'lsa - o'shani; bo'lmasa main.py ishlatayotgan python'ni topamiz
@@ -146,11 +155,15 @@ try {
 
 	$new = (git rev-parse --short HEAD).Trim()
 	Write-Ok "Yangilanish tugadi: $new"
-	if ($FromApp) { Set-Status -Phase "done" -Message "Yangilandi ($new)" -Ok $true }
+	Set-Status -Phase "done" -Message "Yangilandi ($new)" -Ok $true
 }
 catch {
 	Fail-Status "Kutilmagan xato: $_"
 }
 finally {
 	Pop-Location
+	# Kutilmaganda "running" holatда chiqib ketsak - backend/oyna abadiy kutmasin
+	if ($script:LastRunning) {
+		Set-Status -Phase "error" -Message "Yangilanish kutilmaganda to'xtadi" -Ok $false
+	}
 }
