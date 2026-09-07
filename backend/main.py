@@ -1,17 +1,25 @@
-from fastapi import FastAPI, Response  
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import asyncio
 from typing import Optional
 import os
 import logging
+
+# .env ni eng boshida yuklaymiz — routerlar/util modullari import paytida
+# os.getenv() ni ishlatadi, shuning uchun import tartibiga bog'liq bo'lmasin.
+from dotenv import load_dotenv
+load_dotenv()
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 from database import init_db, engine, Base, SessionLocal, Employee
-from core import get_password_hash, limiter, PRIMARY_ADMIN_USERNAME
+from core import (
+    get_password_hash, limiter, APP_ENV,
+    PRIMARY_ADMIN_USERNAME, PRIMARY_ADMIN_PASSWORD, DEV_ADMIN_PASSWORD,
+)
 from bot import bot, dp, check_debts
 from routers import auth, inventory, pos, crm, finance, tasks, sales, audit, settings, suppliers, system
 from fastapi.staticfiles import StaticFiles
@@ -64,10 +72,22 @@ async def lifespan(app: FastAPI):
         result = await db.execute(select(Employee).where(Employee.role == "admin"))
         admin = result.scalars().first()
         if not admin:
-            print(f"Admin yaratilmoqda: {PRIMARY_ADMIN_USERNAME} / changeme-dev")
+            # Boshlang'ich parol: .env dagi PRIMARY_ADMIN_PASSWORD, aks holda
+            # development'da qulaylik uchun DEV_ADMIN_PASSWORD. Production'da esa
+            # zaif default ishlatmaymiz — aniq sozlama xatosi beramiz.
+            bootstrap_password = PRIMARY_ADMIN_PASSWORD
+            if not bootstrap_password:
+                if APP_ENV == "production":
+                    raise RuntimeError(
+                        "PRIMARY_ADMIN_PASSWORD o'rnatilmagan va bazada admin hisobi yo'q. "
+                        "backend/.env ga  PRIMARY_ADMIN_PASSWORD=<kuchli-parol>  qo'shing "
+                        'yoki serverda  python reset_admin.py "<parol>"  ni ishlating.'
+                    )
+                bootstrap_password = DEV_ADMIN_PASSWORD
+            print(f"Admin yaratilmoqda: {PRIMARY_ADMIN_USERNAME}")
             new_admin = Employee(
                 username=PRIMARY_ADMIN_USERNAME,
-                hashed_password=get_password_hash("changeme-dev"),
+                hashed_password=get_password_hash(bootstrap_password),
                 role="admin",
                 permissions="all"
             )
@@ -120,7 +140,12 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 # Configure CORS
 allowed_origins_raw = os.getenv("ALLOWED_ORIGINS", "*")
-allowed_origins = [origin.strip() for origin in allowed_origins_raw.split(",")]
+allowed_origins = [origin.strip() for origin in allowed_origins_raw.split(",") if origin.strip()]
+if APP_ENV == "production" and (not allowed_origins or "*" in allowed_origins):
+    logging.warning(
+        "ALLOWED_ORIGINS='*' (production). backend/.env da o'z domeningizni ko'rsating, "
+        "masalan: ALLOWED_ORIGINS=https://kassa.sizning-domen"
+    )
 
 app.add_middleware(
     CORSMiddleware,

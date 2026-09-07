@@ -13,10 +13,12 @@ import asyncio
 import sys
 from sqlalchemy import select
 from database import SessionLocal, Employee, init_db
-from core import get_password_hash, PRIMARY_ADMIN_USERNAME
+from core import get_password_hash, PRIMARY_ADMIN_USERNAME, PRIMARY_ADMIN_PASSWORD, DEV_ADMIN_PASSWORD
 
 ADMIN_USERNAME = PRIMARY_ADMIN_USERNAME
-DEFAULT_PASSWORD = "changeme-dev"
+# Bo'sh kiritilganda ishlatiladigan parol: .env dagi PRIMARY_ADMIN_PASSWORD,
+# u ham yo'q bo'lsa — DEV_ADMIN_PASSWORD.
+DEFAULT_PASSWORD = PRIMARY_ADMIN_PASSWORD or DEV_ADMIN_PASSWORD
 
 
 def _get_password() -> str:

@@ -43,10 +43,18 @@ env/
 *.log
 logs/
 
-# Environment variables
-# .env
+# Environment variables — hech qachon commit qilinmaydi
+.env
+.env.*
 .env.local
 .env.*.local
+*.env
+# ...lekin namunalar va allaqachon kuzatilayotgan sirsiz frontend fayllari qoladi
+!.env.example
+!.env.*.example
+!frontend/.env
+!frontend/.env.production
+!frontend/.env.production.example
 
 # Temporary files
 *.tmp

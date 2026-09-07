@@ -60,7 +60,16 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 600
 
 # Bosh administrator — bu hisobni API orqali o'zgartirib yoki o'chirib bo'lmaydi.
 # Parolni faqat serverda `python reset_admin.py` bilan tiklash mumkin.
+# Bu nom atayin .env'dan sozlanmaydi: frontend (Employees.jsx) ham aynan shu
+# nomga bog'langan, ikkisini bir joyda o'zgartirmasdan ajratib bo'lmaydi.
 PRIMARY_ADMIN_USERNAME = "miraziz"
+
+# Bosh admin BOSHLANG'ICH paroli — faqat bazada hech qanday admin bo'lmaganda
+# (birinchi ishga tushirish yoki bazani yo'qotib qayta tiklashda) ishlatiladi.
+# Qo'yilmasa: development'da qulaylik uchun DEV_ADMIN_PASSWORD, production'da esa
+# admin yaratish kerak bo'lgan payt main.py aniq xato beradi (zaif default yo'q).
+DEV_ADMIN_PASSWORD = "changeme-dev"
+PRIMARY_ADMIN_PASSWORD = os.getenv("PRIMARY_ADMIN_PASSWORD", "").strip()
 
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/token")
