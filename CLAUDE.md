@@ -49,7 +49,7 @@ npm run preview     # Preview production build
 
 ### Testing
 
-There is no unified test runner or coverage tooling. Ad hoc scripts exist at the repo root (`test_features.py`, `test_async_db.py`, `check_db_lock.py`) — some require a running API or configured database. For new behavior, prefer adding a focused script and manually verifying the affected API routes and UI flows.
+There is no unified test runner or coverage tooling. For new behavior, prefer adding a focused script (run against a local dev server / disposable database) and manually verifying the affected API routes and UI flows.
 
 ## Architecture
 

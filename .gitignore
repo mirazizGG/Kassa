@@ -97,6 +97,12 @@ backend/.env
 # Local uploaded files
 backend/uploads/
 
+# Runtime-uploaded files (invoices, etc.) — keep the folder, not its contents
+uploads/*
+!uploads/invoices/
+uploads/invoices/*
+!uploads/invoices/.gitkeep
+
 # Deploy runtime (pid/log fayllar) — lekin deploy/env/*.example saqlanadi
 deploy/run/
 !deploy/env/

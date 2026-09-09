@@ -60,7 +60,7 @@ Bu Telegram bot funksiyasi bilan birlashtirilgan savdo do'koni uchun professiona
 - **ORM**: SQLAlchemy 2.0 (async rejim)
 - **Ma'lumotlar bazasi**: SQLite (aiosqlite)
 - **Bot**: Aiogram 3.x
-- **Frontend**: Bootstrap 5, JavaScript
+- **Frontend**: React 19, Vite, React Router, TanStack Query, Tailwind CSS, Radix UI / shadcn/ui
 - **Autentifikatsiya**: JWT tokens
 - **Parol xavfsizligi**: passlib (pbkdf2_sha256)
 
@@ -96,22 +96,25 @@ pip install -r requirements.txt
 
 ### 4. Muhit O'zgaruvchilarini Sozlash (MUHIM!)
 
-**XAVFSIZLIK:** Ishlab chiqarishdan oldin quyidagi maxfiy kalitlarni o'zgartiring!
+Barcha maxfiy qiymatlar `backend/.env` faylidan o'qiladi (kodda emas):
 
-`main.py` faylida:
-```python
-# 20-qator
-SECRET_KEY = "o'zingizning_maxfiy_kalitingiz"  # JWT uchun
-
-# 198-qator (send_low_stock_alert funksiyasida)
-token = "SIZNING_TELEGRAM_BOT_TOKEN"
+```bash
+cd backend
+copy .env.example .env      # Windows  (Linux/Mac: cp .env.example .env)
 ```
 
-`bot.py` faylida:
-```python
-# 16-qator
-TOKEN = "SIZNING_TELEGRAM_BOT_TOKEN"
+`backend/.env` ni to'ldiring:
+
 ```
+APP_ENV=development
+SECRET_KEY=<uzun-tasodifiy-satr>
+PRIMARY_ADMIN_PASSWORD=<kuchli-parol>
+TELEGRAM_BOT_TOKEN=<BotFather-bergan-token>
+```
+
+**XAVFSIZLIK:** `APP_ENV=production` bo'lganda `SECRET_KEY` va
+`PRIMARY_ADMIN_PASSWORD` majburiy — o'rnatilmasa server ishga tushmaydi.
+Token yoki parolni hech qachon kodga yoki repo'ga yozmang.
 
 ### 5. Telegram Bot Yaratish
 
@@ -138,11 +141,13 @@ Server ishga tushgach:
 
 ### 7. Birinchi Kirish
 
-**Standart admin ma'lumotlari:**
-- Login: `miraziz`
-- Parol: `changeme-dev`
+Birinchi ishga tushirishda bazada admin bo'lmasa, `miraziz` foydalanuvchisi
+`backend/.env` dagi `PRIMARY_ADMIN_PASSWORD` qiymati bilan yaratiladi
+(`APP_ENV=development` da qiymat berilmasa, `backend/core.py` dagi
+`DEV_ADMIN_PASSWORD` placeholder ishlatiladi — faqat local test uchun).
 
-⚠️ **MUHIM**: Birinchi kirishdan keyin admin parolini o'zgartiring!
+⚠️ **MUHIM**: Production'da doim kuchli `PRIMARY_ADMIN_PASSWORD` qo'ying va
+birinchi kirishdan keyin uni yana o'zgartiring.
 
 ## Foydalanish
 
@@ -328,7 +333,7 @@ Jadval/ustun o'zgarishlari `main.py` ishga tushganda avtomatik qo'llanadi.
 
 ## Muallif
 
-Bu loyiha Claude AI yordamida yaratildi.
+Miraziz — mirazizmiragzamov8434@gmail.com
 
 ## Litsenziya
 
