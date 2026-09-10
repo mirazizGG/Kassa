@@ -50,11 +50,16 @@ async def lifespan(app: FastAPI):
             int(h) for h in raw_hours.replace(" ", "").split(",")
             if h.strip().isdigit() and 0 <= int(h) <= 23
         }) or [12, 22]
+        # Nusxa olinadigan daqiqa (barcha soatlar uchun bir xil). Masalan
+        # BACKUP_HOURS=23 + BACKUP_MINUTE=59  ->  har kuni 23:59 da.
+        raw_minute = os.getenv("BACKUP_MINUTE", "0").strip()
+        backup_minute = int(raw_minute) if raw_minute.isdigit() and 0 <= int(raw_minute) <= 59 else 0
         scheduler.add_job(
-            run_daily_backup, 'cron', hour=",".join(str(h) for h in backup_hours), minute=0,
+            run_daily_backup, 'cron',
+            hour=",".join(str(h) for h in backup_hours), minute=backup_minute,
             id="daily_backup", replace_existing=True, kwargs={"bot": bot},
         )
-        print(f"Startup: Backup rejalashtirildi - har kuni soat {backup_hours} + ishga tushganda.")
+        print(f"Startup: Backup rejalashtirildi - har kuni soat {backup_hours} :{backup_minute:02d} + ishga tushganda.")
         # Har ishga tushganda darhol bitta nusxa (kechasi o'chirilgan kunlar uchun kafolat).
         backup_task = asyncio.create_task(run_startup_backup(bot))
     scheduler.start()
