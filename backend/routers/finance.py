@@ -103,13 +103,26 @@ async def get_stats(
     expense_result = await db.execute(expense_query)
     total_expenses = expense_result.scalar() or 0
 
+    # 1.3 Total Bonus Earned (mijozlarga yozilgan bonus — kelajakda to'lanadigan qarz,
+    # sof foydadan chiqarilishi kerak, aks holda foyda sun'iy oshib ko'rinadi)
+    bonus_query = select(func.sum(Sale.bonus_earned)).where(
+        Sale.created_at >= start_date,
+        Sale.created_at <= end_date,
+        Sale.status == "completed"
+    )
+    if employee_id:
+        bonus_query = bonus_query.where(Sale.cashier_id == employee_id)
+
+    bonus_result = await db.execute(bonus_query)
+    total_bonus = bonus_result.scalar() or 0
+
     # If manager, hide sensitive profit/cost data
     # If manager or cashier, hide sensitive profit/cost data
     if current_user.role in ["manager", "cashier"]:
         total_cost = 0
         net_profit = 0
     else:
-        net_profit = sales_total - total_cost - total_expenses
+        net_profit = sales_total - total_cost - total_expenses - total_bonus
 
     # 2. Client Count
     client_query = select(func.count(Client.id))
@@ -298,13 +311,22 @@ async def get_profit_chart(
         )
         cost_result = await db.execute(cost_query)
         cogs = cost_result.scalar() or 0
-        
+
+        # Bonus Earned (mijozlarga yozilgan bonus — /stats dagi bilan bir xil mantiq)
+        bonus_query = select(func.sum(Sale.bonus_earned)).where(
+            Sale.created_at >= day_start,
+            Sale.created_at < day_end,
+            Sale.status == "completed"
+        )
+        bonus_result = await db.execute(bonus_query)
+        bonus = bonus_result.scalar() or 0
+
         if current_user.role in ["manager", "cashier"]:
             display_expenses = expenses # Only store expenses
             display_profit = 0
         else:
             display_expenses = expenses + cogs
-            display_profit = revenue - cogs - expenses
+            display_profit = revenue - cogs - expenses - bonus
         
         results.append({
             "date": day.strftime("%d.%m"),
