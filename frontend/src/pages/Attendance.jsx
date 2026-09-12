@@ -1,3 +1,4 @@
+import { formatDateTime } from "@/lib/datetime";
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import api from "../api/axios";
@@ -26,7 +27,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { format } from "date-fns";
+
 import { Skeleton } from "@/components/ui/skeleton";
 import FilterBar from "../components/FilterBar";
 
@@ -162,24 +163,10 @@ const Attendance = () => {
                       )}
                     </TableCell>
                     <TableCell className="text-muted-foreground font-medium">
-                      {format(
-                        new Date(
-                          log.created_at.endsWith("Z")
-                            ? log.created_at
-                            : log.created_at + "Z",
-                        ),
-                        "dd.MM.yyyy",
-                      )}
+                      {formatDateTime(log.created_at, "dd.MM.yyyy")}
                     </TableCell>
                     <TableCell className="font-bold text-foreground">
-                      {format(
-                        new Date(
-                          log.created_at.endsWith("Z")
-                            ? log.created_at
-                            : log.created_at + "Z",
-                        ),
-                        "HH:mm",
-                      )}
+                      {formatDateTime(log.created_at, "HH:mm")}
                     </TableCell>
                     <TableCell className="pr-6 italic text-muted-foreground">
                       {log.note || "-"}

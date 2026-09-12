@@ -62,7 +62,7 @@ const Settings = () => {
         footer_text: settings.footer_text || "",
         logo_url: settings.logo_url || "",
         low_stock_threshold: settings.low_stock_threshold || 5,
-        bonus_percentage: settings.bonus_percentage || 1,
+        bonus_percentage: settings.bonus_percentage ?? 1,
         debt_reminder_days: settings.debt_reminder_days || 30,
       });
     }

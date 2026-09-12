@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { formatDateTime } from "@/lib/datetime";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import api from "../api/axios";
 import { queryClient } from "../api/queryClient";
@@ -18,7 +19,7 @@ import {
   Infinity as InfinityIcon,
 } from "lucide-react";
 import BackupButton from "../components/BackupButton";
-import { format } from "date-fns";
+
 import {
   Select,
   SelectContent,
@@ -58,6 +59,10 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { cn, formatThousands, parseThousands } from "@/lib/utils.js";
+
+// Bir marta yaratiladigan collator: localeCompare har chaqiruvda
+// ichida yangisini quradi va katta katalogda sezilarli sekinlik beradi.
+const productCollator = new Intl.Collator("uz", { sensitivity: "base" });
 
 const Inventory = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -271,8 +276,11 @@ const Inventory = () => {
       toast.error("Sotish narxini kiriting");
       return;
     }
-    if (!formData.is_infinite && (!formData.stock || formData.stock <= 0)) {
-      toast.error("Kirim sonini kiriting");
+    // Qoldiq NOL bo'lishi mumkin: tovar tugagan, lekin katalogda qolishi kerak.
+    // Ilgari 0 ni saqlab bo'lmasdi va operator yolg'on son kiritishga majbur edi.
+    const stockValue = Number(formData.stock);
+    if (!formData.is_infinite && (Number.isNaN(stockValue) || stockValue < 0)) {
+      toast.error("Qoldiq manfiy bo'lishi mumkin emas");
       return;
     }
     if (!formData.unit) {
@@ -284,20 +292,31 @@ const Inventory = () => {
       buy_price: Number(formData.buy_price) || 0,
       sell_price: Number(formData.sell_price) || 0,
       stock: formData.is_infinite ? 0 : Number(formData.stock) || 0,
+      // Forma ochilgandagi qoldiq. Server uni hozirgi qoldiq bilan solishtiradi
+      // va oradagi sotuvlarni bekor qilib yubormaslik uchun 409 qaytaradi.
+      ...(editingProduct ? { expected_stock: editingProduct.stock } : {}),
     });
   };
 
-  const filteredProducts = products
-    .filter((p) => {
+  // useMemo SHART: ilgari bu ro'yxat HAR RENDERDA qaytadan filtrlanib
+  // saralanardi — modal ochish, forma maydonini yozish, har bosilgan tugma
+  // butun katalogni qayta hisoblatardi.
+  const filteredProducts = useMemo(() => {
+    const needle = searchTerm.trim().toLowerCase();
+    const filtered = products.filter((p) => {
       const matchesSearch =
-        p.name.toLowerCase().startsWith(searchTerm.toLowerCase()) ||
-        p.barcode?.startsWith(searchTerm);
+        !needle ||
+        p.name.toLowerCase().startsWith(needle) ||
+        p.barcode?.startsWith(needle);
       const matchesCategory =
         selectedCategory === "all" ||
         p.category_id?.toString() === selectedCategory;
       return matchesSearch && matchesCategory;
-    })
-    .sort((a, b) => {
+    });
+
+    // Intl.Collator bir marta yaratiladi (modul darajasida) — localeCompare
+    // har chaqiruvda ichida yangisini quradi.
+    filtered.sort((a, b) => {
       switch (sortBy) {
         case "price-asc":
           return a.sell_price - b.sell_price;
@@ -314,11 +333,13 @@ const Inventory = () => {
             (a.is_infinite ? Infinity : a.stock)
           );
         case "name-asc":
-          return a.name.localeCompare(b.name);
+          return productCollator.compare(a.name, b.name);
         default:
           return 0;
       }
     });
+    return filtered;
+  }, [products, searchTerm, selectedCategory, sortBy]);
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -460,10 +481,7 @@ const Inventory = () => {
                           return (
                             <TableRow key={item.id}>
                               <TableCell className="text-xs text-muted-foreground">
-                                {format(
-                                  new Date(item.created_at),
-                                  "dd.MM.yyyy HH:mm",
-                                )}
+                                {formatDateTime(item.created_at)}
                               </TableCell>
                               <TableCell className="font-medium">
                                 {product ? product.name : `#${item.product_id}`}
@@ -535,7 +553,7 @@ const Inventory = () => {
                         stockLogs.map((log) => (
                           <TableRow key={log.id} className="text-sm">
                             <TableCell className="text-xs text-muted-foreground">
-                              {format(new Date(log.created_at), "dd.MM HH:mm")}
+                              {formatDateTime(log.created_at, "dd.MM HH:mm")}
                             </TableCell>
                             <TableCell className="font-medium">
                               {log.product?.name || `#${log.product_id}`}

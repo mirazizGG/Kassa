@@ -1,3 +1,4 @@
+import { formatDateTime, parseServerDate } from "@/lib/datetime";
 import React, { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import api from "../api/axios";
@@ -15,7 +16,7 @@ import {
   Trash2,
   AlertTriangle,
 } from "lucide-react";
-import { format, isPast } from "date-fns";
+import { isPast } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -154,7 +155,8 @@ const CRM = () => {
   );
   const debtors = clients.filter((client) => client.balance < 0);
   const overdueDebtors = debtors.filter(
-    (client) => client.debt_due_date && isPast(new Date(client.debt_due_date)),
+    (client) =>
+      client.debt_due_date && isPast(parseServerDate(client.debt_due_date)),
   );
   const totalDebt = debtors.reduce(
     (sum, client) => sum + Math.abs(client.balance || 0),
@@ -285,13 +287,13 @@ const CRM = () => {
                         <div
                           className={cn(
                             "text-[10px] flex items-center gap-1 mt-1 font-medium",
-                            isPast(new Date(client.debt_due_date))
+                            isPast(parseServerDate(client.debt_due_date))
                               ? "text-rose-600 animate-pulse"
                               : "text-slate-500",
                           )}
                         >
                           <Calendar className="w-3 h-3" />
-                          {format(new Date(client.debt_due_date), "dd.MM.yyyy")}
+                          {formatDateTime(client.debt_due_date, "dd.MM.yyyy")}
                         </div>
                       )}
                     </TableCell>
@@ -339,10 +341,15 @@ const CRM = () => {
                                   name: client.name,
                                   phone: client.phone || "",
                                   telegram_id: client.telegram_id || "",
+                                  // Muddat - KALENDAR sanasi, moment emas.
+                                  // Ilgari u new Date(...).toISOString() orqali
+                                  // o'tkazilardi: server naive-UTC qaytaradi,
+                                  // brauzer uni mahalliy vaqt deb o'qiydi va
+                                  // ISO ga qaytarganda sana BIR KUN ORQAGA
+                                  // suriladi. Har saqlashda muddat bir kunga
+                                  // yaqinlashaverardi.
                                   debt_due_date: client.debt_due_date
-                                    ? new Date(client.debt_due_date)
-                                        .toISOString()
-                                        .split("T")[0]
+                                    ? String(client.debt_due_date).slice(0, 10)
                                     : "",
                                 });
                                 setIsEditModalOpen(true);

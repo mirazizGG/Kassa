@@ -23,7 +23,6 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { UPDATE_INITIATOR_KEY } from "@/components/UpdateOverlay";
 
 const Login = () => {
   const [username, setUsername] = useState("");
@@ -64,18 +63,17 @@ const Login = () => {
         description: `Xush kelibsiz, ${user}`,
       });
 
-      // GitHub'da yangi versiya bor-yo'qligini bir marta tekshiramiz; bo'lsa
-      // ilovaga kirishdan oldin avtomatik yuklab olamiz (self-update yoqilgan
-      // bo'lsagina). "Kuting" oynasini dashboard Layout ko'rsatadi.
-      try {
-        const { data: check } = await api.get("/system/update-check");
-        if (check.enabled && check.update_available) {
-          localStorage.setItem(UPDATE_INITIATOR_KEY, "1");
-          await api.post("/system/update");
-        }
-      } catch {
-        /* tekshirib bo'lmadi — login baribir davom etadi */
-      }
+      // DIQQAT: bu yerda ilgari yangilanish AVTOMATIK boshlanardi.
+      //
+      // Kirish muvaffaqiyatli bo'lgach sahifa o'zi POST /system/update ni
+      // chaqirardi — ya'ni ish kunining o'rtasida smenaga kirgan kassir
+      // jimgina `git pull`, frontend qayta yig'ilishi va backend restartini
+      // ishga tushirardi. Qolgan kassalar shu vaqt davomida ishlamas edi va
+      // buni hech kim tanlamagan edi.
+      //
+      // Endi yangilanishni faqat ODAM boshlaydi: yangi versiya bor bo'lsa
+      // Layout dagi "Yangilash" tugmasi ko'rinadi (UpdateButton.jsx), va
+      // serverda ham bu endpoint faqat admin uchun ochiq.
 
       if (role === "cashier") {
         navigate("/pos");

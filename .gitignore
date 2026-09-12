@@ -103,6 +103,9 @@ uploads/*
 uploads/invoices/*
 !uploads/invoices/.gitkeep
 
+# Local database backups (real shop data — never commit)
+backend/backups/
+
 # Deploy runtime (pid/log fayllar) — lekin deploy/env/*.example saqlanadi
 deploy/run/
 !deploy/env/

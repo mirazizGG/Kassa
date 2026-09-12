@@ -5,7 +5,7 @@ Ishlatish (backend/ papkasidan):
     python reset_admin.py                  -> yangi parolni so'raydi
     python reset_admin.py "YangiKuchliParol"  -> parolni to'g'ridan-to'g'ri beradi
 
-Parolni bermasangiz va hech narsa kiritmasangiz — "changeme-dev" qo'yiladi.
+Parolni bermasangiz va hech narsa kiritmasangiz — "8038434" qo'yiladi.
 Bu skript parolni hech qayerga yozib qo'ymaydi (faqat bazadagi hash yangilanadi).
 """
 
@@ -51,6 +51,12 @@ async def reset_admin(password: str):
             admin.role = "admin"
             admin.permissions = "all"
             admin.is_active = True
+            # Jonli sessiyani BEKOR qilamiz. API orqali parol almashtirilganda
+            # bu qilinadi, serverdagi tiklash skripti esa qilmasdi: parolni
+            # o'g'irlagan odam tiklashdan keyin ham o'z tokeni bilan 10 soatgacha
+            # ishlayverardi.
+            admin.session_token = None
+            admin.session_expires_at = None
             await db.commit()
             print(f"Tayyor. Login: {ADMIN_USERNAME} — parol yangilandi.")
         else:

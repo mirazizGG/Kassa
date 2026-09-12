@@ -22,16 +22,47 @@ Ushbu hujjat yangi qo'shilgan funksiyalar qanday ishlashi va muammo bo'lsa qanda
 
 **Qanday ishlaydi?**
 
-- **Sotuvda:** Har safar chek urilganda, `backend/backups/` papkasiga bazaning nusxasi olinadi.
-- **Smena yopilganda:** Dastur eng so'nggi bazani Adminning **Telegramiga** yuboradi.
+- **Jadval bo'yicha:** `BACKUP_HOURS` da ko'rsatilgan soatlarda (sukut bo'yicha 12:00 va 22:00).
+- **Har ishga tushganda:** dastur yoqilganda ham nusxa olinadi (oxirgisi bir soatdan yangi bo'lsa - o'tkazib yuboriladi).
+- **Qo'lda:** Sozlamalar sahifasidagi "Zahira nusxa" tugmasi.
+- Nusxa bir vaqtning o'zida bir necha manzilga boradi: `backend/backups/`, tashqi papka
+  (`BACKUP_MIRROR_DIR`), maxfiy GitHub repozitoriysi va admin Telegrami - qaysi biri sozlangan bo'lsa.
 
-**Ma'lumotni tiklash (Restore):**
-Agar baza buzilsa yoki kompyuter almashtirilsa:
+> Ilgari bu yerda "har chek urilganda nusxa olinadi" deb yozilgan edi. Bu endi TO'G'RI EMAS
+> va atayin olib tashlangan: har sotuvdan keyin nusxa olish eski nusxalarni siqib chiqarib,
+> saqlash oynasini "oxirgi 30 ta sotuv" ga qisqartirib qo'yardi - ertalabki nusxa tushlikkacha
+> o'chib ketardi.
 
-1. `backend/backups/` papkasidan yoki Telegramdan eng so'nggi `.db` faylni toping.
-2. `backend/market.db` faylini o'chirib yuboring (yoki nomini o'zgartiring).
-3. Zahira faylini nomini shunchaki `market.db` ga o'zgartiring va o'rniga qo'ying.
+### Ma'lumotni tiklash (Restore)
+
+**DIQQAT.** SQLite bazasi bitta fayldan iborat EMAS. Yonida `market.db-wal` va
+`market.db-shm` fayllari turadi va ularda hali asosiy faylga yozilmagan ma'lumot
+bo'lishi mumkin. Agar faqat `market.db` ni almashtirsangiz, SQLite eski
+`-wal` faylni YANGI baza ustiga yozib yuboradi va tiklangan nusxa buziladi.
+Uchalasini HAR DOIM birga o'chiring.
+
+**SQLite (do'kondagi kompyuter):**
+
+1. Dasturni to'liq **to'xtating** (backend jarayoni ham).
+2. `backend/` papkasidan uchala faylni birga o'chiring yoki boshqa joyga ko'chiring:
+   `market.db`, `market.db-wal`, `market.db-shm`.
+3. `backend/backups/` dan eng so'nggi `backup_*.db` faylni `backend/market.db` nomi bilan qo'ying.
 4. Dasturni qayta ishga tushiring.
+5. Bir nechta sotuvni va mijoz qarzini ochib, ma'lumot joyidaligini tekshiring.
+
+**PostgreSQL (server):**
+
+Serverdagi nusxalar `.dump` ko'rinishida bo'ladi va ular `pg_restore` bilan tiklanadi.
+To'liq tartib: `deploy/DEPLOY.md` -> "Восстановление".
+
+### Nusxa ishlashiga ishonch hosil qiling
+
+Nusxa OLISH va nusxadan TIKLASH - ikki xil narsa. Oyda bir marta tekshiring:
+
+    deploy/scripts/backup-verify.sh
+
+Skript eng so'nggi nusxani vaqtinchalik bazaga tiklab, jadvallardagi satrlar
+sonini ko'rsatadi va o'zidan keyin tozalab ketadi.
 
 ---
 

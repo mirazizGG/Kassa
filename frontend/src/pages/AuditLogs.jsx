@@ -78,10 +78,21 @@ const AuditLogs = () => {
     end_date: today,
   });
 
-  const { data: logs = [], isLoading } = useQuery({
-    queryKey: ["audit-logs", filters],
+  // Sahifalash. Ilgari bu yerda umuman limit/offset yuborilmasdi: server
+  // sukut bo'yicha 100 tasini qaytarardi va sahifa o'sha sonni "topildi" deb
+  // ko'rsatardi. Ya'ni tekshiruv paytida jurnal jimgina qirqilib, hech narsa
+  // yashirilmagandek ko'rinardi.
+  const PAGE_SIZE = 100;
+  const [page, setPage] = React.useState(0);
+
+  React.useEffect(() => {
+    setPage(0);
+  }, [filters]);
+
+  const { data: result, isLoading } = useQuery({
+    queryKey: ["audit-logs", filters, page],
     queryFn: async () => {
-      const params = {};
+      const params = { limit: PAGE_SIZE, offset: page * PAGE_SIZE };
       if (filters.employee_id && filters.employee_id !== "all")
         params.employee_id = filters.employee_id;
       if (filters.action) params.action = filters.action;
@@ -90,12 +101,19 @@ const AuditLogs = () => {
       if (filters.end_date) params.end_date = filters.end_date;
 
       const res = await api.get("/audit/logs", { params });
-      return res.data;
+      return {
+        rows: res.data,
+        total: Number(res.headers["x-total-count"] ?? res.data.length),
+      };
     },
     staleTime: 0,
     refetchOnMount: "always",
     refetchInterval: 15000,
   });
+
+  const logs = result?.rows ?? [];
+  const total = result?.total ?? 0;
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const handleExport = async () => {
     setIsExporting(true);
@@ -269,7 +287,7 @@ const AuditLogs = () => {
               </CardDescription>
             </div>
             <div className="px-3 py-1 bg-primary/10 text-primary text-[10px] font-bold uppercase rounded-full tracking-wider border border-primary/20">
-              {logs.length} ta yozuv topildi
+              {total} ta yozuv topildi
             </div>
           </div>
         </CardHeader>
@@ -408,6 +426,35 @@ const AuditLogs = () => {
               </TableBody>
             </Table>
           </div>
+          {total > PAGE_SIZE && (
+            <div className="flex items-center justify-between border-t px-4 py-3 text-sm">
+              <span className="text-muted-foreground">
+                {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} /{" "}
+                {total}
+              </span>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page === 0}
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                >
+                  Oldingi
+                </Button>
+                <span className="text-xs text-muted-foreground">
+                  {page + 1} / {pageCount}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page + 1 >= pageCount}
+                  onClick={() => setPage((p) => p + 1)}
+                >
+                  Keyingi
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

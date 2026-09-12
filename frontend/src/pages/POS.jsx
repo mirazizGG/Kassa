@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import api from "../api/axios";
 import { queryClient } from "../api/queryClient";
@@ -48,6 +48,23 @@ import { useHotkeys } from "react-hotkeys-hook";
 // Tugallanmagan savdo qoralamasi. Sahifa yangilanib ketsa (masalan dastur
 // yangilanganda yoki tasodifan F5 bosilsa) savat shu yerdan tiklanadi.
 const POS_DRAFT_KEY = "pos-draft";
+
+// Kassa sahifasida bir vaqtda ko'rsatiladigan mahsulotlar chegarasi.
+// 20 000 ta kartochkani DOM ga qo'yish kassani ishlatib bo'lmaydigan qiladi;
+// kassir baribir qidiruv orqali topadi.
+const MAX_VISIBLE_PRODUCTS = 120;
+
+// Intl.Collator BIR MARTA yaratiladi. localeCompare har chaqiruvda ichida
+// yangi collator quradi — 20 000 ta solishtirishda bu har bosilgan tugmada
+// sezilarli sekinlik beradi.
+const nameCollator = new Intl.Collator("uz", { sensitivity: "base" });
+
+// Har bir savat uchun takrorlanmas kalit (idempotency). crypto.randomUUID
+// eski brauzerlarda yo'q bo'lishi mumkin — shuning uchun zaxira varianti bor.
+const newSaleKey = () =>
+  globalThis.crypto?.randomUUID?.() ??
+  `k-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+
 const readPosDraft = () => {
   try {
     const d = JSON.parse(localStorage.getItem(POS_DRAFT_KEY) || "{}");
@@ -55,9 +72,14 @@ const readPosDraft = () => {
       cart: Array.isArray(d.cart) ? d.cart : [],
       selectedClient: d.selectedClient ?? null,
       bonusSpent: Number(d.bonusSpent) || 0,
+      // Kalit ham qoralama bilan birga saqlanadi. Aks holda F5 dan keyin
+      // yangi kalit paydo bo'lardi va takroriy chekdan himoya AYNAN o'sha
+      // holatda — so'rov osilib qolib, kassir sahifani yangilaganda —
+      // ishlamay qolardi.
+      saleKey: typeof d.saleKey === "string" && d.saleKey ? d.saleKey : null,
     };
   } catch {
-    return { cart: [], selectedClient: null, bonusSpent: 0 };
+    return { cart: [], selectedClient: null, bonusSpent: 0, saleKey: null };
   }
 };
 const clearPosDraft = () => {
@@ -88,6 +110,12 @@ const POS = () => {
     perevod: "",
     qarz: "",
   });
+  // Har bir savat uchun bitta takrorlanmas kalit. Ikki marta bosilgan yoki
+  // timeout bo'lib qayta yuborilgan so'rov shu kalit bilan keladi va server
+  // yangi chek yaratmay, birinchisini qaytaradi.
+  const [saleKey, setSaleKey] = useState(
+    () => initialDraft.saleKey || newSaleKey(),
+  );
   const [selectedClient, setSelectedClient] = useState(
     initialDraft.selectedClient,
   );
@@ -218,8 +246,12 @@ const POS = () => {
     }
 
     if (activeShift) {
-      const expectedCash =
-        activeShift.opening_balance + (activeShift.total_cash || 0);
+      // Serverdan kelgan tayyor qiymatni ishlatamiz, o'zimiz qayta hisoblamaymiz.
+      // Ilgari bu yerda "opening_balance + total_cash" yozilgan edi: mijozdan
+      // naqd qabul qilingan qarz to'lovlari ham, kassadan chiqqan xarajatlar ham
+      // hisobga olinmasdi. Natijada kassirga bir raqam ko'rsatilib, server
+      // boshqasini kutardi va sababsiz "farq" chiqardi.
+      const expectedCash = activeShift.expected_cash ?? 0;
       if (Math.abs(amount - expectedCash) > 0.01 && !shiftNote.trim()) {
         toast.error("Kassa farqi uchun sabab yozing");
         return;
@@ -263,12 +295,12 @@ const POS = () => {
     try {
       localStorage.setItem(
         POS_DRAFT_KEY,
-        JSON.stringify({ cart, selectedClient, bonusSpent }),
+        JSON.stringify({ cart, selectedClient, bonusSpent, saleKey }),
       );
     } catch {
       /* jim */
     }
-  }, [cart, selectedClient, bonusSpent]);
+  }, [cart, selectedClient, bonusSpent, saleKey]);
 
   const favoriteMutation = useMutation({
     mutationFn: (productId) =>
@@ -336,13 +368,40 @@ const POS = () => {
   // Sale Mutation
   const saleMutation = useMutation({
     mutationFn: (data) => api.post("/sales/", data),
-    onSuccess: () => {
+    onSuccess: (response) => {
       toast.success("Sotuv amalga oshirildi!");
       setCart([]);
+      // Keyingi chek uchun yangi kalit.
+      setSaleKey(newSaleKey());
+      // Mijozni tozalaymiz: aks holda keyingi mijozning nasiyasi avvalgi
+      // mijozning hisobiga yozilib ketardi.
+      setSelectedClient(null);
       setIsPaymentModalOpen(false);
       setPaymentAmounts({ cash: "", card: "", perevod: "", qarz: "" });
       setBonusSpent(0);
-      queryClient.invalidateQueries({ queryKey: ["products"] });
+      // Katalogni QAYTA YUKLAMAYMIZ. Ilgari bu yerda invalidateQueries
+      // ["products"] turardi: har bir chekdan keyin butun katalog qaytadan
+      // so'ralardi. 20 000 mahsulotli do'konda bu har sotuvda ko'p megabaytlik
+      // javob — kassir uni kutib turardi, holbuki o'zgargan narsa 1-5 ta
+      // mahsulotning qoldig'i.
+      //
+      // Server javobida har bir pozitsiya bo'yicha YANGILANGAN mahsulot
+      // keladi (load_sale populate_existing bilan o'qiydi), shuning uchun
+      // keshni joyida tuzatamiz.
+      const soldItems = response?.data?.items ?? [];
+      if (soldItems.length) {
+        queryClient.setQueryData(["products"], (old) => {
+          if (!Array.isArray(old)) return old;
+          const fresh = new Map(
+            soldItems
+              .filter((i) => i.product)
+              .map((i) => [i.product.id, i.product]),
+          );
+          return fresh.size
+            ? old.map((p) => (fresh.has(p.id) ? { ...p, ...fresh.get(p.id) } : p))
+            : old;
+        });
+      }
       queryClient.invalidateQueries({ queryKey: ["sales-history"] });
       queryClient.invalidateQueries({ queryKey: ["finance-stats"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
@@ -372,12 +431,13 @@ const POS = () => {
 
   // Logic
   const addToCart = (product, forcedQuantity = null) => {
-    /* 
-        if (product.stock <= 0) {
-            toast.error("Mahsulot qolmagan!");
-            return;
-        }
-        */
+    // Qoldiq tekshiruvi. Ilgari bu blok izohga olingan edi: kassir savatni
+    // to'ldirib, to'lov paytida serverdan "yetarli emas" degan xatoni olardi
+    // va butun savatni qaytadan yig'ishga majbur bo'lardi.
+    if (!product.is_infinite && product.stock <= 0) {
+      toast.error(`"${product.name}" qolmagan`);
+      return;
+    }
 
     // If it's a weighted item and no quantity provided, open modal
     if (
@@ -396,12 +456,17 @@ const POS = () => {
     setCart((prev) => {
       const existing = prev.find((item) => item.product_id === product.id);
       if (existing) {
-        /*
-                if (existing.quantity + quantityToAdd > product.stock) {
-                    toast.warning("Boshqa qoldiq yo'q");
-                    return prev;
-                }
-                */
+        // Savatdagi miqdor qoldiqdan oshib ketmasin - xatoni to'lov paytida
+        // emas, SHU YERDA ko'rsatamiz.
+        if (
+          !product.is_infinite &&
+          existing.quantity + quantityToAdd > product.stock
+        ) {
+          toast.warning(
+            `"${product.name}" uchun qoldiq yetarli emas (${product.stock} ${product.unit})`,
+          );
+          return prev;
+        }
         return prev.map((item) =>
           item.product_id === product.id
             ? { ...item, quantity: item.quantity + quantityToAdd }
@@ -529,28 +594,43 @@ const POS = () => {
       transfer_amount: Number(paymentAmounts.perevod) || 0,
       debt_amount: Number(paymentAmounts.qarz) || 0,
       bonus_spent: Number(bonusSpent) || 0,
+      idempotency_key: saleKey,
     };
     saleMutation.mutate(saleData);
   };
 
   // Filtered Products
-  const filteredProducts = products
-    .filter((p) => {
+  // useMemo SHART: ilgari bu ro'yxat HAR RENDERDA qaytadan filtrlanib
+  // saralanardi — savatga qo'shish, modal ochish, har bosilgan tugma butun
+  // katalogni qayta hisoblatardi.
+  const matchingProducts = useMemo(() => {
+    const needle = searchTerm.trim().toLowerCase();
+    const filtered = products.filter((p) => {
       const matchesSearch =
-        p.name.toLowerCase().startsWith(searchTerm.toLowerCase()) ||
-        p.barcode?.startsWith(searchTerm);
+        !needle ||
+        p.name.toLowerCase().startsWith(needle) ||
+        p.barcode?.startsWith(needle);
       const matchesCategory = selectedCategory
         ? p.category_id === selectedCategory
         : true;
       return matchesSearch && matchesCategory;
-    })
-    .sort((a, b) => {
-      // Favorites first
-      if (a.is_favorite && !b.is_favorite) return -1;
-      if (!a.is_favorite && b.is_favorite) return 1;
-      // Keyin alifbo bo'yicha (A-Z)
-      return a.name.localeCompare(b.name, "uz");
     });
+
+    filtered.sort((a, b) => {
+      // Saralanganlar birinchi
+      if (a.is_favorite !== b.is_favorite) return a.is_favorite ? -1 : 1;
+      // Keyin alifbo bo'yicha (A-Z)
+      return nameCollator.compare(a.name, b.name);
+    });
+    return filtered;
+  }, [products, searchTerm, selectedCategory]);
+
+  // Ekranga faqat boshini chiqaramiz; qolgani qidiruv orqali topiladi.
+  const filteredProducts = useMemo(
+    () => matchingProducts.slice(0, MAX_VISIBLE_PRODUCTS),
+    [matchingProducts],
+  );
+  const hiddenProductCount = matchingProducts.length - filteredProducts.length;
 
   // Shortcuts
   useHotkeys("f2", () => searchInputRef.current?.focus(), {
@@ -749,6 +829,14 @@ const POS = () => {
                 <div className="col-span-full flex flex-col items-center justify-center h-40 text-muted-foreground">
                   <Search className="w-8 h-8 mb-2 opacity-50" />
                   <p>Mahsulotlar topilmadi</p>
+                </div>
+              )}
+              {/* Ro'yxat qirqilganini AYTAMIZ. Jimgina qirqish "hammasi shu"
+                  degan taassurot qoldirardi. */}
+              {hiddenProductCount > 0 && (
+                <div className="col-span-full py-3 text-center text-xs text-muted-foreground">
+                  Yana {hiddenProductCount} ta mahsulot bor — qidiruvni
+                  aniqlashtiring yoki shtrix kodni skanerlang
                 </div>
               )}
             </div>
@@ -1590,13 +1678,26 @@ const POS = () => {
                     {(dailySummary?.debt_amount || 0).toLocaleString("de-DE")}
                   </span>
                 </div>
+                {(activeShift.total_expenses || 0) > 0 && (
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>Kassadan xarajat:</span>
+                    <span>
+                      -{(activeShift.total_expenses || 0).toLocaleString("de-DE")} so'm
+                    </span>
+                  </div>
+                )}
+                {(activeShift.total_refunds || 0) > 0 && (
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>Kassadan vozvrat:</span>
+                    <span>
+                      -{(activeShift.total_refunds || 0).toLocaleString("de-DE")} so'm
+                    </span>
+                  </div>
+                )}
                 <div className="border-t pt-2 flex justify-between font-bold text-lg">
                   <span>Kassada bo'lishi kerak:</span>
                   <span>
-                    {(
-                      activeShift.opening_balance +
-                      (activeShift.total_cash || 0)
-                    ).toLocaleString("de-DE")}{" "}
+                    {(activeShift.expected_cash ?? 0).toLocaleString("de-DE")}{" "}
                     so'm
                   </span>
                 </div>
@@ -1621,9 +1722,13 @@ const POS = () => {
             </div>{" "}
             {activeShift &&
               shiftBalance !== "" &&
+              // Server bilan BIR XIL formula bo'lishi shart. Ilgari bu yerda
+              // "opening_balance + total_cash" turardi: naqd qarz to'lovi,
+              // xarajat yoki vozvrat bo'lgan smenada sabab maydoni KO'RINMASDI,
+              // lekin server yopishni rad etardi — kassir smenani yopa olmay,
+              // sababini ham tushunmay qolardi.
               Math.abs(
-                Number(shiftBalance) -
-                  (activeShift.opening_balance + (activeShift.total_cash || 0)),
+                Number(shiftBalance) - (activeShift.expected_cash ?? 0),
               ) > 0.01 && (
                 <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/30">
                   <Label htmlFor="shift-note">Farq sababi</Label>

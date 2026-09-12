@@ -1,3 +1,4 @@
+import { formatDateTime } from "@/lib/datetime";
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import api, { API_URL } from "../api/axios";
@@ -20,7 +21,7 @@ import {
   ChevronRight,
   Eye,
 } from "lucide-react";
-import { format } from "date-fns";
+
 import {
   Dialog,
   DialogContent,
@@ -445,7 +446,7 @@ const Suppliers = () => {
                       <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
                         <span className="flex items-center gap-1">
                           <Calendar className="h-3 w-3" />{" "}
-                          {format(new Date(item.date), "dd.MM.yyyy HH:mm")}
+                          {formatDateTime(item.date)}
                         </span>
                         {item.note && (
                           <span className="italic">"{item.note}"</span>

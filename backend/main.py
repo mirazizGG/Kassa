@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from contextlib import asynccontextmanager
 import asyncio
 from typing import Optional
@@ -24,52 +25,91 @@ from bot import bot, dp, check_debts
 from routers import auth, inventory, pos, crm, finance, tasks, sales, audit, settings, suppliers, system
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from sqlalchemy.exc import IntegrityError
 
 # Configure Rate Limiting - MOVED TO core.py
+
+# Fon vazifalari (rejalashtiruvchi, Telegram polling, ishga tushish nusxasi)
+# YAGONA jarayonda ishlashi kerak.
+#
+# Ular lifespan ichida bo'lgani uchun `uvicorn --workers 4` ularni ham to'rt
+# marta ishga tushirardi: to'rtta getUpdates polleri Telegram'dan uzluksiz
+# 409 Conflict oladi va bot javob bermay qoladi; to'rtta rejalashtiruvchi har
+# bir qarzdorga to'rttadan eslatma yuboradi; to'rtta nusxa vazifasi bitta
+# papkaga bir vaqtda yozadi.
+#
+# Serverda: bitta systemd unit `RUN_BACKGROUND_JOBS=true` bilan (bitta jarayon),
+# web unit esa ko'p worker bilan va bu flagsiz ishlaydi.
+RUN_BACKGROUND_JOBS = os.getenv("RUN_BACKGROUND_JOBS", "true").strip().lower() in {
+    "1", "true", "yes",
+}
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("Startup: Initializing DB...")
     await init_db()
-    
-    # Start Scheduler for background tasks
-    print("Startup: Starting scheduler...")
-    scheduler = AsyncIOScheduler()
-    # Har kuni ertalab soat 9:00 da qarzni tekshirish
-    scheduler.add_job(check_debts, 'cron', hour=9, minute=0, args=[bot])
 
-    # SQLite backup — kun davomida bir necha marta + har ishga tushganda.
-    # run_daily_backup: lokal nusxa + BACKUP_MIRROR_DIR (bo'lsa) + Telegram (bo'lsa).
+    scheduler = None
     backup_task = None
-    if os.getenv("BACKUP_ENABLED", "true").lower() in {"1", "true", "yes"}:
-        from utils.backup import run_daily_backup, run_startup_backup
-        # Standart: har kuni soat 12:00 va 22:00 + har ishga tushganda.
-        # BACKUP_HOURS="9,14,22" bilan .env dan o'zgartirish mumkin.
-        raw_hours = os.getenv("BACKUP_HOURS", "12,22")
-        backup_hours = sorted({
-            int(h) for h in raw_hours.replace(" ", "").split(",")
-            if h.strip().isdigit() and 0 <= int(h) <= 23
-        }) or [12, 22]
-        # Nusxa olinadigan daqiqa (barcha soatlar uchun bir xil). Masalan
-        # BACKUP_HOURS=23 + BACKUP_MINUTE=59  ->  har kuni 23:59 da.
-        raw_minute = os.getenv("BACKUP_MINUTE", "0").strip()
-        backup_minute = int(raw_minute) if raw_minute.isdigit() and 0 <= int(raw_minute) <= 59 else 0
-        scheduler.add_job(
-            run_daily_backup, 'cron',
-            hour=",".join(str(h) for h in backup_hours), minute=backup_minute,
-            id="daily_backup", replace_existing=True, kwargs={"bot": bot},
-        )
-        print(f"Startup: Backup rejalashtirildi - har kuni soat {backup_hours} :{backup_minute:02d} + ishga tushganda.")
-        # Har ishga tushganda darhol bitta nusxa (kechasi o'chirilgan kunlar uchun kafolat).
-        backup_task = asyncio.create_task(run_startup_backup(bot))
-    scheduler.start()
-    # Start Telegram only when a token is configured.
     bot_task = None
-    if bot:
-        print("Startup: Starting bot polling...")
-        bot_task = asyncio.create_task(dp.start_polling(bot))
-    else:
-        print("Startup: Telegram bot is disabled (no token).")
+
+    if not RUN_BACKGROUND_JOBS:
+        print("Startup: fon vazifalari o'chirilgan (RUN_BACKGROUND_JOBS=false) — "
+              "faqat web so'rovlariga xizmat qilamiz.")
+
+    if RUN_BACKGROUND_JOBS:
+        # Start Scheduler for background tasks
+        print("Startup: Starting scheduler...")
+        scheduler = AsyncIOScheduler()
+        # Har kuni ertalab soat 9:00 da qarzni tekshirish
+        scheduler.add_job(check_debts, 'cron', hour=9, minute=0, args=[bot])
+
+        # SQLite backup — kun davomida bir necha marta + har ishga tushganda.
+        # run_daily_backup: lokal nusxa + BACKUP_MIRROR_DIR (bo'lsa) + Telegram (bo'lsa).
+        if os.getenv("BACKUP_ENABLED", "true").lower() in {"1", "true", "yes"}:
+            from utils.backup import run_daily_backup, run_startup_backup
+            # Standart: har kuni soat 12:00 va 22:00 + har ishga tushganda.
+            # BACKUP_HOURS="9,14,22" bilan .env dan o'zgartirish mumkin.
+            raw_hours = os.getenv("BACKUP_HOURS", "12,22")
+            backup_hours = sorted({
+                int(h) for h in raw_hours.replace(" ", "").split(",")
+                if h.strip().isdigit() and 0 <= int(h) <= 23
+            }) or [12, 22]
+            scheduler.add_job(
+                run_daily_backup, 'cron', hour=",".join(str(h) for h in backup_hours), minute=0,
+                id="daily_backup", replace_existing=True, kwargs={"bot": bot},
+            )
+            print(f"Startup: Backup rejalashtirildi - har kuni soat {backup_hours} + ishga tushganda.")
+            # Har ishga tushganda darhol bitta nusxa (kechasi o'chirilgan kunlar uchun kafolat).
+            backup_task = asyncio.create_task(run_startup_backup(bot))
+        scheduler.start()
+        # Start Telegram only when a token is configured.
+        if bot:
+            print("Startup: Starting bot polling...")
+
+            async def _supervised_polling():
+                """Polling uzilib qolsa QAYTA ishga tushiradi.
+
+                Ilgari bu oddiy create_task edi: vazifa xato bilan tugasa hech
+                kim bilmasdi — bot jim qolar, /health esa "ok" deb turaverardi.
+                """
+                delay = 5
+                while True:
+                    try:
+                        await dp.start_polling(bot)
+                        return                      # normal to'xtash (shutdown)
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception as exc:        # noqa: BLE001
+                        logging.error("Bot polling uzildi: %s. %s soniyadan keyin qayta.",
+                                      exc, delay)
+                        await asyncio.sleep(delay)
+                        delay = min(delay * 2, 300)
+
+            bot_task = asyncio.create_task(_supervised_polling())
+        else:
+            print("Startup: Telegram bot is disabled (no token).")
 
     # Create a default admin only if no admin account exists at all
     async with SessionLocal() as db:
@@ -97,14 +137,22 @@ async def lifespan(app: FastAPI):
                 permissions="all"
             )
             db.add(new_admin)
-            await db.commit()
+            try:
+                await db.commit()
+            except IntegrityError:
+                # Bir nechta worker bir vaqtda ishga tushsa, ikkinchisi shu
+                # yerga yetib kelguncha birinchisi adminni yaratib bo'lgan
+                # bo'ladi. Bu xato emas.
+                await db.rollback()
+                print("Admin allaqachon boshqa jarayon tomonidan yaratilgan.")
     
     print("Startup: Complete. Application running.")
     try:
         yield
     finally:
         print("Shutdown: Stopping scheduler and bot...")
-        scheduler.shutdown()
+        if scheduler is not None:
+            scheduler.shutdown()
         if backup_task and not backup_task.done():
             try:
                 await asyncio.wait_for(backup_task, timeout=10.0)
@@ -135,6 +183,34 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+import math
+from fastapi.exceptions import RequestValidationError
+
+
+def _json_safe(value):
+    """NaN/Infinity ni matnga aylantiradi.
+
+    Pydantic NaN ni to'g'ri rad etadi (422), ammo FastAPI xato javobida
+    kiritilgan qiymatni QAYTA JSON ga o'giradi — va standart JSON da NaN yo'q.
+    Natijada validatsiya xatosi javob yozilayotganda 500 ga aylanardi, ya'ni
+    noto'g'ri son yuborgan mijoz baribir serverni yiqitardi.
+    """
+    if isinstance(value, float):
+        return value if math.isfinite(value) else str(value)
+    if isinstance(value, dict):
+        return {key: _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, bytes):
+        return value.decode("utf-8", "replace")
+    return value
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    return JSONResponse(status_code=422, content={"detail": _json_safe(exc.errors())})
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     logger.error(f"Global error: {exc}", exc_info=True)
@@ -147,10 +223,17 @@ async def global_exception_handler(request: Request, exc: Exception):
 allowed_origins_raw = os.getenv("ALLOWED_ORIGINS", "*")
 allowed_origins = [origin.strip() for origin in allowed_origins_raw.split(",") if origin.strip()]
 if APP_ENV == "production" and (not allowed_origins or "*" in allowed_origins):
-    logging.warning(
-        "ALLOWED_ORIGINS='*' (production). backend/.env da o'z domeningizni ko'rsating, "
-        "masalan: ALLOWED_ORIGINS=https://kassa.sizning-domen"
+    # Ilgari bu shunchaki ogohlantirish edi va server ochiq CORS bilan
+    # ishlayverardi. Production'da bu sozlama xatosi — ishga tushirmaymiz.
+    raise RuntimeError(
+        "Production'da ALLOWED_ORIGINS='*' bo'lishi mumkin emas. "
+        "backend/.env da o'z domeningizni ko'rsating, masalan: "
+        "ALLOWED_ORIGINS=https://kassa.sizning-domen"
     )
+
+# Ro'yxat javoblari (mahsulotlar, savdolar, audit) siqilmasdan ketardi.
+# Do'kon Wi-Fi'sida bu sezilarli — JSON juda yaxshi siqiladi.
+app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 app.add_middleware(
     CORSMiddleware,
@@ -174,9 +257,13 @@ app.include_router(suppliers.router)
 app.include_router(system.router)
 
 # Static files for invoices
-if not os.path.exists("uploads"):
-    os.makedirs("uploads")
-app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+# Yo'l modul joylashuviga bog'langan: ilovani qaysi katalogdan ishga
+# tushirishdan qat'i nazar, fayllar doim backend/uploads/ da bo'ladi.
+from utils.backup import UPLOAD_DIR  # noqa: E402
+
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+(UPLOAD_DIR / "invoices").mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 
 @app.get('/favicon.ico', include_in_schema=False)
 async def favicon():
@@ -184,7 +271,12 @@ async def favicon():
 
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
+    """Monitoring uchun. Bu jarayon nima bilan shug'ullanayotganini ham ko'rsatadi."""
+    return {
+        "status": "ok",
+        "background_jobs": RUN_BACKGROUND_JOBS,
+        "bot": bool(bot) and RUN_BACKGROUND_JOBS,
+    }
 
 
 # --- Frontend (yig'ilgan statik fayllar) ---

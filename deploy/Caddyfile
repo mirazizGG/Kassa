@@ -1,0 +1,39 @@
+# Caddy: TLS (Let's Encrypt avtomatik) + reverse proxy.
+#
+#   sudo cp deploy/Caddyfile /etc/caddy/Caddyfile
+#   sudo systemctl reload caddy
+#
+# Caddy sertifikatni o'zi oladi va yangilaydi - qo'lda hech narsa qilinmaydi.
+# Shart: domen shu serverning IP siga qarab turishi va 80/443 portlar ochiq bo'lishi.
+
+smart-kassa.uz, www.smart-kassa.uz {
+    encode zstd gzip
+
+    # Yuklangan nakladnoylar va frontend fayllari ham shu yerdan o'tadi -
+    # backend ularni o'zi beradi (bitta origin, bitta port).
+    reverse_proxy 127.0.0.1:8000 {
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+    }
+
+    # Nakladnoy fayllari brauzerda BAJARILMASIN. Kengaytmalar oq ro'yxati
+    # backend'da ham bor, bu ikkinchi himoya qatlami.
+    header /uploads/* {
+        X-Content-Type-Options nosniff
+        Content-Disposition attachment
+    }
+
+    header {
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy same-origin
+        -Server
+    }
+
+    log {
+        output file /var/log/caddy/kassa.log {
+            roll_size 20mb
+            roll_keep 10
+        }
+    }
+}

@@ -1,55 +1,33 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+import asyncio
+
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, case
+from sqlalchemy import select, func, case, update
 from typing import List, Optional
 from datetime import datetime, timezone, timedelta
-from zoneinfo import ZoneInfo
+# DIQQAT: bu yerda ilgari o'z LOCAL_TZ = ZoneInfo("Asia/Tashkent") va ikkita
+# yordamchi funksiya bor edi — audit.py da esa uchinchisi. Mintaqa uch joyda
+# qat'iy yozilgani uchun SHOP_TIMEZONE sozlamasi ularga ta'sir qilmasdi va
+# "bugun" turli sahifalarda turlicha hisoblanardi. Hammasi utils/timezone.py ga
+# ko'chirildi.
 
-LOCAL_TZ = ZoneInfo("Asia/Tashkent")
-
-
-def local_today_start() -> datetime:
-    """Mahalliy (Toshkent) vaqt bo'yicha bugungi kun boshini naive UTC ko'rinishida qaytaradi."""
-    now_local = datetime.now(LOCAL_TZ)
-    start_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
-    return start_local.astimezone(timezone.utc).replace(tzinfo=None)
-
-
-def local_day_bounds(day):
-    """Mahalliy taqvim kuni uchun [boshi, oxiri) ni naive UTC ko'rinishida qaytaradi."""
-    start_local = datetime(day.year, day.month, day.day, tzinfo=LOCAL_TZ)
-    end_local = start_local + timedelta(days=1)
-    return (
-        start_local.astimezone(timezone.utc).replace(tzinfo=None),
-        end_local.astimezone(timezone.utc).replace(tzinfo=None),
-    )
-
-from database import get_db, Expense, Payment, Employee, Client, Product, Sale, SaleItem, StoreSetting, Task
-from schemas import ExpenseCreate, ExpenseOut, PaymentCreate
+from database import get_db, Expense, Payment, Employee, Client, Product, Sale, SaleItem, StoreSetting, Task, Shift
+from utils.timezone import (
+    utc_now, parse_filter_date, day_start_utc, day_end_utc,
+    day_bounds_utc, today_start_utc, shop_today,
+)
+from schemas import ExpenseCreate, ExpenseOut, ExpenseUpdate, PaymentCreate
 from core import get_current_user
 # from sqlalchemy import func # Already imported above
 from sqlalchemy.orm import joinedload
-from routers.audit import log_action
+from routers.audit import log_action, csv_safe
 import io
 
 router = APIRouter(prefix="/finance", tags=["finance"])
 
-def parse_date(date_val: Optional[str], default_time=datetime.min.time()):
-    if not date_val:
-        return None
-    try:
-        # If it's just a date (YYYY-MM-DD)
-        if len(date_val) <= 10:
-            d = datetime.strptime(date_val, "%Y-%m-%d")
-            return datetime.combine(d.date(), default_time)
-        
-        # Try ISO format
-        dt = datetime.fromisoformat(date_val.replace("Z", "+00:00"))
-        if dt.tzinfo:
-            dt = dt.replace(tzinfo=None)
-        return dt
-    except ValueError:
-        return None
+# pos.py dagi CASH_METHODS bilan bir xil.
+CASH_PAYMENT_METHODS = ("cash", "naqd")
+
 
 @router.get("/stats")
 async def get_stats(
@@ -74,13 +52,13 @@ async def get_stats(
         target_emp = target_emp_res.scalars().first()
         if target_emp and target_emp.role == "admin":
              raise HTTPException(status_code=403, detail="Menejer admin hisobotini ko'ra olmaydi")
-    start_date = parse_date(start_date, datetime.min.time())
-    end_date = parse_date(end_date, datetime.max.time())
+    start_date = parse_filter_date(start_date)
+    end_date = parse_filter_date(end_date, end_of_day=True)
     # 1. Daily Sales or custom range
     if not start_date:
-        start_date = local_today_start()
+        start_date = today_start_utc()
     if not end_date:
-        end_date = datetime.now(timezone.utc).replace(tzinfo=None)
+        end_date = utc_now()
     
     sales_query = select(func.sum(Sale.total_amount)).where(
         Sale.created_at >= start_date,
@@ -95,8 +73,12 @@ async def get_stats(
     
     # 1.1 Total Cost (sotuv paytidagi tannarx * miqdor; eski satrlar uchun joriy narx zaxira)
     cost_query = (
-        select(func.sum(SaleItem.quantity * func.coalesce(SaleItem.buy_price, Product.buy_price)))
-        .join(Product, SaleItem.product_id == Product.id)
+        # outerjoin: mahsulot o'chirilgan bo'lsa ham satr TUSHIB QOLMASIN.
+        # INNER JOIN da bunday satrlar tannarxdan chiqib ketardi va sof foyda
+        # sun'iy oshib ko'rinardi. Endi o'chirish himoyalangan, lekin ilgari
+        # yetim qolgan satrlar bazada bor.
+        select(func.sum(SaleItem.quantity * func.coalesce(SaleItem.buy_price, Product.buy_price, 0)))
+        .outerjoin(Product, SaleItem.product_id == Product.id)
         .join(Sale, SaleItem.sale_id == Sale.id)
         .where(
             Sale.created_at >= start_date,
@@ -135,11 +117,16 @@ async def get_stats(
     client_count = client_result.scalar() or 0
     
     # 3. Low Stock Items List
-    settings_result = await db.execute(select(StoreSetting))
+    settings_result = await db.execute(select(StoreSetting).order_by(StoreSetting.id).limit(1))
     settings = settings_result.scalars().first()
     threshold = settings.low_stock_threshold if settings else 5
 
-    stock_query = select(Product).where(Product.stock <= threshold).limit(10)
+    stock_query = (
+        select(Product)
+        .where(Product.stock <= threshold, Product.is_infinite.isnot(True))
+        .order_by(Product.stock)
+        .limit(10)
+    )
     stock_result = await db.execute(stock_query)
     low_stock_items = stock_result.scalars().all()
     
@@ -178,13 +165,13 @@ async def get_expenses_by_category(
 ):
     if current_user.role not in ["admin", "manager"]:
         raise HTTPException(status_code=403, detail="Ruxsat berilmagan")
-    start_date = parse_date(start_date, datetime.min.time())
-    end_date = parse_date(end_date, datetime.max.time())
+    start_date = parse_filter_date(start_date)
+    end_date = parse_filter_date(end_date, end_of_day=True)
     
     if not start_date:
-        start_date = datetime.now(timezone.utc) - timedelta(days=30)
+        start_date = utc_now() - timedelta(days=30)
     if not end_date:
-        end_date = datetime.now(timezone.utc)
+        end_date = utc_now()
         
     query = (
         select(Expense.category, func.sum(Expense.amount))
@@ -205,13 +192,13 @@ async def get_employee_performance(
     if current_user.role not in ["admin", "manager"]:
         raise HTTPException(status_code=403, detail="Ruxsat berilmagan")
         
-    start_date_parsed = parse_date(start_date, datetime.min.time())
-    end_date_parsed = parse_date(end_date, datetime.max.time())
+    start_date_parsed = parse_filter_date(start_date)
+    end_date_parsed = parse_filter_date(end_date, end_of_day=True)
     
     if not start_date_parsed:
-        start_date_parsed = datetime.now(timezone.utc) - timedelta(days=30)
+        start_date_parsed = utc_now() - timedelta(days=30)
     if not end_date_parsed:
-        end_date_parsed = datetime.now(timezone.utc)
+        end_date_parsed = utc_now()
         
     # Get employees (Managers don't see Admin performance)
     query = select(Employee)
@@ -225,9 +212,17 @@ async def get_employee_performance(
     
     for emp in employees:
         # Sales count and total
+        # status == "completed" SHART: qaytarilgan cheklar ham hisoblanardi,
+        # ya'ni chek urib keyin bekor qilgan kassir halol ishlaganidan YUQORI
+        # ko'rsatkich olardi.
         sales_query = (
             select(func.count(Sale.id), func.sum(Sale.total_amount))
-            .where(Sale.cashier_id == emp.id, Sale.created_at >= start_date_parsed, Sale.created_at <= end_date_parsed)
+            .where(
+                Sale.cashier_id == emp.id,
+                Sale.created_at >= start_date_parsed,
+                Sale.created_at <= end_date_parsed,
+                Sale.status == "completed",
+            )
         )
         sales_result = await db.execute(sales_query)
         sale_count, sale_total = sales_result.first()
@@ -265,13 +260,13 @@ async def get_profit_chart(
     if current_user.role not in ["admin", "manager"]:
         raise HTTPException(status_code=403, detail="Ruxsat berilmagan")
     # Returns last N days profit/revenue/expense
-    today = datetime.now(LOCAL_TZ).date()
+    today = shop_today()
     start_date = today - timedelta(days=days-1)
 
     results = []
     for i in range(days):
         day = start_date + timedelta(days=i)
-        day_start, day_end = local_day_bounds(day)
+        day_start, day_end = day_bounds_utc(day)
 
         # Revenue
         rev_query = select(func.sum(Sale.total_amount)).where(
@@ -292,8 +287,8 @@ async def get_profit_chart(
         
         # Cost of Goods Sold (COGS) — sotuv paytidagi tannarx bo'yicha
         cost_query = (
-            select(func.sum(SaleItem.quantity * func.coalesce(SaleItem.buy_price, Product.buy_price)))
-            .join(Product, SaleItem.product_id == Product.id)
+            select(func.sum(SaleItem.quantity * func.coalesce(SaleItem.buy_price, Product.buy_price, 0)))
+            .outerjoin(Product, SaleItem.product_id == Product.id)
             .join(Sale, SaleItem.sale_id == Sale.id)
             .where(
                 Sale.created_at >= day_start,
@@ -330,7 +325,7 @@ async def get_dashboard_chart(
     if current_user.role == "cashier":
         employee_id = current_user.id
     # Returns last 7 days sales
-    today = datetime.now(LOCAL_TZ).date()
+    today = shop_today()
     start_date = today - timedelta(days=6) # 7 days including today
 
     labels = []
@@ -338,7 +333,7 @@ async def get_dashboard_chart(
 
     for i in range(7):
         day = start_date + timedelta(days=i)
-        day_start, day_end = local_day_bounds(day)
+        day_start, day_end = day_bounds_utc(day)
 
         query = select(func.sum(Sale.total_amount)).where(
             Sale.created_at >= day_start,
@@ -367,8 +362,8 @@ async def get_top_products(
 ):
     if current_user.role == "cashier":
         employee_id = current_user.id
-    start_date = parse_date(start_date, datetime.min.time())
-    end_date = parse_date(end_date, datetime.max.time())
+    start_date = parse_filter_date(start_date)
+    end_date = parse_filter_date(end_date, end_of_day=True)
     query = (
         select(Product.name, func.sum(SaleItem.quantity).label("total_qty"))
         .join(SaleItem, Product.id == SaleItem.product_id)
@@ -400,8 +395,8 @@ async def get_expenses(
 ):
     if current_user.role == "cashier":
         employee_id = current_user.id
-    start_date = parse_date(start_date, datetime.min.time())
-    end_date = parse_date(end_date, datetime.max.time())
+    start_date = parse_filter_date(start_date)
+    end_date = parse_filter_date(end_date, end_of_day=True)
     query = select(Expense).options(joinedload(Expense.creator))
     if employee_id:
         query = query.where(Expense.created_by == employee_id)
@@ -421,10 +416,21 @@ async def create_expense(
     current_user: Employee = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    if current_user.role not in ["admin", "manager", "cashier"]:
+        raise HTTPException(status_code=403, detail="Ruxsat berilmagan")
+
+    # Xarajatni ochiq smenaga bog'laymiz (Payment kabi). Shusiz kassadan
+    # chiqqan naqd pul smena hisobiga umuman kirmasdi va kassir har kuni
+    # tushuntirib bo'lmaydigan kamomadda qolardi.
+    open_shift_for_expense = await db.scalar(
+        select(Shift).where(Shift.cashier_id == current_user.id, Shift.status == "open")
+    )
+
     db_expense = Expense(
         **expense.model_dump(),
         created_by=current_user.id,
-        created_at=datetime.now(timezone.utc)
+        created_at=utc_now(),
+        shift_id=open_shift_for_expense.id if open_shift_for_expense else None,
     )
     db.add(db_expense)
     
@@ -434,32 +440,127 @@ async def create_expense(
     await db.refresh(db_expense)
     return db_expense
 
+@router.patch("/expenses/{expense_id}", response_model=ExpenseOut)
+async def update_expense(
+    expense_id: int,
+    payload: ExpenseUpdate,
+    reason: str = Query(min_length=3, max_length=300, description="Tuzatish sababi"),
+    current_user: Employee = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Xato yozilgan xarajatni tuzatish.
+
+    Ilgari xarajatni na tahrirlash, na o'chirish mumkin edi. Bir marta noto'g'ri
+    summa kiritilsa, u abadiy qolib, o'sha davrning sof foydasini va xarajat
+    hisobotlarini butunlay buzardi.
+    """
+    if current_user.role not in ["admin", "manager"]:
+        raise HTTPException(status_code=403, detail="Faqat admin va menejer tuzata oladi")
+
+    expense = await db.scalar(select(Expense).where(Expense.id == expense_id))
+    if not expense:
+        raise HTTPException(status_code=404, detail="Xarajat topilmadi")
+
+    changes = payload.model_dump(exclude_unset=True, exclude_none=True)
+    if not changes:
+        raise HTTPException(status_code=400, detail="O'zgartirish uchun maydon berilmadi")
+
+    was = f"{expense.amount:,.0f} so'm ({expense.category}, {expense.payment_method})"
+    for key, value in changes.items():
+        setattr(expense, key, value)
+
+    await log_action(
+        db, current_user.id, "XARAJAT_TUZATILDI",
+        f"Xarajat #{expense_id}: {was} -> {expense.amount:,.0f} so'm "
+        f"({expense.category}, {expense.payment_method}). Sabab: {reason}"
+    )
+    await db.commit()
+    await db.refresh(expense)
+    return expense
+
+
+@router.delete("/expenses/{expense_id}")
+async def delete_expense(
+    expense_id: int,
+    reason: str = Query(min_length=3, max_length=300, description="O'chirish sababi"),
+    current_user: Employee = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Xato yozilgan xarajatni o'chirish (sabab majburiy, audit jurnaliga tushadi)."""
+    if current_user.role not in ["admin", "manager"]:
+        raise HTTPException(status_code=403, detail="Faqat admin va menejer o'chira oladi")
+
+    expense = await db.scalar(select(Expense).where(Expense.id == expense_id))
+    if not expense:
+        raise HTTPException(status_code=404, detail="Xarajat topilmadi")
+
+    note = ""
+    if expense.shift_id:
+        shift = await db.scalar(select(Shift).where(Shift.id == expense.shift_id))
+        if shift and shift.status == "closed":
+            # Smena hisobi yopilishda muzlatilgan — u o'zgarmaydi. Lekin moliya
+            # hisobotlari o'zgaradi, shuning uchun buni aniq belgilab qo'yamiz.
+            note = f" DIQQAT: yopilgan smena #{shift.id} ga tegishli edi."
+
+    await log_action(
+        db, current_user.id, "XARAJAT_OCHIRILDI",
+        f"Xarajat #{expense_id} o'chirildi: {expense.amount:,.0f} so'm "
+        f"({expense.category}) — {expense.reason}. Sabab: {reason}.{note}"
+    )
+    await db.delete(expense)
+    await db.commit()
+    return {"message": "Xarajat o'chirildi", "warning": note.strip() or None}
+
+
 @router.post("/payments")
 async def create_payment(
     payment: PaymentCreate,
     current_user: Employee = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    if current_user.role not in ["admin", "manager", "cashier"]:
+        raise HTTPException(status_code=403, detail="Ruxsat berilmagan")
+
     # Payment usually means client paying back debt
-    from database import Shift
     open_shift = await db.scalar(
         select(Shift).where(Shift.cashier_id == current_user.id, Shift.status == "open")
     )
+
+    # NAQD to'lov uchun ochiq smena SHART — crm.pay_debt dagi bilan bir xil
+    # sabab: aks holda pul kassaga tushadi, lekin uni hech qaysi smena kutmaydi
+    # va yopilishda tushunarsiz ortiqcha chiqadi.
+    if payment.payment_method in CASH_PAYMENT_METHODS and open_shift is None:
+        raise HTTPException(
+            status_code=409,
+            detail="Naqd to'lovni qabul qilish uchun avval smenani oching",
+        )
+
     db_payment = Payment(
         **payment.model_dump(),
         created_by=current_user.id,
-        created_at=datetime.now(timezone.utc),
+        created_at=utc_now(),
         shift_id=open_shift.id if open_shift else None,
     )
-    db.add(db_payment)
-    
-    # Update client balance
+    # Mijoz bor-yo'qligini AVVAL tekshiramiz. Ilgari to'lov yozuvi baribir
+    # qo'shilardi: mavjud bo'lmagan mijoz uchun "to'lov qabul qilindi" deb
+    # javob qaytardi, hech kimning qarzi kamaymasdi, lekin smena kassasi shu
+    # summaga oshib, kassirga tushunarsiz kamomad bo'lib chiqardi.
     result = await db.execute(select(Client).where(Client.id == payment.client_id))
     client = result.scalars().first()
-    if client:
-        client.balance += payment.amount
-        
-    await log_action(db, current_user.id, "MIJOZ_TOLOV", f"Mijoz: {client.name if client else 'Nomalum'}. Summa: {payment.amount:,.0f} so'm. Usul: {payment.payment_method}")
+    if not client:
+        raise HTTPException(status_code=404, detail="Mijoz topilmadi")
+
+    db.add(db_payment)
+
+    # Balansni ATOMIK oshiramiz.
+    await db.execute(
+        update(Client)
+        .where(Client.id == payment.client_id)
+        .values(balance=Client.balance + payment.amount)
+        .execution_options(synchronize_session=False)
+    )
+
+    await log_action(db, current_user.id, "MIJOZ_TOLOV", f"Mijoz: {client.name}. Summa: {payment.amount:,.0f} so'm. Usul: {payment.payment_method}")
         
     await db.commit()
     return {"status": "success", "message": "To'lov qabul qilindi"}
@@ -477,13 +578,13 @@ async def export_sales(
 ):
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Ruxsat berilmagan")
-    start_date = parse_date(start_date, datetime.min.time())
-    end_date = parse_date(end_date, datetime.max.time())
+    start_date = parse_filter_date(start_date)
+    end_date = parse_filter_date(end_date, end_of_day=True)
     """Sotuvlar tarixini CSV formatda yuklab olish"""
     if not start_date:
-        start_date = datetime.now(timezone.utc) - timedelta(days=30)
+        start_date = utc_now() - timedelta(days=30)
     if not end_date:
-        end_date = datetime.now(timezone.utc)
+        end_date = utc_now()
 
     # Fetch sales with items and products
     query = (
@@ -500,18 +601,25 @@ async def export_sales(
     writer = csv.writer(output)
     
     # Header
-    writer.writerow(["ID", "Sana", "Kassir", "Mijoz", "Summa", "To'lov usuli", "Mahsulotlar"])
+    # "Holat" ustuni ATAYIN qo'shildi. Ilgari qaytarilgan cheklar ham fayllarga
+    # tushardi, lekin ularni ajratadigan ustun yo'q edi: CSV/XLSX dashboard bilan
+    # aynan vozvratlar summasiga farq qilar, va bu "pul yo'qolgan" kabi ko'rinardi.
+    writer.writerow(["ID", "Sana", "Kassir", "Mijoz", "Summa", "To'lov usuli", "Holat", "Mahsulotlar"])
     
     for s in sales:
         items_str = "; ".join([f"{item.product.name} ({item.quantity} {item.product.unit})" for item in s.items if item.product])
+        # csv_safe: mijoz ismi Telegram orqali, mahsulot nomi xodim tomonidan
+        # kiritiladi. "=" bilan boshlangan katak Excel'da FORMULA bo'lib
+        # bajariladi — hisobotni ochgan admin kompyuterida.
         writer.writerow([
             s.id,
             s.created_at.strftime("%d.%m.%Y %H:%M"),
-            s.cashier.username if s.cashier else "-",
-            s.client.name if s.client else "-",
+            csv_safe(s.cashier.username if s.cashier else "-"),
+            csv_safe(s.client.name if s.client else "-"),
             s.total_amount,
-            s.payment_method,
-            items_str
+            csv_safe(s.payment_method),
+            "Qaytarilgan" if s.status == "refunded" else "O'tkazilgan",
+            csv_safe(items_str),
         ])
     
     output.seek(0)
@@ -533,13 +641,13 @@ async def export_sales_excel(
         raise HTTPException(status_code=403, detail="Ruxsat berilmagan")
     import pandas as pd
     
-    start_date = parse_date(start_date, datetime.min.time())
-    end_date = parse_date(end_date, datetime.max.time())
+    start_date = parse_filter_date(start_date)
+    end_date = parse_filter_date(end_date, end_of_day=True)
     
     if not start_date:
-        start_date = datetime.now(timezone.utc) - timedelta(days=30)
+        start_date = utc_now() - timedelta(days=30)
     if not end_date:
-        end_date = datetime.now(timezone.utc)
+        end_date = utc_now()
 
     query = (
         select(Sale)
@@ -557,20 +665,25 @@ async def export_sales_excel(
         data.append({
             "ID": s.id,
             "Sana": s.created_at.strftime("%d.%m.%Y %H:%M"),
-            "Kassir": s.cashier.username if s.cashier else "-",
-            "Mijoz": s.client.name if s.client else "-",
+            "Kassir": csv_safe(s.cashier.username if s.cashier else "-"),
+            "Mijoz": csv_safe(s.client.name if s.client else "-"),
             "Summa": s.total_amount,
-            "To'lov usuli": s.payment_method,
-            "Mahsulotlar": items_str
+            "To'lov usuli": csv_safe(s.payment_method),
+            "Holat": "Qaytarilgan" if s.status == "refunded" else "O'tkazilgan",
+            "Mahsulotlar": csv_safe(items_str)
         })
     
-    df = pd.DataFrame(data)
-    
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False, sheet_name='Savdolar')
-    
-    output.seek(0)
+    # Excel yozish ALOHIDA OQIMDA. pandas + openpyxl sinxron ishlaydi va
+    # to'g'ridan-to'g'ri async handlerda chaqirilsa butun event loop'ni ushlab
+    # turadi: admin hisobotni yuklab olayotganda hamma kassa kutib qoladi.
+    def _render() -> io.BytesIO:
+        buffer = io.BytesIO()
+        with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+            pd.DataFrame(data).to_excel(writer, index=False, sheet_name="Savdolar")
+        buffer.seek(0)
+        return buffer
+
+    output = await asyncio.to_thread(_render)
     
     return StreamingResponse(
         output,

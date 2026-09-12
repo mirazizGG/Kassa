@@ -1,0 +1,39 @@
+# Web (API + frontend). Bir nechta worker bilan ishlaydi.
+#
+# DIQQAT: RUN_BACKGROUND_JOBS=false. Rejalashtiruvchi, Telegram bot va zahira
+# nusxa vazifalari BU YERDA ishlamaydi - ular kassa-worker.service da, YAGONA
+# jarayonda ishlaydi. Aks holda har bir worker o'z pollerini, o'z
+# rejalashtiruvchisini va o'z zahira vazifasini ishga tushirardi.
+#
+#   sudo cp deploy/systemd/*.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now kassa-web kassa-worker
+
+[Unit]
+Description=SmartKassa web (API + frontend)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=kassa
+Group=kassa
+WorkingDirectory=/opt/kassa/backend
+EnvironmentFile=/opt/kassa/deploy/env/production.env
+Environment=RUN_BACKGROUND_JOBS=false
+ExecStart=/opt/kassa/venv/bin/uvicorn main:app \
+    --host 127.0.0.1 --port 8000 \
+    --workers 4 \
+    --proxy-headers --forwarded-allow-ips=127.0.0.1
+Restart=always
+RestartSec=3
+
+# Xavfsizlik cheklovlari
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/kassa/backend/backups /opt/kassa/backend/uploads
+
+[Install]
+WantedBy=multi-user.target

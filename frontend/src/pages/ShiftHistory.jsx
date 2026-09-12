@@ -1,3 +1,4 @@
+import { formatDateTime } from "@/lib/datetime";
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import api from "../api/axios";
@@ -27,7 +28,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { format } from "date-fns";
+
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import FilterBar from "../components/FilterBar";
@@ -155,28 +156,14 @@ const ShiftHistory = () => {
                       <TableCell className="text-xs">
                         <div className="flex items-center gap-1">
                           <Clock className="w-3 h-3 opacity-50" />
-                          {format(
-                            new Date(
-                              shift.opened_at.endsWith("Z")
-                                ? shift.opened_at
-                                : shift.opened_at + "Z",
-                            ),
-                            "dd.MM.yyyy HH:mm",
-                          )}
+                          {formatDateTime(shift.opened_at, "dd.MM.yyyy HH:mm")}
                         </div>
                       </TableCell>
                       <TableCell className="text-xs">
                         {shift.closed_at ? (
                           <div className="flex items-center gap-1">
                             <Clock className="w-3 h-3 opacity-50" />
-                            {format(
-                              new Date(
-                                shift.closed_at.endsWith("Z")
-                                  ? shift.closed_at
-                                  : shift.closed_at + "Z",
-                              ),
-                              "dd.MM.yyyy HH:mm",
-                            )}
+                            {formatDateTime(shift.closed_at, "dd.MM.yyyy HH:mm")}
                           </div>
                         ) : (
                           "-"

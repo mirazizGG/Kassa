@@ -2,6 +2,10 @@
 fastapi
 uvicorn[standard]
 
+# cPanel/Passenger uchun ASGI -> WSGI ko'prigi (passenger_wsgi.py da ishlatiladi).
+# VPS da kerak emas, lekin zarari ham yo'q.
+a2wsgi
+
 # Database
 sqlalchemy
 aiosqlite

@@ -1,3 +1,4 @@
+import { formatDateTime } from "@/lib/datetime";
 import React from "react";
 import {
   TrendingUp,
@@ -13,6 +14,7 @@ import {
   Loader2,
   BarChart3,
   FileDown,
+  Trash2,
 } from "lucide-react";
 import {
   PieChart as RePieChart,
@@ -65,7 +67,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "sonner";
-import { format } from "date-fns";
+
 const StatCard = ({ title, value, icon, type = "neutral" }) => (
   <Card>
     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -89,9 +91,13 @@ const Finance = () => {
     end_date: today,
   });
   const [isDialogOpen, setIsDialogOpen] = React.useState(false);
+  // payment_method: faqat "cash" smena kassasidan ayiriladi. Bank orqali
+  // ketgan xarajat kassaga tegmasligi kerak, aks holda kassirda sababsiz
+  // kamomad chiqadi.
   const [newExpense, setNewExpense] = React.useState({
     reason: "",
     amount: "",
+    payment_method: "cash",
     category: "Boshqa",
   });
   const { data: stats, isLoading: statsLoading } = useQuery({
@@ -137,6 +143,37 @@ const Finance = () => {
       return res.data;
     },
   });
+  // Xato yozilgan xarajatni o'chirish. Sabab majburiy va audit jurnaliga tushadi.
+  const deleteExpenseMutation = useMutation({
+    mutationFn: ({ id, reason }) =>
+      api.delete(`/finance/expenses/${id}`, { params: { reason } }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["expenses"] });
+      queryClient.invalidateQueries({ queryKey: ["expenses-by-category"] });
+      queryClient.invalidateQueries({ queryKey: ["finance-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["active-shift"] });
+      toast.success("Xarajat o'chirildi");
+    },
+    onError: (error) =>
+      toast.error(
+        error.response?.data?.detail || "Xarajatni o'chirib bo'lmadi",
+      ),
+  });
+
+  const handleDeleteExpense = (exp) => {
+    const reason = window.prompt(
+      `"${exp.reason}" (${exp.amount.toLocaleString("de-DE")} so'm) o'chiriladi.
+` +
+        "Sababini yozing (kamida 3 belgi):",
+    );
+    if (reason === null) return;
+    if (reason.trim().length < 3) {
+      toast.error("Sababni to'liqroq yozing");
+      return;
+    }
+    deleteExpenseMutation.mutate({ id: exp.id, reason: reason.trim() });
+  };
+
   const expenseMutation = useMutation({
     mutationFn: (data) => api.post("/finance/expenses", data),
     onSuccess: () => {
@@ -145,7 +182,12 @@ const Finance = () => {
       queryClient.invalidateQueries(["dashboard-stats"]);
       toast.success("Xarajat qo'shildi!");
       setIsDialogOpen(false);
-      setNewExpense({ reason: "", amount: "", category: "Boshqa" });
+      setNewExpense({
+      reason: "",
+      amount: "",
+      category: "Boshqa",
+      payment_method: "cash",
+    });
     },
     onError: (error) => {
       toast.error("Xatolik!", {
@@ -307,6 +349,27 @@ const Finance = () => {
                         </SelectContent>
                       </Select>
                     </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="payment_method">Qayerdan to'landi</Label>
+                      <Select
+                        value={newExpense.payment_method}
+                        onValueChange={(v) =>
+                          setNewExpense({ ...newExpense, payment_method: v })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="cash">Kassadan (naqd)</SelectItem>
+                          <SelectItem value="card">Karta</SelectItem>
+                          <SelectItem value="transfer">Bank o'tkazmasi</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Faqat naqd xarajat smena kassasidan ayiriladi.
+                      </p>
+                    </div>
                   </div>
                   <DialogFooter className="pt-4">
                     <Button
@@ -405,14 +468,15 @@ const Finance = () => {
                   <TableHead className="pl-6">Sabab / Kategoriya</TableHead>
                   <TableHead>Summa</TableHead>
                   <TableHead>Xodim</TableHead>
-                  <TableHead className="pr-6">Sana</TableHead>
+                  <TableHead>Sana</TableHead>
+                  <TableHead className="pr-6 w-10"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {expensesLoading ? (
                   [1, 2, 3].map((i) => (
                     <TableRow key={i}>
-                      <TableCell colSpan={4} className="h-12 text-center">
+                      <TableCell colSpan={5} className="h-12 text-center">
                         Yuklanmoqda...
                       </TableCell>
                     </TableRow>
@@ -420,7 +484,7 @@ const Finance = () => {
                 ) : expenses.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={4}
+                      colSpan={5}
                       className="h-32 text-center text-muted-foreground"
                     >
                       Hozircha xarajatlar yo'q
@@ -444,11 +508,23 @@ const Finance = () => {
                           {exp.creator?.username || "Tizim"}
                         </div>
                       </TableCell>
-                      <TableCell className="pr-6 text-xs text-muted-foreground">
+                      <TableCell className="text-xs text-muted-foreground">
                         <div className="flex items-center gap-1">
                           <Calendar className="w-3 h-3 opacity-50" />
-                          {format(new Date(exp.created_at), "dd.MM.yyyy HH:mm")}
+                          {formatDateTime(exp.created_at)}
                         </div>
+                      </TableCell>
+                      <TableCell className="pr-6">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                          title="Xato yozuvni o'chirish"
+                          disabled={deleteExpenseMutation.isPending}
+                          onClick={() => handleDeleteExpense(exp)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))

@@ -17,6 +17,8 @@ from sqlalchemy import select, and_, func
 from sqlalchemy.orm import joinedload
 from dotenv import load_dotenv
 
+from utils.timezone import days_until, day_start_utc, day_end_utc, shop_today, to_shop_time, utc_now
+
 load_dotenv()
 
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -94,7 +96,7 @@ async def clock_in_handler(message: Message) -> None:
         await db.commit()
         name = employee.full_name or employee.username
         await message.answer(
-            f"Xush kelibsiz, {name}! Ish boshlandi. 🚀\nVaqt: {datetime.now().strftime('%H:%M')}",
+            f"Xush kelibsiz, {name}! Ish boshlandi. 🚀\nVaqt: {to_shop_time(utc_now()).strftime('%H:%M')}",
             reply_markup=get_main_menu(employee.role, "in"),
         )
 
@@ -124,7 +126,7 @@ async def clock_out_handler(message: Message) -> None:
         await db.commit()
         name = employee.full_name or employee.username
         await message.answer(
-            f"Yaxshi dam oling, {name}! Ish yakunlandi. ✅\nVaqt: {datetime.now().strftime('%H:%M')}",
+            f"Yaxshi dam oling, {name}! Ish yakunlandi. ✅\nVaqt: {to_shop_time(utc_now()).strftime('%H:%M')}",
             reply_markup=get_main_menu(employee.role, "out"),
         )
 
@@ -132,7 +134,7 @@ async def clock_out_handler(message: Message) -> None:
 async def who_is_working_handler(message: Message) -> None:
     async with AsyncSessionLocal() as db:
         # Adminlikni tekshirish
-        res = await db.execute(select(Employee).where(Employee.telegram_id == message.from_user.id, Employee.role == "admin"))
+        res = await db.execute(select(Employee).where(Employee.telegram_id == message.from_user.id, Employee.role == "admin", Employee.is_active.is_(True)))
         if not res.scalars().first():
             return
 
@@ -204,6 +206,17 @@ async def command_start_handler(message: Message, state: FSMContext) -> None:
 @dp.message(Registration.waiting_for_contact, F.contact)
 async def contact_handler(message: Message, state: FSMContext) -> None:
     contact = message.contact
+    # Telegram contact.user_id ni faqat foydalanuvchi O'Z raqamini tugma orqali
+    # yuborganida jo'natuvchi id si bilan teng qiladi. Buni tekshirmasak, istalgan
+    # kishi "Kontakt" ilova qilib BOSHQA odamning (masalan adminning) raqamini
+    # yuborib, o'sha xodim sifatida tanilib qolardi.
+    if contact.user_id != message.from_user.id:
+        await message.answer(
+            "Iltimos, pastdagi <b>tugma</b> orqali o'zingizning raqamingizni yuboring. "
+            "Boshqa odamning kontakt kartochkasini qabul qila olmaymiz.",
+            parse_mode=ParseMode.HTML,
+        )
+        return
     phone = contact.phone_number
     if not phone.startswith("+"):
         phone = "+" + phone
@@ -318,7 +331,7 @@ async def bonus_handler(message: Message) -> None:
 @dp.message(F.text == "📢 Reklama yuborish")
 async def start_broadcast(message: Message, state: FSMContext) -> None:
     async with AsyncSessionLocal() as db:
-        res = await db.execute(select(Employee).where(Employee.telegram_id == message.from_user.id, Employee.role == "admin"))
+        res = await db.execute(select(Employee).where(Employee.telegram_id == message.from_user.id, Employee.role == "admin", Employee.is_active.is_(True)))
         if not res.scalars().first():
             await message.answer("Kechirasiz, bu bo'lim faqat adminlar uchun!")
             return
@@ -368,7 +381,7 @@ async def process_broadcast(message: Message, state: FSMContext) -> None:
 async def admin_backup_handler(message: Message) -> None:
     telegram_id = message.from_user.id
     async with AsyncSessionLocal() as db:
-        result = await db.execute(select(Employee).where(Employee.telegram_id == telegram_id, Employee.role == "admin"))
+        result = await db.execute(select(Employee).where(Employee.telegram_id == telegram_id, Employee.role == "admin", Employee.is_active.is_(True)))
         admin = result.scalars().first()
 
         if not admin:
@@ -450,9 +463,12 @@ async def admin_backup_handler(message: Message) -> None:
             )
 
             # Bugungi kassirlar bo'yicha savdo taqsimoti (savdosi bo'lmaganlar ham 0 bilan chiqadi)
-            today = datetime.now().date()
-            start = datetime.combine(today, datetime.min.time())
-            end = datetime.combine(today, datetime.max.time())
+            # "Bugun" - DO'KON kuni, serverning soati emas. Bazada vaqt UTC da,
+            # shuning uchun chegaralarni utils/timezone orqali olamiz: aks holda
+            # hisobot boshqa sahifalardagi "bugun" bilan mos kelmasdi.
+            today = shop_today()
+            start = day_start_utc(today)
+            end = day_end_utc(today)
 
             per_cashier_res = await db.execute(
                 select(
@@ -549,9 +565,8 @@ async def check_debts(bot: Bot | None = None):
         return
 
     try:
-        now = datetime.now()
         async with AsyncSessionLocal() as db:
-            settings_result = await db.execute(select(StoreSetting))
+            settings_result = await db.execute(select(StoreSetting).order_by(StoreSetting.id).limit(1))
             settings = settings_result.scalars().first()
             reminder_days = max(settings.debt_reminder_days if settings else 3, 0)
             result = await db.execute(
@@ -563,7 +578,9 @@ async def check_debts(bot: Bot | None = None):
             )
 
             for client in result.scalars().all():
-                days_left = (client.debt_due_date - now).days
+                # KALENDAR kunlari farqi, timedelta emas — aks holda muddat
+                # kunining o'zida ham "muddati o'tgan" chiqardi.
+                days_left = days_until(client.debt_due_date)
                 debt = abs(client.balance)
                 if 0 < days_left <= reminder_days:
                     msg = f"Eslatma: {client.name}, qarzingizni to'lashga {days_left} kun qoldi.\nSumma: {debt:,.0f} so'm"

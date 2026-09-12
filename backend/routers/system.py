@@ -8,6 +8,7 @@ turib "kuting" oynasini ko'rsatadi.
 
 Faqat server `.env` da `ALLOW_SELF_UPDATE=true` bo'lsagina ishlaydi.
 """
+import asyncio
 import json
 import os
 import subprocess
@@ -25,7 +26,12 @@ from routers.audit import log_action
 router = APIRouter(prefix="/system", tags=["system"])
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-UPDATE_SCRIPT = REPO_ROOT / "deploy" / "scripts" / "update.ps1"
+# Windows'da PowerShell skripti, Linux serverda — bash skripti.
+# Ilgari faqat update.ps1 ko'rsatilgan edi va Linux'da endpoint har doim
+# "update.ps1 topilmadi" deb 500 qaytarardi.
+UPDATE_SCRIPT = REPO_ROOT / "deploy" / "scripts" / (
+    "update.ps1" if sys.platform == "win32" else "update.sh"
+)
 RUN_DIR = REPO_ROOT / "deploy" / "run"
 STATUS_FILE = RUN_DIR / "update-status.json"
 
@@ -34,7 +40,7 @@ ALLOW_SELF_UPDATE = os.getenv("ALLOW_SELF_UPDATE", "false").strip().lower() in {
 STALE_SECONDS = 15 * 60
 
 
-def _git(*args: str) -> str:
+def _git_sync(*args: str) -> str:
     try:
         out = subprocess.run(
             ["git", *args], cwd=str(REPO_ROOT),
@@ -45,6 +51,17 @@ def _git(*args: str) -> str:
         return ""
 
 
+async def _git(*args: str) -> str:
+    """git ni ALOHIDA OQIMDA ishlatadi.
+
+    Ilgari bu blokirovkalovchi subprocess.run edi va u to'g'ridan-to'g'ri
+    event loop'da chaqirilardi: GitHub sekin javob bersa yoki umuman
+    javob bermasa, BUTUN API 20 soniyagacha muzlab qolardi — sotuv ham,
+    smena yopish ham. Kassada bu shunchaki ishlamay qolish demak.
+    """
+    return await asyncio.to_thread(_git_sync, *args)
+
+
 def _read_status() -> dict:
     try:
         # utf-8-sig: PowerShell 5.1 `Set-Content -Encoding utf8` BOM qo'shadi
@@ -53,8 +70,8 @@ def _read_status() -> dict:
         return {}
 
 
-def _current_commit() -> str:
-    return _git("rev-parse", "--short", "HEAD") or "?"
+async def _current_commit() -> str:
+    return (await _git("rev-parse", "--short", "HEAD")) or "?"
 
 
 @router.get("/version")
@@ -64,8 +81,8 @@ async def get_version(current_user: Employee = Depends(get_current_user)):
     if running and time.time() - status.get("updated_at", 0) > STALE_SECONDS:
         running = False
     return {
-        "commit": _current_commit(),
-        "branch": _git("rev-parse", "--abbrev-ref", "HEAD"),
+        "commit": await _current_commit(),
+        "branch": await _git("rev-parse", "--abbrev-ref", "HEAD"),
         "updating": running,
         "self_update_enabled": ALLOW_SELF_UPDATE,
     }
@@ -76,11 +93,11 @@ async def check_for_update(current_user: Employee = Depends(get_current_user)):
     """GitHub'da yangi versiya bor-yo'qligini tekshiradi (git fetch)."""
     if not ALLOW_SELF_UPDATE:
         return {"enabled": False, "update_available": False}
-    branch = _git("rev-parse", "--abbrev-ref", "HEAD") or "main"
-    _git("fetch", "origin", branch)
-    local = _git("rev-parse", "HEAD")
-    remote = _git("rev-parse", f"origin/{branch}")
-    behind = _git("rev-list", "--count", f"HEAD..origin/{branch}")
+    branch = (await _git("rev-parse", "--abbrev-ref", "HEAD")) or "main"
+    await _git("fetch", "origin", branch)
+    local = await _git("rev-parse", "HEAD")
+    remote = await _git("rev-parse", f"origin/{branch}")
+    behind = await _git("rev-list", "--count", f"HEAD..origin/{branch}")
     try:
         behind_n = int(behind)
     except ValueError:
@@ -110,6 +127,16 @@ async def start_update(
     current_user: Employee = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    # Faqat ADMIN yangilay oladi.
+    #
+    # Ilgari bu yerda rol tekshirilmasdi, Login.jsx esa muvaffaqiyatli kirishda
+    # POST /system/update ni O'ZI chaqirardi. Ya'ni ish kunining o'rtasida
+    # smenaga kirgan kassir jimgina `git pull`, frontend qayta yig'ilishi va
+    # backend restartini boshlab yuborardi — qolgan kassalar shu vaqt davomida
+    # ishlamas edi va hech kim buni tanlamagan edi.
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Yangilashni faqat admin boshlashi mumkin")
+
     if not ALLOW_SELF_UPDATE:
         raise HTTPException(status_code=403, detail="Bu serverda ilova ichidan yangilash o'chirilgan")
     if not UPDATE_SCRIPT.exists():
@@ -128,7 +155,7 @@ async def start_update(
         "started_by": current_user.username,
         "started_at": time.time(),
         "updated_at": time.time(),
-        "from_commit": _current_commit(),
+        "from_commit": await _current_commit(),
     }), encoding="utf-8")
 
     await log_action(db, current_user.id, "TIZIM_YANGILASH", f"Dastur yangilanishi boshlandi: @{current_user.username}")
@@ -151,7 +178,7 @@ async def start_update(
         )
     else:
         subprocess.Popen(
-            ["pwsh", "-NoProfile", "-File", str(UPDATE_SCRIPT), "-FromApp"],
+            ["/usr/bin/env", "bash", str(UPDATE_SCRIPT)],
             cwd=str(REPO_ROOT), start_new_session=True,
             stdin=subprocess.DEVNULL, stdout=_spawn_log, stderr=subprocess.STDOUT,
         )

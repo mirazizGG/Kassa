@@ -8,12 +8,17 @@ import uuid
 from datetime import datetime
 
 from database import get_db, Supplier, SupplyReceipt, SupplierPayment, Employee
-from core import get_current_user, verify_password
+from core import get_current_user, verify_password, verify_approver
 from pydantic import BaseModel
 
 from routers.audit import log_action
+from utils.backup import UPLOAD_DIR
 
 router = APIRouter(prefix="/suppliers", tags=["suppliers"])
+
+# Nakladnoy fayli uchun ruxsat etilgan kengaytmalar va hajm chegarasi.
+ALLOWED_INVOICE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".pdf"}
+MAX_INVOICE_BYTES = 10 * 1024 * 1024  # 10 MB
 
 # --- Schemas ---
 class SupplierBase(BaseModel):
@@ -56,14 +61,20 @@ class PaymentOut(BaseModel):
 
 # --- Endpoints ---
 
-async def verify_confirming_employee(db: AsyncSession, username: str, password: str) -> Employee:
-    result = await db.execute(select(Employee).where(Employee.username == username))
-    employee = result.scalars().first()
-    if not employee or not verify_password(password, employee.hashed_password):
-        raise HTTPException(status_code=401, detail="Login yoki parol noto'g'ri")
-    if not employee.is_active:
-        raise HTTPException(status_code=403, detail="Hisob bloklangan")
-    return employee
+async def verify_confirming_employee(db: AsyncSession, requester: Employee,
+                                     username: str, password: str) -> Employee:
+    """Firma bilan pul harakatini TASDIQLOVCHI xodim.
+
+    Ilgari bu funksiya na rolni, na tasdiqlovchi BOSHQA odam ekanini
+    tekshirardi: omborchi o'z login-parolini kiritib, o'z amalini o'zi
+    "tasdiqlab" qo'yardi. Ikki kishilik nazorat umuman ishlamasdi.
+    """
+    if username == requester.username:
+        raise HTTPException(
+            status_code=403,
+            detail="Amalni o'zingiz tasdiqlay olmaysiz — menejer yoki admin tasdig'i kerak",
+        )
+    return await verify_approver(db, requester, username, password)
 
 @router.get("/", response_model=List[SupplierOut])
 async def get_suppliers(
@@ -96,7 +107,10 @@ async def create_supplier(
 @router.post("/receipts")
 async def add_receipt(
     supplier_id: int = Form(...),
-    total_amount: float = Form(...),
+    # Manfiy yoki NaN summa firma balansini qaytarib bo'lmaydigan darajada
+    # buzardi (NaN butun "Firmalar" sahifasini 500 ga olib borardi). Bu — pul
+    # bilan ishlaydigan yagona joy edi, unga son cheklovlari yetib bormagan.
+    total_amount: float = Form(..., gt=0, allow_inf_nan=False),
     note: Optional[str] = Form(None),
     image: Optional[UploadFile] = File(None),
     confirm_username: str = Form(...),
@@ -106,7 +120,7 @@ async def add_receipt(
 ):
     if current_user.role not in ["admin", "manager", "warehouse"]:
         raise HTTPException(status_code=403, detail="Ruxsat berilmagan")
-    confirming_employee = await verify_confirming_employee(db, confirm_username, confirm_password)
+    confirming_employee = await verify_confirming_employee(db, current_user, confirm_username, confirm_password)
     # Check if supplier exists
     res = await db.execute(select(Supplier).where(Supplier.id == supplier_id))
     supplier = res.scalars().first()
@@ -115,16 +129,32 @@ async def add_receipt(
 
     image_path = None
     if image:
-        # Save image
-        ext = os.path.splitext(image.filename)[1]
+        # Kengaytmani foydalanuvchi bergan fayl nomidan olardik va uni
+        # o'zgartirmasdan saqlardik. /uploads papkasi ilovaning O'Z domenidan
+        # beriladi, shuning uchun ".html" yuklab, keyin o'sha havolani ochgan
+        # xodimning tokenini o'g'irlash mumkin edi. Endi faqat rasm va PDF.
+        ext = os.path.splitext(image.filename or "")[1].lower()
+        if ext not in ALLOWED_INVOICE_EXTENSIONS:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Nakladnoy uchun faqat rasm yoki PDF yuklash mumkin "
+                    f"({', '.join(sorted(ALLOWED_INVOICE_EXTENSIONS))})"
+                ),
+            )
+
+        payload = await image.read()
+        if len(payload) > MAX_INVOICE_BYTES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Fayl juda katta (maksimum {MAX_INVOICE_BYTES // (1024 * 1024)} MB)",
+            )
+
         filename = f"{uuid.uuid4()}{ext}"
-        save_dir = "uploads/invoices"
-        os.makedirs(save_dir, exist_ok=True)
-        image_path = os.path.join(save_dir, filename)
-        
-        with open(image_path, "wb") as f:
-            f.write(await image.read())
-        
+        save_dir = UPLOAD_DIR / "invoices"
+        save_dir.mkdir(parents=True, exist_ok=True)
+        (save_dir / filename).write_bytes(payload)
+
         # Use URL path for DB
         image_path = f"/uploads/invoices/{filename}"
 
@@ -137,18 +167,24 @@ async def add_receipt(
     )
     db.add(receipt)
     
-    # Update supplier balance (Increase debt)
-    supplier.balance += total_amount
+    # Firma balansini ATOMIK oshiramiz (qarzimiz ortadi).
+    await db.execute(
+        update(Supplier)
+        .where(Supplier.id == supplier_id)
+        .values(balance=Supplier.balance + total_amount)
+        .execution_options(synchronize_session=False)
+    )
     
     await log_action(db, current_user.id, "FIRMA_KIRIM", f"Firma: {supplier.name}. Summa: {total_amount} so'm. Izoh: {note or '-'}. Tasdiqladi: @{confirming_employee.username}")
     
     await db.commit()
+    await db.refresh(supplier)
     return {"message": "Kirim muvaffaqiyatli saqlandi", "new_balance": supplier.balance}
 
 @router.post("/payments")
 async def add_payment(
     supplier_id: int = Form(...),
-    amount: float = Form(...),
+    amount: float = Form(..., gt=0, allow_inf_nan=False),
     payment_method: str = Form("cash"),
     note: Optional[str] = Form(None),
     confirm_username: str = Form(...),
@@ -158,7 +194,7 @@ async def add_payment(
 ):
     if current_user.role not in ["admin", "manager", "warehouse"]:
         raise HTTPException(status_code=403, detail="Ruxsat berilmagan")
-    confirming_employee = await verify_confirming_employee(db, confirm_username, confirm_password)
+    confirming_employee = await verify_confirming_employee(db, current_user, confirm_username, confirm_password)
     res = await db.execute(select(Supplier).where(Supplier.id == supplier_id))
     supplier = res.scalars().first()
     if not supplier:
@@ -172,12 +208,18 @@ async def add_payment(
     )
     db.add(payment)
     
-    # Update supplier balance (Decrease debt)
-    supplier.balance -= amount
+    # Firma balansini ATOMIK kamaytiramiz (qarzimiz kamayadi).
+    await db.execute(
+        update(Supplier)
+        .where(Supplier.id == supplier_id)
+        .values(balance=Supplier.balance - amount)
+        .execution_options(synchronize_session=False)
+    )
     
     await log_action(db, current_user.id, "FIRMA_TOLOV", f"Firma: {supplier.name}. Summa: {amount} so'm. Usul: {payment_method}. Izoh: {note or '-'}. Tasdiqladi: @{confirming_employee.username}")
     
     await db.commit()
+    await db.refresh(supplier)
     return {"message": "To'lov muvaffaqiyatli saqlandi", "new_balance": supplier.balance}
 
 @router.get("/{supplier_id}/history")

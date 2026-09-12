@@ -1,0 +1,31 @@
+# Fon vazifalari: APScheduler (qarz eslatmalari, zahira nusxa) + Telegram bot.
+#
+# FAQAT BITTA jarayon. Ikkinchisini ishga tushirmang: Telegram ikkita pollerga
+# 409 Conflict qaytaradi, qarzdorlar ikki marta eslatma oladi va ikkita zahira
+# vazifasi bitta papkaga bir vaqtda yozadi.
+
+[Unit]
+Description=SmartKassa background worker (scheduler + Telegram bot)
+After=network-online.target postgresql.service kassa-web.service
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=kassa
+Group=kassa
+WorkingDirectory=/opt/kassa/backend
+EnvironmentFile=/opt/kassa/deploy/env/production.env
+Environment=RUN_BACKGROUND_JOBS=true
+# Bitta jarayon, port band qilmaydi (web allaqachon 8000 da).
+ExecStart=/opt/kassa/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8001 --workers 1
+Restart=always
+RestartSec=5
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/kassa/backend/backups /opt/kassa/backend/uploads
+
+[Install]
+WantedBy=multi-user.target

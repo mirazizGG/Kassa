@@ -1,0 +1,5 @@
+# Test uchun qo'shimcha paketlar. Ishlab chiqarish serveriga kerak emas:
+#   pip install -r requirements.txt -r requirements-dev.txt
+#   cd backend && python -m pytest
+-r requirements.txt
+pytest

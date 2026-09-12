@@ -20,8 +20,14 @@ async def get_settings(
 ):
     # Settingsni barcha xodimlar o'qiy olishi kerak (masalan, low_stock_threshold uchun)
     # Ruxsat tekshiruvi olib tashlandi, chunki get_current_user allaqachon loginni tekshiradi.
-    """Do'kon sozlamalarini olish. Agar bo'sh bo'lsa, default yaratadi."""
-    result = await db.execute(select(StoreSetting))
+    """Do'kon sozlamalarini olish. Agar bo'sh bo'lsa, default yaratadi.
+
+    `.order_by(id).limit(1)` shart: StoreSetting yagona satr bo'lishi kerak,
+    lekin buni faqat kelishuv ushlab turadi. Tartibsiz `.first()` da PostgreSQL
+    satrlar ketma-ketligini KAFOLATLAMAYDI — agar ikkinchi satr paydo bo'lsa,
+    sozlamalar so'rovdan so'rovga "sakrab" turardi.
+    """
+    result = await db.execute(select(StoreSetting).order_by(StoreSetting.id).limit(1))
     settings = result.scalars().first()
     
     if not settings:
@@ -42,7 +48,7 @@ async def update_settings(
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Ruxsat berilmagan")
         
-    result = await db.execute(select(StoreSetting))
+    result = await db.execute(select(StoreSetting).order_by(StoreSetting.id).limit(1))
     settings = result.scalars().first()
     
     if not settings:

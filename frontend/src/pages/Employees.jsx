@@ -1,3 +1,4 @@
+import { formatDateTime } from "@/lib/datetime";
 import React, { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import api from "../api/axios";
@@ -761,7 +762,7 @@ const Employees = () => {
                     </div>
                     <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
                       <Calendar className="w-3 h-3" />
-                      {new Date(task.created_at).toLocaleDateString()}
+                      {formatDateTime(task.created_at, "dd.MM.yyyy")}
                     </div>
                   </CardContent>
                 </Card>

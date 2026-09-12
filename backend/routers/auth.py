@@ -1,12 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Form
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime, timedelta, timezone
 import secrets
 from typing import List, Optional
 
 from database import get_db, Employee
+from utils.timezone import utc_now
 from schemas import Token, EmployeeCreate, EmployeeOut, EmployeeUpdate
 from core import verify_password, get_password_hash, create_access_token, get_current_user, ACCESS_TOKEN_EXPIRE_MINUTES, limiter, PRIMARY_ADMIN_USERNAME
 from routers.audit import log_action
@@ -24,6 +25,12 @@ async def login_for_access_token(
     result = await db.execute(select(Employee).where(Employee.username == form_data.username))
     user = result.scalars().first()
     
+    # Noma'lum login uchun ham parolni HISOBLAYMIZ. Aks holda javob sezilarli
+    # tez qaytardi va shu farq orqali qaysi loginlar mavjudligini aniqlash
+    # mumkin edi.
+    if user is None:
+        get_password_hash(form_data.password)
+
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -43,7 +50,7 @@ async def login_for_access_token(
             detail="Sotuvchi lavozimi saytga kira olmaydi. Faqat Telegram bot orqali ishga kelish/ketishni belgilang.",
         )
 
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = utc_now()
     has_active_session = bool(
         user.session_token and user.session_expires_at and user.session_expires_at > now
     )
@@ -184,6 +191,12 @@ async def update_employee(
     
     if "password" in update_data and update_data["password"]:
         update_data["hashed_password"] = get_password_hash(update_data.pop("password"))
+        # Parol almashtirilsa, eski sessiya BEKOR bo'lsin. Aks holda parolni
+        # o'g'irlagan odam parol almashtirilganidan keyin ham o'z tokeni bilan
+        # 600 daqiqagacha ishlayverardi — ya'ni parolni almashtirish hujumni
+        # to'xtatmasdi.
+        update_data["session_token"] = None
+        update_data["session_expires_at"] = None
     
     if "is_active" in update_data and employee_id == current_user.id and update_data["is_active"] is False:
         raise HTTPException(status_code=400, detail="O'zingizni o'zingiz bloklay olmaysiz")
@@ -238,7 +251,32 @@ async def delete_employee(
 
     if db_user.role == "admin" and current_user.username != PRIMARY_ADMIN_USERNAME:
         raise HTTPException(status_code=403, detail="Boshqa admin hisobini faqat bosh admin o'chira oladi")
-        
+
+    # Ishlagan xodimni O'CHIRIB BO'LMAYDI — uni BLOKLASH kerak.
+    #
+    # Xodim id si sotuv, smena, to'lov, xarajat va audit satrlarida turadi.
+    # SQLite tashqi kalitni majburlamagani uchun o'chirish bu satrlarni yetim
+    # qoldirardi: cheklarda kassir yo'qolib, audit jurnali "kim qildi" degan
+    # savolga javob bera olmay qolardi. PostgreSQL da esa bu 500 bo'lardi.
+    from database import Sale, Shift, Payment, Expense, AuditLog
+
+    for model, field, nomi in (
+        (Sale, Sale.cashier_id, "savdo"),
+        (Shift, Shift.cashier_id, "smena"),
+        (Payment, Payment.created_by, "to'lov"),
+        (Expense, Expense.created_by, "xarajat"),
+        (AuditLog, AuditLog.user_id, "audit yozuvi"),
+    ):
+        count = await db.scalar(select(func.count(model.id)).where(field == employee_id))
+        if count:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Bu xodimda {count} ta {nomi} tarixi bor — o'chirib bo'lmaydi. "
+                    "Uning o'rniga hisobni bloklang (faol emas qilib qo'ying)."
+                ),
+            )
+
     await db.delete(db_user)
     
     await log_action(db, current_user.id, "XODIM_OCHIRILDI", f"Xodim o'chirildi: {db_user.username} (ID: {employee_id})")

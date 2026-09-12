@@ -15,3 +15,21 @@ export function formatThousands(value) {
 export function parseThousands(value) {
   return String(value ?? "").replace(/\D/g, "")
 }
+
+/**
+ * HTML ga qo'yiladigan matnni xavfsizlantiradi.
+ *
+ * Chek chop etishda mahsulot nomi document.write ga TO'G'RIDAN-TO'G'RI
+ * qo'yilardi. Mahsulot nomini o'zgartira oladigan har kim (admin, menejer,
+ * omborchi) u yerga `<img src=x onerror=...>` yozib qo'yishi mumkin edi, va
+ * shu chekni chop etgan odamning tokeni localStorage'dan o'g'irlanardi —
+ * ya'ni omborchi admin huquqiga ko'tarilardi.
+ */
+export function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}

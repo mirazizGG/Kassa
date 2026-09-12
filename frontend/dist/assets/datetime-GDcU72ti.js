@@ -1,0 +1,1 @@
+import{f as s}from"./table-DvSIb7rn.js";function o(t){if(!t)return null;if(t instanceof Date)return t;const r=String(t),n=/(?:Z|[+-]\d{2}:?\d{2})$/i.test(r),e=new Date(n?r:`${r}Z`);return Number.isNaN(e.getTime())?null:e}function i(t,r="dd.MM.yyyy HH:mm",n="-"){const e=o(t);if(!e)return n;try{return s(e,r)}catch{return n}}export{i as f,o as p};

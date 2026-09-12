@@ -6,15 +6,136 @@ import base64
 import os
 import shutil
 import sqlite3
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import httpx
+from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-DB_PATH = BASE_DIR / "market.db"
+
+# Modul mustaqil import qilinganda ham sozlamalar o'qilsin: DATABASE_URL siz
+# bu yerdagi hamma narsa SQLite deb o'ylaydi va PostgreSQL nusxasi olinmaydi.
+load_dotenv(BASE_DIR / ".env")
 BACKUP_DIR = BASE_DIR / "backups"
+
+# Nakladnoy rasmlari. Yo'l MODUL joylashuviga bog'langan, ishchi katalogga EMAS.
+#
+# Ilgari `"uploads"` deb yozilgani uchun ilovani repo ildizidan ishga tushirish
+# yetardi: yangi bo'sh papka yaratilib, oldin yuklangan hamma nakladnoy
+# 404 bo'lib qolardi.
+UPLOAD_DIR = BASE_DIR / "uploads"
+UPLOAD_ARCHIVE_GLOB = "uploads_*.tar.gz"
+BACKUP_GLOB = "backup_*"       # baza nusxalari: backup_*.db / backup_*.dump
+
+
+def _database_url() -> str:
+    return os.getenv("DATABASE_URL", "").strip()
+
+
+def is_postgres() -> bool:
+    return _database_url().startswith(("postgres://", "postgresql://", "postgresql+"))
+
+
+def _libpq_url() -> str:
+    """SQLAlchemy URL -> pg_dump tushunadigan libpq URL (drayver qo'shimchasisiz)."""
+    url = _database_url()
+    for prefix in ("postgresql+asyncpg://", "postgresql+psycopg://", "postgresql+psycopg2://"):
+        if url.startswith(prefix):
+            return "postgresql://" + url[len(prefix):]
+    if url.startswith("postgres://"):
+        return "postgresql://" + url[len("postgres://"):]
+    return url
+
+
+def create_uploads_archive() -> str | None:
+    """Nakladnoy fayllarini bitta arxivga yig'adi.
+
+    Baza dumpida bu fayllar YO'Q. Ularsiz tiklangan bazada SupplyReceipt
+    satrlari mavjud bo'lmagan fayllarga ishora qiladi: firma qarzi saqlanadi,
+    lekin uni tasdiqlaydigan dalil yo'qoladi. Nakladnoy rasmi esa firma bilan
+    hisob-kitobdagi yagona mustaqil dalil.
+
+    Fayl yo'q bo'lsa None qaytaradi (arxiv yaratilmaydi).
+    """
+    import tarfile
+
+    if not UPLOAD_DIR.exists() or not any(UPLOAD_DIR.rglob("*")):
+        return None
+
+    BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    archive_path = BACKUP_DIR / f"uploads_{timestamp}.tar.gz"
+
+    try:
+        with tarfile.open(archive_path, "w:gz") as tar:
+            tar.add(UPLOAD_DIR, arcname="uploads")
+    except (OSError, tarfile.TarError) as exc:
+        archive_path.unlink(missing_ok=True)
+        print(f"Uploads arxivi xatosi: {exc}")
+        return None
+
+    _clean_old_uploads_archives()
+    _mirror_backup(archive_path)
+    return str(archive_path)
+
+
+def _clean_old_uploads_archives(limit: int | None = None) -> None:
+    # DEFAULT_RETENTION quyiroqda e'lon qilingan, shuning uchun chaqiruv paytida olamiz.
+    if limit is None:
+        limit = DEFAULT_RETENTION
+    archives = sorted(
+        BACKUP_DIR.glob(UPLOAD_ARCHIVE_GLOB),
+        key=lambda item: item.stat().st_mtime,
+        reverse=True,
+    )
+    for old in archives[limit:]:
+        old.unlink(missing_ok=True)
+
+
+def _split_password(url: str) -> "tuple[str, str | None]":
+    """URL dan parolni ajratib oladi va (parolsiz URL, parol) qaytaradi."""
+    from urllib.parse import urlsplit, urlunsplit, quote
+
+    parts = urlsplit(url)
+    if not parts.password:
+        return url, None
+
+    userinfo = quote(parts.username or "", safe="")
+    host = parts.hostname or ""
+    if parts.port:
+        host = f"{host}:{parts.port}"
+    netloc = f"{userinfo}@{host}" if userinfo else host
+    return (
+        urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment)),
+        parts.password,
+    )
+
+
+def _sqlite_path() -> Path:
+    """Haqiqiy SQLite fayl yo'li.
+
+    Ilgari bu yerda qat'iy `BASE_DIR / "market.db"` turardi va DATABASE_URL
+    umuman o'qilmasdi. Baza boshqa joyga ko'chirilgan bo'lsa, zahira nusxa
+    eski (ko'pincha bo'sh) fayldan olinardi va tizim baribir "muvaffaqiyatli"
+    deb javob berardi.
+    """
+    url = _database_url()
+    marker = "sqlite+aiosqlite:///"
+    if url.startswith(marker):
+        raw = url[len(marker):]
+    elif url.startswith("sqlite:///"):
+        raw = url[len("sqlite:///"):]
+    else:
+        return BASE_DIR / "market.db"
+    raw = raw.split("?", 1)[0]
+    path = Path(raw)
+    return path if path.is_absolute() else (BASE_DIR / path).resolve()
+
+
+DB_PATH = _sqlite_path()
 DEFAULT_RETENTION = int(os.getenv("BACKUP_RETENTION", "30"))
 # Ixtiyoriy: har zahira nusxa shu papkaga ham ko'chiriladi (tashqi disk yoki
 # Google Drive/OneDrive kabi sinxronlanadigan papka). Bo'sh bo'lsa — o'tkazib yuboriladi.
@@ -22,8 +143,15 @@ BACKUP_MIRROR_DIR = os.getenv("BACKUP_MIRROR_DIR", "").strip()
 
 
 def create_backup() -> str | None:
-    """Create a consistent SQLite snapshot, including data in WAL mode."""
-    if not DB_PATH.exists():
+    """Zahira nusxa oladi. Bazaga qarab SQLite yoki PostgreSQL yo'lini tanlaydi."""
+    return _create_postgres_backup() if is_postgres() else _create_sqlite_backup()
+
+
+def _create_sqlite_backup() -> str | None:
+    """Izchil SQLite snapshot — WAL dagi ma'lumot ham qo'shiladi."""
+    db_path = _sqlite_path()
+    if not db_path.exists():
+        print(f"Backup: baza fayli topilmadi: {db_path}")
         return None
 
     BACKUP_DIR.mkdir(parents=True, exist_ok=True)
@@ -31,16 +159,57 @@ def create_backup() -> str | None:
     backup_path = BACKUP_DIR / f"backup_{timestamp}.db"
 
     try:
-        with sqlite3.connect(DB_PATH) as source, sqlite3.connect(backup_path) as destination:
+        with sqlite3.connect(db_path) as source, sqlite3.connect(backup_path) as destination:
             source.backup(destination)
         clean_old_backups()
         _mirror_backup(backup_path)
         return str(backup_path)
     except sqlite3.Error as exc:
-        if backup_path.exists():
-            backup_path.unlink()
+        backup_path.unlink(missing_ok=True)
         print(f"Backup error: {exc}")
         return None
+
+
+def _create_postgres_backup() -> str | None:
+    """pg_dump orqali custom-format nusxa (pg_restore bilan tiklanadi)."""
+    BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    backup_path = BACKUP_DIR / f"backup_{timestamp}.dump"
+
+    # Parolni ARGV ga bermaymiz: serverdagi istalgan foydalanuvchi uni `ps` da
+    # ko'rib turardi. Parol muhit o'zgaruvchisiga ketadi, qolgani URL da qoladi.
+    conn_url, pgpassword = _split_password(_libpq_url())
+    env = dict(os.environ)
+    if pgpassword:
+        env["PGPASSWORD"] = pgpassword
+
+    cmd = [
+        os.getenv("PG_DUMP_PATH", "pg_dump"),
+        "--format=custom",
+        "--no-owner",
+        "--no-privileges",
+        "--file", str(backup_path),
+        conn_url,
+    ]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=900, env=env)
+    except FileNotFoundError:
+        print("Backup xatosi: pg_dump topilmadi. postgresql-client o'rnating "
+              "yoki PG_DUMP_PATH ni ko'rsating.")
+        return None
+    except subprocess.TimeoutExpired:
+        backup_path.unlink(missing_ok=True)
+        print("Backup xatosi: pg_dump 15 daqiqada tugamadi.")
+        return None
+
+    if proc.returncode != 0 or not backup_path.exists() or backup_path.stat().st_size == 0:
+        backup_path.unlink(missing_ok=True)
+        print(f"Backup xatosi: pg_dump kod {proc.returncode}: {(proc.stderr or '')[:400]}")
+        return None
+
+    clean_old_backups()
+    _mirror_backup(backup_path)
+    return str(backup_path)
 
 
 def _mirror_backup(backup_path: Path) -> None:
@@ -52,7 +221,7 @@ def _mirror_backup(backup_path: Path) -> None:
         mirror_dir.mkdir(parents=True, exist_ok=True)
         shutil.copy2(backup_path, mirror_dir / backup_path.name)
         mirrors = sorted(
-            mirror_dir.glob("backup_*.db"),
+            mirror_dir.glob(BACKUP_GLOB),
             key=lambda item: item.stat().st_mtime,
             reverse=True,
         )
@@ -64,7 +233,7 @@ def _mirror_backup(backup_path: Path) -> None:
 
 def clean_old_backups(limit: int = DEFAULT_RETENTION) -> None:
     """Keep only the newest valid backup files."""
-    backups = sorted(BACKUP_DIR.glob("backup_*.db"), key=lambda item: item.stat().st_mtime, reverse=True)
+    backups = sorted(BACKUP_DIR.glob(BACKUP_GLOB), key=lambda item: item.stat().st_mtime, reverse=True)
     for backup in backups[limit:]:
         backup.unlink(missing_ok=True)
 
@@ -80,7 +249,7 @@ def list_backups() -> list[dict[str, Any]]:
             "size": backup.stat().st_size,
             "created_at": datetime.fromtimestamp(backup.stat().st_mtime, tz=timezone.utc).isoformat(),
         }
-        for backup in sorted(BACKUP_DIR.glob("backup_*.db"), key=lambda item: item.stat().st_mtime, reverse=True)
+        for backup in sorted(BACKUP_DIR.glob(BACKUP_GLOB), key=lambda item: item.stat().st_mtime, reverse=True)
     ]
 
 
@@ -154,12 +323,17 @@ async def run_full_backup(bot=None) -> dict:
     Har bir manzil mustaqil — biri ishlamasa qolganlari baribir bajariladi.
     Natija: qaysi manzilga borgani haqida lug'at.
     """
-    result: dict[str, Any] = {"local": None, "mirror": None, "github": None, "telegram": None}
+    result: dict[str, Any] = {
+        "local": None, "mirror": None, "github": None, "telegram": None, "uploads": None,
+    }
 
     backup_path = await asyncio.to_thread(create_backup)
     if not backup_path:
         raise RuntimeError("Zahira nusxasi yaratilmadi")
     result["local"] = backup_path
+
+    # Nakladnoy fayllari baza dumpiga kirmaydi - alohida arxiv.
+    result["uploads"] = await asyncio.to_thread(create_uploads_archive)
 
     if BACKUP_MIRROR_DIR:
         result["mirror"] = (Path(BACKUP_MIRROR_DIR) / Path(backup_path).name).exists()
@@ -183,7 +357,7 @@ def _latest_backup_age_seconds() -> float | None:
     if not BACKUP_DIR.exists():
         return None
     backups = sorted(
-        BACKUP_DIR.glob("backup_*.db"),
+        BACKUP_DIR.glob(BACKUP_GLOB),
         key=lambda item: item.stat().st_mtime,
         reverse=True,
     )

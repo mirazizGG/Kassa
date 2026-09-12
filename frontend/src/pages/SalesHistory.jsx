@@ -1,3 +1,5 @@
+import { escapeHtml } from "@/lib/utils";
+import { formatDateTime } from "@/lib/datetime";
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import api from "../api/axios";
@@ -32,7 +34,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { format } from "date-fns";
+
 import { Skeleton } from "@/components/ui/skeleton";
 import FilterBar from "../components/FilterBar";
 import { Button } from "@/components/ui/button";
@@ -65,19 +67,36 @@ const SalesHistory = () => {
   });
   const queryClient = useQueryClient();
 
-  const { data: sales = [], isLoading } = useQuery({
-    queryKey: ["sales-history", filters],
+  // Sahifalash. Ilgari sahifa faqat oxirgi 100 ta chekni olardi va boshqa
+  // hech narsa ko'rsatmasdi: ko'p chekli kunda ertalabki savdolar ekrandan
+  // yo'qolardi, ular bilan birga VOZVRAT tugmasi ham — u faqat shu ro'yxatda.
+  const PAGE_SIZE = 100;
+  const [page, setPage] = React.useState(0);
+
+  React.useEffect(() => {
+    setPage(0);
+  }, [filters]);
+
+  const { data: result, isLoading } = useQuery({
+    queryKey: ["sales-history", filters, page],
     queryFn: async () => {
-      const params = {};
+      const params = { limit: PAGE_SIZE, skip: page * PAGE_SIZE };
       if (filters.employee_id && filters.employee_id !== "all")
         params.employee_id = filters.employee_id;
       if (filters.start_date) params.start_date = filters.start_date;
       if (filters.end_date) params.end_date = filters.end_date;
 
       const res = await api.get("/sales/", { params });
-      return res.data;
+      return {
+        rows: res.data,
+        total: Number(res.headers["x-total-count"] ?? res.data.length),
+      };
     },
   });
+
+  const sales = result?.rows ?? [];
+  const total = result?.total ?? 0;
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const refundMutation = useMutation({
     mutationFn: ({ saleId, approval }) =>
@@ -116,10 +135,12 @@ const SalesHistory = () => {
       toast.error("Chek oynasini ochishga ruxsat bering");
       return;
     }
+    // Mahsulot nomi FOYDALANUVCHI kiritgan matn — ekranlashsiz HTML ga
+    // qo'yib bo'lmaydi (chek oynasi ilovaning o'z domenida ochiladi).
     const items = sale.items
-      .map((item) => `<tr><td>${item.product?.name || "Mahsulot"}</td><td>${item.quantity} × ${item.price.toLocaleString("de-DE")}</td><td>${(item.quantity * item.price).toLocaleString("de-DE")}</td></tr>`)
+      .map((item) => `<tr><td>${escapeHtml(item.product?.name || "Mahsulot")}</td><td>${item.quantity} × ${item.price.toLocaleString("de-DE")}</td><td>${(item.quantity * item.price).toLocaleString("de-DE")}</td></tr>`)
       .join("");
-    receipt.document.write(`<!doctype html><html><head><title>Chek #${sale.id}</title><style>body{font:14px Arial;margin:16px;color:#111}h2,p{text-align:center;margin:5px}table{width:100%;border-collapse:collapse;margin-top:14px}td{padding:6px 0;border-bottom:1px dashed #aaa}td:last-child{text-align:right}.total{font-size:18px;font-weight:700;text-align:right;margin-top:14px}</style></head><body><h2>SmartKassa</h2><p>Chek #${sale.id}</p><p>${format(new Date(sale.created_at.endsWith("Z") ? sale.created_at : sale.created_at + "Z"), "dd.MM.yyyy HH:mm")}</p><table>${items}</table><p class="total">Jami: ${sale.total_amount.toLocaleString("de-DE")} so'm</p><p>Naqd: ${sale.cash_amount.toLocaleString("de-DE")} | Terminal: ${sale.card_amount.toLocaleString("de-DE")} | Perevod: ${sale.transfer_amount.toLocaleString("de-DE")}</p><script>window.print();window.onafterprint=()=>window.close();</script></body></html>`);
+    receipt.document.write(`<!doctype html><html><head><title>Chek #${escapeHtml(sale.id)}</title><style>body{font:14px Arial;margin:16px;color:#111}h2,p{text-align:center;margin:5px}table{width:100%;border-collapse:collapse;margin-top:14px}td{padding:6px 0;border-bottom:1px dashed #aaa}td:last-child{text-align:right}.total{font-size:18px;font-weight:700;text-align:right;margin-top:14px}</style></head><body><h2>SmartKassa</h2><p>Chek #${escapeHtml(sale.id)}</p><p>${formatDateTime(sale.created_at, "dd.MM.yyyy HH:mm")}</p><table>${items}</table><p class="total">Jami: ${sale.total_amount.toLocaleString("de-DE")} so'm</p><p>Naqd: ${sale.cash_amount.toLocaleString("de-DE")} | Terminal: ${sale.card_amount.toLocaleString("de-DE")} | Perevod: ${sale.transfer_amount.toLocaleString("de-DE")}</p><script>window.print();window.onafterprint=()=>window.close();</script></body></html>`);
     receipt.document.close();
   };
   const toggleExpand = (id) => {
@@ -200,14 +221,7 @@ const SalesHistory = () => {
                       </TableCell>
                       <TableCell>{sale.client?.name || "-"}</TableCell>
                       <TableCell className="text-xs">
-                        {format(
-                          new Date(
-                            sale.created_at.endsWith("Z")
-                              ? sale.created_at
-                              : sale.created_at + "Z",
-                          ),
-                          "dd.MM.yyyy HH:mm",
-                        )}
+                        {formatDateTime(sale.created_at, "dd.MM.yyyy HH:mm")}
                       </TableCell>
                       <TableCell className="font-bold">
                         {sale.total_amount.toLocaleString("de-DE")} so'm
@@ -375,6 +389,35 @@ const SalesHistory = () => {
               )}
             </TableBody>
           </Table>
+          {total > PAGE_SIZE && (
+            <div className="flex items-center justify-between border-t px-4 py-3 text-sm">
+              <span className="text-muted-foreground">
+                {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} /{" "}
+                {total}
+              </span>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page === 0}
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                >
+                  Oldingi
+                </Button>
+                <span className="text-xs text-muted-foreground">
+                  {page + 1} / {pageCount}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page + 1 >= pageCount}
+                  onClick={() => setPage((p) => p + 1)}
+                >
+                  Keyingi
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
