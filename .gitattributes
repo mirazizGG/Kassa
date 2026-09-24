@@ -7,3 +7,22 @@ frontend/dist/** -text -diff linguist-generated
 *.psm1 text eol=crlf
 *.bat text eol=crlf
 *.cmd text eol=crlf
+
+# Serverda bajariladigan fayllar: FAQAT LF.
+#
+# Git for Windows checkout paytida LF ni CRLF ga aylantiradi. Server
+# fayllari uchun bu falokat: bash "" ni buyruqning bir qismi deb o'qiydi
+# va skript "command not found" bilan yiqiladi, Apache esa .htaccess dagi
+# qo'shimcha belgidan butun saytga 500 qaytarishi mumkin. Aynan shu
+# loyihada sodir bo'lgan: Windows'da yig'ilgan .sh fayllar serverda
+# ishga tushmadi.
+*.sh        text eol=lf
+*.php       text eol=lf
+*.py        text eol=lf
+*.ini       text eol=lf
+*.service   text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+.htaccess   text eol=lf
+.user.ini   text eol=lf
+Caddyfile   text eol=lf

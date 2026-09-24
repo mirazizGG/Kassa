@@ -115,3 +115,14 @@ deploy/run/
 start_backend_hidden.vbs
 start_frontend_hidden.vbs
 
+# PHP versiyasining ishchi fayllari
+php/.env
+php/logs/
+php/backups/
+php/market.db*
+php/public/assets/
+php/public/index.html
+php/public/favicon*
+php/public/uploads/invoices/*
+!php/public/uploads/invoices/.gitkeep
+kassa-php-*.tar.gz

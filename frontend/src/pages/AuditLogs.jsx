@@ -108,7 +108,14 @@ const AuditLogs = () => {
     },
     staleTime: 0,
     refetchOnMount: "always",
-    refetchInterval: 15000,
+    // 15 soniya emas, 60.
+    //
+    // Audit jurnali yuz minglab yozuvga yetganda har so'rov jami sonni
+    // qayta sanaydi, qidiruv esa "%matn%" bo'lgani uchun indeksdan
+    // foydalana olmaydi. Sahifa ochiq qoldirilsa (tekshiruv paytida u
+    // soatlab ochiq turadi) bu daqiqasiga to'rt marta to'liq skanerlash
+    // demak edi. Jurnal — tarix, undagi yozuv bir daqiqada ko'rinsa yetarli.
+    refetchInterval: 60000,
   });
 
   const logs = result?.rows ?? [];

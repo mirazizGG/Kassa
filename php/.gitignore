@@ -1,0 +1,20 @@
+# Sozlamalar — hech qachon repozitoriyga tushmasin
+.env
+
+# Ishlab chiqish uchun SQLite fayli
+market.db
+market.db-wal
+market.db-shm
+
+# Jurnal, kesh va vaqtinchalik fayllar
+logs/
+backups/
+
+# Yuklangan nakladnoy fotolari
+public/uploads/invoices/*
+!public/uploads/invoices/.gitkeep
+
+# Frontend yig'ilmasi (npm run build bilan qayta yaratiladi)
+public/assets/
+public/index.html
+public/favicon*

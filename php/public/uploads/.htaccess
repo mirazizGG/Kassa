@@ -1,0 +1,33 @@
+# Yuklangan fayllar papkasi — bu yerda HECH QACHON kod bajarilmasin.
+#
+# Nakladnoy fotosini xodim yuklaydi va u shu domendan beriladi. Agar bu yerga
+# .php fayl tushib, u bajarilsa — hujumchi serverda o'z kodini ishlatadi.
+# Kengaytma tekshiruvi ilovada ham bor (faqat rasm va PDF), bu esa ikkinchi
+# qator: himoyaning bir qatori yetarli emas.
+
+# Ijro etiladigan har qanday kengaytmani bloklaymiz.
+<IfModule mod_authz_core.c>
+    <FilesMatch "\.(?i:php|php[0-9]|phtml|phar|phps|pht|cgi|pl|py|sh|htaccess)$">
+        Require all denied
+    </FilesMatch>
+</IfModule>
+<IfModule !mod_authz_core.c>
+    <FilesMatch "\.(?i:php|php[0-9]|phtml|phar|phps|pht|cgi|pl|py|sh|htaccess)$">
+        Order allow,deny
+        Deny from all
+    </FilesMatch>
+</IfModule>
+
+# Ishlov beruvchini olib tashlaymiz: fayl bajarilmaydi, oddiy matn bo'lib qoladi.
+<IfModule mod_mime.c>
+    RemoveHandler .php .phtml .php3 .php4 .php5 .php7 .php8 .phar .cgi .pl .py
+    RemoveType .php .phtml .phar
+</IfModule>
+
+# Brauzer HTML/SVG ni sahifa deb ochmasin (saqlansin) — XSS yo'lini yopadi.
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set Content-Security-Policy "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'"
+</IfModule>
+
+Options -ExecCGI -Indexes

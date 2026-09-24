@@ -1,0 +1,89 @@
+# Kassa — Apache / LiteSpeed sozlamasi
+#
+# ENG MUHIM QOIDA: mavjud fayl PHP ga TEGMAYDI. JS, CSS, rasm va nakladnoy
+# fotosini veb-server o'zi beradi. Python versiyasida har bir shunday so'rov
+# ham ilova jarayonidan o'tardi — endi o'tmaydi.
+#
+# Eslatma: bu yerda <Directory> ishlatib BO'LMAYDI — u faqat server
+# konfiguratsiyasida yaroqli va .htaccess ichida butun saytni 500 qiladi.
+# Papka darajasidagi qoidalar uchun uploads/.htaccess bor.
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # CGI/FastCGI Authorization sarlavhasini yo'q qiladi. Usiz JWT umuman
+    # yetib kelmaydi va butun ilova 401 qaytaradi.
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule ^ - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+    # Mavjud fayl yoki papka — to'g'ridan-to'g'ri.
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    # Qolgani — front controller.
+    RewriteRule ^ index.php [L]
+</IfModule>
+
+# --- Kesh --------------------------------------------------------------
+# Vite fayl nomiga hash qo'yadi (index-Bgb1nGAo.js), ya'ni nomi o'zgarmasa
+# mazmuni ham o'zgarmagan. Bir yil keshlash xavfsiz va brauzer qayta
+# so'ramaydi — server yuklamasi shuncha kamayadi.
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType text/css                 "access plus 1 year"
+    ExpiresByType application/javascript   "access plus 1 year"
+    ExpiresByType text/javascript          "access plus 1 year"
+    ExpiresByType image/svg+xml            "access plus 1 year"
+    ExpiresByType font/woff2               "access plus 1 year"
+    ExpiresByType image/png                "access plus 1 month"
+    ExpiresByType image/jpeg               "access plus 1 month"
+    ExpiresByType image/webp               "access plus 1 month"
+</IfModule>
+
+<IfModule mod_headers.c>
+    <FilesMatch "\.(css|js|svg|woff2|png|jpg|jpeg|webp|ico)$">
+        Header set Cache-Control "public, max-age=31536000, immutable"
+    </FilesMatch>
+    # index.html hech qachon keshlanmasin — yangilanish darhol ko'rinsin.
+    <FilesMatch "^index\.html$">
+        Header set Cache-Control "no-cache, must-revalidate"
+    </FilesMatch>
+    Header always set X-Content-Type-Options "nosniff"
+</IfModule>
+
+# --- Siqish ------------------------------------------------------------
+# Trafikni ~4 barobar kamaytiradi. Protsessor sarfi kichik, tarmoq yutug'i katta.
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/plain text/css text/xml
+    AddOutputFilterByType DEFLATE application/javascript text/javascript
+    AddOutputFilterByType DEFLATE application/json application/xml
+    AddOutputFilterByType DEFLATE image/svg+xml
+</IfModule>
+
+# --- Himoya ------------------------------------------------------------
+# Sozlama, jurnal va zahira fayllari hech qachon ko'rinmasin.
+<IfModule mod_authz_core.c>
+    <FilesMatch "^\.|\.(ini|log|sql|gz|db|sqlite|sqlite3|lock|md|yml|yaml)$">
+        Require all denied
+    </FilesMatch>
+</IfModule>
+<IfModule !mod_authz_core.c>
+    <FilesMatch "^\.|\.(ini|log|sql|gz|db|sqlite|sqlite3|lock|md|yml|yaml)$">
+        Order allow,deny
+        Deny from all
+    </FilesMatch>
+</IfModule>
+
+DirectoryIndex index.php index.html
+
+# Options и SetEnv здесь НАМЕРЕННО НЕ ИСПОЛЬЗУЮТСЯ.
+#
+# Обе директивы зависят от настроек сервера: SetEnv требует mod_env, Options —
+# разрешения AllowOverride Options. Если чего-то из этого нет, Apache отвечает
+# 500 на ВЕСЬ сайт, причём до PHP дело не доходит и журнал приложения остаётся
+# пустым — искать причину тяжело. Проверено на боевом хостинге: mod_env там не
+# загружен.
+#
+# Просмотр содержимого папок закрыт иначе: в каждой лежит index.php или
+# index.html, а папка загрузок защищена своим uploads/.htaccess.
