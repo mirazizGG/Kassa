@@ -59,6 +59,15 @@ final class Schema
                 'category_id' => 'fk:categories',
                 'is_favorite' => 'bool default 0',
             ],
+            // Bitta mahsulotning QO'SHIMCHA shtrix-kodlari. Masalan "Agusha"
+            // ning har xil ta'mlari har xil kod bilan keladi, lekin do'kon
+            // ularni bitta mahsulot, bitta narx va bitta qoldiq sifatida
+            // yuritadi. Asosiy kod products.barcode da qoladi.
+            'product_barcodes' => [
+                'id'         => 'pk',
+                'product_id' => 'fk:products',
+                'barcode'    => 'str',
+            ],
             'users' => [
                 'id'            => 'pk',
                 'telegram_id'   => 'bigint',
@@ -246,6 +255,7 @@ final class Schema
             'uq_categories_name'      => ['categories', ['name']],
             'uq_expcat_name'          => ['expense_categories', ['name']],
             'uq_products_barcode'     => ['products', ['barcode']],
+            'uq_product_barcodes'     => ['product_barcodes', ['barcode']],
             'uq_users_telegram'       => ['users', ['telegram_id']],
             'uq_clients_telegram'     => ['clients', ['telegram_id']],
             // Takroriy chekni bazaning O'ZI to'xtatadi: ikki parallel so'rov
@@ -297,6 +307,7 @@ final class Schema
 
             'ix_products_name'       => ['products', ['name']],
             'ix_products_category'   => ['products', ['category_id']],
+            'ix_product_barcodes_p'  => ['product_barcodes', ['product_id']],
 
             'ix_clients_name'        => ['clients', ['name']],
             // Qarzdorlar ro'yxati: WHERE balance < 0.

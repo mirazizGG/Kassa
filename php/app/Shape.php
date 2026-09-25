@@ -46,7 +46,7 @@ final class Shape
         if ($r === null || !isset($r['id'])) {
             return null;
         }
-        return [
+        $out = [
             'name'        => $r['name'],
             'barcode'     => $r['barcode'] ?? null,
             'buy_price'   => Db::f($r['buy_price'] ?? 0),
@@ -58,6 +58,14 @@ final class Shape
             'is_favorite' => Db::b($r['is_favorite'] ?? 0),
             'id'          => Db::i($r['id']),
         ];
+        // Qo'shimcha kodlar faqat ular YUKLANGAN javobda chiqadi. Chek
+        // javobidagi mahsulotda bu kalit yo'q — kassa keshni {...eski,
+        // ...yangi} bilan birlashtiradi va bo'sh ro'yxat kodlarni o'chirib
+        // yuborardi.
+        if (array_key_exists('extra_barcodes', $r)) {
+            $out['extra_barcodes'] = array_values($r['extra_barcodes']);
+        }
+        return $out;
     }
 
     public static function client(?array $r): ?array

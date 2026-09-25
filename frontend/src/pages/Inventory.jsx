@@ -17,8 +17,11 @@ import {
   FolderPlus,
   History,
   Infinity as InfinityIcon,
+  X,
+  PackagePlus,
 } from "lucide-react";
 import BackupButton from "../components/BackupButton";
+import SupplyDialog from "../components/SupplyDialog";
 
 import {
   Select,
@@ -58,7 +61,12 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { cn, formatThousands, parseThousands } from "@/lib/utils.js";
+import {
+  cn,
+  formatThousands,
+  parseThousands,
+  productBarcodes,
+} from "@/lib/utils.js";
 
 // Bir marta yaratiladigan collator: localeCompare har chaqiruvda
 // ichida yangisini quradi va katta katalogda sezilarli sekinlik beradi.
@@ -78,6 +86,7 @@ const Inventory = () => {
   const [formData, setFormData] = useState({
     name: "",
     barcode: "",
+    extra_barcodes: [],
     category_id: null,
     buy_price: "",
     sell_price: "",
@@ -87,6 +96,38 @@ const Inventory = () => {
   });
 
   const [barcodeLookupLoading, setBarcodeLookupLoading] = useState(false);
+  const [newExtraBarcode, setNewExtraBarcode] = useState("");
+
+  // Qo'shimcha shtrix-kod: bitta mahsulotga bir nechta kod (masalan
+  // Agushaning har xil ta'mlari). Kassada qaysi biri skanerlansa ham shu
+  // mahsulot chiqadi, qoldiq esa umumiy.
+  const addExtraBarcode = () => {
+    const code = newExtraBarcode.trim();
+    if (!code) return;
+    if (productBarcodes(formData).includes(code)) {
+      toast.warning("Bu shtrix-kod shu mahsulotda allaqachon bor");
+      return;
+    }
+    const owner = products.find(
+      (p) => p.id !== editingProduct?.id && productBarcodes(p).includes(code),
+    );
+    if (owner) {
+      toast.error(`Bu shtrix-kod band: "${owner.name}"`);
+      return;
+    }
+    setFormData((prev) => ({
+      ...prev,
+      extra_barcodes: [...prev.extra_barcodes, code],
+    }));
+    setNewExtraBarcode("");
+  };
+
+  const removeExtraBarcode = (code) => {
+    setFormData((prev) => ({
+      ...prev,
+      extra_barcodes: prev.extra_barcodes.filter((c) => c !== code),
+    }));
+  };
 
   // Shtrix-kod bo'yicha internetdan (Open Food Facts) mahsulot nomini topish.
   const lookupBarcode = async (rawCode) => {
@@ -119,6 +160,15 @@ const Inventory = () => {
   };
 
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isSupplyOpen, setIsSupplyOpen] = useState(false);
+  const [supplyProduct, setSupplyProduct] = useState(null);
+  const [supplyKey, setSupplyKey] = useState(0);
+
+  const openSupply = (product = null) => {
+    setSupplyProduct(product);
+    setSupplyKey((k) => k + 1);
+    setIsSupplyOpen(true);
+  };
   const [isStockLogOpen, setIsStockLogOpen] = useState(false);
 
   const { data: products = [], isLoading } = useQuery({
@@ -230,6 +280,7 @@ const Inventory = () => {
     setFormData({
       name: "",
       barcode: "",
+      extra_barcodes: [],
       category_id: null,
       buy_price: "",
       sell_price: "",
@@ -244,6 +295,7 @@ const Inventory = () => {
     setFormData({
       name: product.name,
       barcode: product.barcode || "",
+      extra_barcodes: product.extra_barcodes ?? [],
       category_id: product.category_id,
       buy_price: product.buy_price ? String(product.buy_price) : "",
       sell_price: product.sell_price ? String(product.sell_price) : "",
@@ -307,7 +359,7 @@ const Inventory = () => {
       const matchesSearch =
         !needle ||
         p.name.toLowerCase().startsWith(needle) ||
-        p.barcode?.startsWith(needle);
+        productBarcodes(p).some((code) => code.startsWith(needle));
       const matchesCategory =
         selectedCategory === "all" ||
         p.category_id?.toString() === selectedCategory;
@@ -428,12 +480,25 @@ const Inventory = () => {
               </DialogContent>
             </Dialog>
 
-            {/* Supply button removed */}
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={() => openSupply()}
+            >
+              <PackagePlus className="w-4 h-4" /> Kirim
+            </Button>
+            <SupplyDialog
+              key={supplyKey}
+              open={isSupplyOpen}
+              onOpenChange={setIsSupplyOpen}
+              products={products}
+              initialProduct={supplyProduct}
+            />
 
             <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
               <DialogTrigger asChild>
                 <Button variant="ghost" className="gap-2">
-                  <Truck className="w-4 h-4" /> Kirimlar
+                  <Truck className="w-4 h-4" /> Kirim tarixi
                 </Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-[700px] max-h-[80vh] flex flex-col">
@@ -725,6 +790,58 @@ const Inventory = () => {
                       </Button>
                     </div>
                   </div>
+                  <div className="grid grid-cols-4 items-start gap-4">
+                    <Label htmlFor="extra_barcode" className="text-right pt-2">
+                      Qo'shimcha kodlar
+                    </Label>
+                    <div className="col-span-3 space-y-2">
+                      <div className="flex gap-2">
+                        <Input
+                          id="extra_barcode"
+                          className="flex-1"
+                          placeholder="Boshqa ta'm / variant kodi"
+                          value={newExtraBarcode}
+                          onChange={(e) => setNewExtraBarcode(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              addExtraBarcode();
+                            }
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          title="Kodni qo'shish"
+                          onClick={addExtraBarcode}
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      {formData.extra_barcodes.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {formData.extra_barcodes.map((code) => (
+                            <Badge
+                              key={code}
+                              variant="secondary"
+                              className="gap-1 font-mono text-xs"
+                            >
+                              {code}
+                              <button
+                                type="button"
+                                className="rounded-sm opacity-60 hover:opacity-100"
+                                title="Olib tashlash"
+                                onClick={() => removeExtraBarcode(code)}
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                   <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="buy_price" className="text-right">
                       Keltirilgan Narx
@@ -943,6 +1060,14 @@ const Inventory = () => {
                     </TableCell>
                     <TableCell className="text-muted-foreground font-mono text-xs">
                       {product.barcode || "-"}
+                      {product.extra_barcodes?.length > 0 && (
+                        <span
+                          className="ml-1 text-primary"
+                          title={product.extra_barcodes.join(", ")}
+                        >
+                          +{product.extra_barcodes.length}
+                        </span>
+                      )}
                     </TableCell>
                     <TableCell>
                       <Badge
@@ -1020,7 +1145,17 @@ const Inventory = () => {
                               >
                                 <Edit className="w-4 h-4" /> Tahrirlash
                               </DropdownMenuItem>
-                              {(role === "admin" || role === "manager") && (
+                              <DropdownMenuItem
+                                className="gap-2 cursor-pointer"
+                                onClick={() => openSupply(product)}
+                              >
+                                <PackagePlus className="w-4 h-4" /> Kirim qilish
+                              </DropdownMenuItem>
+                              {/* Omborchi ham o'chira oladi. Tarixi bor mahsulotni
+                                  server baribir 409 bilan rad etadi. */}
+                              {(role === "admin" ||
+                                role === "manager" ||
+                                role === "warehouse") && (
                                 <DropdownMenuItem
                                   className="gap-2 cursor-pointer text-destructive focus:bg-destructive/10 focus:text-destructive"
                                   onClick={() => {

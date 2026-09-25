@@ -10,6 +10,101 @@
 
 declare(strict_types=1);
 
+// --- Qo'shimcha shtrix-kodlar -------------------------------------------
+//
+// Bitta mahsulot bir nechta kod bilan skanerlanishi mumkin (masalan
+// Agushaning har xil ta'mlari). Asosiy kod products.barcode da, qolganlari
+// product_barcodes da. Kod IKKALA joy bo'yicha ham noyob bo'lishi kerak:
+// aks holda kassa bitta kodni ikki xil mahsulotga olib borardi.
+
+/** Kod kimniki: mahsulot nomi yoki null. $exceptId — o'zi hisobga olinmaydi. */
+function barcode_owner(string $code, ?int $exceptId = null): ?string
+{
+    $ex = $exceptId ?? 0;
+    $row = Db::one('SELECT name FROM products WHERE barcode = ? AND id <> ?', [$code, $ex])
+        ?? Db::one(
+            'SELECT p.name FROM product_barcodes pb JOIN products p ON p.id = pb.product_id
+             WHERE pb.barcode = ? AND pb.product_id <> ?',
+            [$code, $ex]
+        );
+    return $row['name'] ?? null;
+}
+
+/**
+ * So'rovdan `extra_barcodes` ro'yxatini o'qiydi va tekshiradi.
+ * Maydon umuman yuborilmagan bo'lsa null — ya'ni "tegma".
+ */
+function read_extra_barcodes(array $b, ?string $primary, ?int $productId): ?array
+{
+    if (!array_key_exists('extra_barcodes', $b) || $b['extra_barcodes'] === null) {
+        return null;
+    }
+    if (!is_array($b['extra_barcodes'])) {
+        fail(422, "«Qo'shimcha shtrix-kodlar» ro'yxat bo'lishi kerak.");
+    }
+    $codes = [];
+    foreach ($b['extra_barcodes'] as $raw) {
+        if (!is_string($raw) && !is_int($raw)) {
+            fail(422, "Shtrix-kod matn bo'lishi kerak.");
+        }
+        $code = trim((string)$raw);
+        if ($code === '' || $code === $primary || in_array($code, $codes, true)) {
+            continue;
+        }
+        if (mb_strlen($code) > 30) {
+            fail(422, "Shtrix-kod juda uzun (eng ko'pi 30 belgi): $code");
+        }
+        $owner = barcode_owner($code, $productId);
+        if ($owner !== null) {
+            fail(409, "Shtrix-kod $code band: \"$owner\"");
+        }
+        $codes[] = $code;
+    }
+    if (count($codes) > 100) {
+        fail(422, "Bitta mahsulotga ko'pi bilan 100 ta qo'shimcha shtrix-kod.");
+    }
+    return $codes;
+}
+
+/** Mahsulotning qo'shimcha kodlarini to'liq almashtiradi. Tranzaksiya ichida. */
+function save_extra_barcodes(int $productId, array $codes): void
+{
+    Db::run('DELETE FROM product_barcodes WHERE product_id = ?', [$productId]);
+    foreach ($codes as $code) {
+        Db::insert('product_barcodes', ['product_id' => $productId, 'barcode' => $code]);
+    }
+}
+
+/** Mahsulot qatorlariga `extra_barcodes` ni qo'shadi (bitta so'rov bilan). */
+function with_extra_barcodes(array $rows): array
+{
+    if ($rows === []) {
+        return $rows;
+    }
+    $ids = array_map(fn($r) => (int)$r['id'], $rows);
+    // Ko'p mahsulotda IN (...) SQLite parametr chegarasiga urilardi. Jadval
+    // kichik (faqat qo'shimcha kodlar), shuning uchun hammasini o'qish arzon.
+    $extra = count($ids) > 200
+        ? Db::all('SELECT product_id, barcode FROM product_barcodes ORDER BY id')
+        : Db::all('SELECT product_id, barcode FROM product_barcodes WHERE product_id IN ('
+            . Db::marks($ids) . ') ORDER BY id', $ids);
+    $byProduct = [];
+    foreach ($extra as $e) {
+        $byProduct[(int)$e['product_id']][] = $e['barcode'];
+    }
+    foreach ($rows as &$r) {
+        $r['extra_barcodes'] = $byProduct[(int)$r['id']] ?? [];
+    }
+    unset($r);
+    return $rows;
+}
+
+function product_response(int $id): never
+{
+    $rows = with_extra_barcodes([Db::one('SELECT * FROM products WHERE id = ?', [$id])]);
+    Http::json(Shape::product($rows[0]));
+}
+
 // =======================================================================
 // GET /inventory/purchase-list
 // =======================================================================
@@ -54,13 +149,20 @@ Router::post('/supplies', function (): never {
     // paytida muzlatilgani uchun keyin tuzatish eski cheklarni tiklamaydi.
     $quantity = Http::reqNum($b, 'quantity', 'gt', 0, null, 'Soni');
     $buyPrice = Http::reqNum($b, 'buy_price', 'ge', 0, null, 'Kelish narxi');
+    // Ixtiyoriy: yangi partiya bilan sotish narxi ham o'zgargan bo'lsa.
+    // Yuborilmasa — joriy narx qoladi.
+    $sellPrice = Http::num($b, 'sell_price', null, 'gt', 0, null, 'Sotish narxi');
 
     $product = Db::one('SELECT * FROM products WHERE id = ?', [$productId]);
     if ($product === null) {
         fail(404, 'Product not found');
     }
+    $oldSell = Db::f($product['sell_price']);
+    if ($sellPrice !== null && abs($sellPrice - $oldSell) < 1e-9) {
+        $sellPrice = null;
+    }
 
-    $supplyId = Db::tx(function () use ($productId, $quantity, $buyPrice, $user, $product): int {
+    $supplyId = Db::tx(function () use ($productId, $quantity, $buyPrice, $sellPrice, $oldSell, $user, $product): int {
         $supplyId = Db::insert('supplies', [
             'product_id' => $productId,
             'quantity'   => $quantity,
@@ -74,6 +176,9 @@ Router::post('/supplies', function (): never {
             'UPDATE products SET stock = stock + ?, buy_price = ? WHERE id = ?',
             [$quantity, $buyPrice, $productId]
         );
+        if ($sellPrice !== null) {
+            Db::run('UPDATE products SET sell_price = ? WHERE id = ?', [$sellPrice, $productId]);
+        }
 
         Db::insert('stock_moves', [
             'product_id' => $productId,
@@ -85,7 +190,8 @@ Router::post('/supplies', function (): never {
         ]);
 
         Audit::log((int)$user['id'], 'OMBOR_KIRIM',
-            "Mahsulot: {$product['name']}. Soni: $quantity. Narxi: $buyPrice");
+            "Mahsulot: {$product['name']}. Soni: $quantity. Narxi: $buyPrice"
+            . ($sellPrice !== null ? ". Sotish narxi: $oldSell -> $sellPrice" : ''));
 
         return $supplyId;
     });
@@ -243,7 +349,7 @@ Router::post('/products/{product_id}/return', function (array $p): never {
             "Mahsulot: {$product['name']}. Soni: $quantity. Sabab: $reason");
     });
 
-    Http::json(Shape::product(Db::one('SELECT * FROM products WHERE id = ?', [$productId])));
+    product_response($productId);
 });
 
 // =======================================================================
@@ -266,7 +372,9 @@ Router::get('/products', function (): never {
         // Registrga sezgir bo'lmagan qidiruv. Oddiy LIKE PostgreSQL da
         // registrni hisobga oladi — serverga ko'chganda mahsulot qidiruvi
         // hech narsa topmay qo'yardi.
-        $where[] = '(' . Db::ilike('name') . ' OR ' . Db::ilike('barcode') . ')';
+        $where[] = '(' . Db::ilike('name') . ' OR ' . Db::ilike('barcode')
+            . ' OR id IN (SELECT product_id FROM product_barcodes WHERE ' . Db::ilike('barcode') . '))';
+        $params[] = "%$query%";
         $params[] = "%$query%";
         $params[] = "%$query%";
     }
@@ -299,7 +407,7 @@ Router::get('/products', function (): never {
     header('X-Total-Count: ' . $total);
     header('Access-Control-Expose-Headers: X-Total-Count');
 
-    Http::json(array_map(fn($r) => Shape::product($r), $rows));
+    Http::json(array_map(fn($r) => Shape::product($r), with_extra_barcodes($rows)));
 });
 
 // =======================================================================
@@ -313,7 +421,12 @@ Router::get('/barcode-lookup/{barcode}', function (array $p): never {
     }
 
     // 1) Avval O'Z bazamizda qaraymiz.
-    $existing = Db::one('SELECT id, name FROM products WHERE barcode = ?', [$barcode]);
+    $existing = Db::one('SELECT id, name FROM products WHERE barcode = ?', [$barcode])
+        ?? Db::one(
+            'SELECT p.id, p.name FROM product_barcodes pb JOIN products p ON p.id = pb.product_id
+             WHERE pb.barcode = ?',
+            [$barcode]
+        );
     if ($existing !== null) {
         Http::json([
             'found'      => true,
@@ -420,13 +533,14 @@ Router::post('/products', function (): never {
     // cheklov buzilishi ushlanmasdi va operator "Ichki server xatoligi"
     // degan tushunarsiz xabar olardi.
     if ($barcode !== null) {
-        $existing = Db::one('SELECT name FROM products WHERE barcode = ?', [$barcode]);
-        if ($existing !== null) {
-            fail(409, "Bu shtrix-kod band: \"{$existing['name']}\"");
+        $owner = barcode_owner($barcode);
+        if ($owner !== null) {
+            fail(409, "Bu shtrix-kod band: \"$owner\"");
         }
     }
+    $extraCodes = read_extra_barcodes($b, $barcode, null) ?? [];
 
-    $id = Db::tx(function () use ($b, $user, $name, $barcode, $buyPrice, $sellPrice, $stock): int {
+    $id = Db::tx(function () use ($b, $user, $name, $barcode, $extraCodes, $buyPrice, $sellPrice, $stock): int {
         $id = Db::insert('products', [
             'name'        => $name,
             'barcode'     => $barcode,
@@ -438,6 +552,7 @@ Router::post('/products', function (): never {
             'category_id' => Http::int($b, 'category_id'),
             'is_favorite' => Http::bool($b, 'is_favorite'),
         ]);
+        save_extra_barcodes($id, $extraCodes);
 
         if ($stock > 0) {
             Db::insert('stock_moves', [
@@ -451,11 +566,12 @@ Router::post('/products', function (): never {
         }
 
         Audit::log((int)$user['id'], 'YANGI_MAHSULOT',
-            "Mahsulot: $name. Sklad: $stock. Narx: $sellPrice");
+            "Mahsulot: $name. Sklad: $stock. Narx: $sellPrice"
+            . ($extraCodes ? ". Qo'shimcha kodlar: " . implode(', ', $extraCodes) : ''));
         return $id;
     });
 
-    Http::json(Shape::product(Db::one('SELECT * FROM products WHERE id = ?', [$id])));
+    product_response($id);
 });
 
 // =======================================================================
@@ -488,11 +604,13 @@ Router::put('/products/{product_id}', function (array $p): never {
 
     $barcode = Http::str($b, 'barcode', null, 30, 'Shtrix-kod');
     if ($barcode !== null && $barcode !== ($product['barcode'] ?? null)) {
-        $clash = Db::one('SELECT name FROM products WHERE barcode = ? AND id <> ?', [$barcode, $productId]);
+        $clash = barcode_owner($barcode, $productId);
         if ($clash !== null) {
-            fail(409, "Bu shtrix-kod band: \"{$clash['name']}\"");
+            fail(409, "Bu shtrix-kod band: \"$clash\"");
         }
     }
+    // null — forma bu maydonni yubormadi, mavjud kodlarga tegmaymiz.
+    $extraCodes = read_extra_barcodes($b, $barcode, $productId);
 
     $data = [
         'name'        => Http::reqStr($b, 'name', 300, 'Nomi'),
@@ -505,7 +623,7 @@ Router::put('/products/{product_id}', function (array $p): never {
         'is_favorite' => Http::bool($b, 'is_favorite', Db::b($product['is_favorite'])),
     ];
 
-    Db::tx(function () use ($data, $productId, $expected, $newStock, $oldStock, $user, $product): void {
+    Db::tx(function () use ($data, $productId, $expected, $newStock, $oldStock, $user, $product, $extraCodes): void {
         // Qoldiqni ATOMIK va SHARTLI yozamiz (compare-and-swap).
         //
         // Yuqoridagi tekshiruv formani ochgan paytdagi qiymatni solishtiradi,
@@ -526,6 +644,9 @@ Router::put('/products/{product_id}', function (array $p): never {
         }
 
         Db::update('products', $productId, $data);
+        if ($extraCodes !== null) {
+            save_extra_barcodes($productId, $extraCodes);
+        }
 
         if (abs($newStock - $oldStock) > 1e-9) {
             Db::insert('stock_moves', [
@@ -539,17 +660,18 @@ Router::put('/products/{product_id}', function (array $p): never {
         }
 
         Audit::log((int)$user['id'], 'MAHSULOT_TAHRIR',
-            "Mahsulot: {$data['name']} (ID: $productId). Sklad: $oldStock -> $newStock");
+            "Mahsulot: {$data['name']} (ID: $productId). Sklad: $oldStock -> $newStock"
+            . ($extraCodes ? ". Qo'shimcha kodlar: " . implode(', ', $extraCodes) : ''));
     });
 
-    Http::json(Shape::product(Db::one('SELECT * FROM products WHERE id = ?', [$productId])));
+    product_response($productId);
 });
 
 // =======================================================================
 // DELETE /inventory/products/{product_id}
 // =======================================================================
 Router::delete('/products/{product_id}', function (array $p): never {
-    $user = Auth::require(['admin', 'manager'], 'Only admins and managers can delete products');
+    $user = Auth::require(['admin', 'manager', 'warehouse'], "Mahsulotni o'chirishga ruxsat yo'q");
     $productId = Router::id($p, 'product_id');
 
     $product = Db::one('SELECT * FROM products WHERE id = ?', [$productId]);
@@ -578,6 +700,7 @@ Router::delete('/products/{product_id}', function (array $p): never {
         // Qoldiq harakatlari tarix emas, mahsulotning o'ziga tegishli —
         // ular ketishi mumkin.
         Db::run('DELETE FROM stock_moves WHERE product_id = ?', [$productId]);
+        Db::run('DELETE FROM product_barcodes WHERE product_id = ?', [$productId]);
         Db::delete('products', $productId);
         Audit::log((int)$user['id'], 'DELETE_PRODUCT',
             "Mahsulot o'chirildi: {$product['name']} (ID: $productId)");
@@ -633,5 +756,5 @@ Router::post('/products/{product_id}/toggle-favorite', function (array $p): neve
     // NOT uchala bazada ham ishlaydi (MySQL/SQLite da 1/0, PostgreSQL da bool).
     Db::run('UPDATE products SET is_favorite = NOT is_favorite WHERE id = ?', [$productId]);
 
-    Http::json(Shape::product(Db::one('SELECT * FROM products WHERE id = ?', [$productId])));
+    product_response($productId);
 });

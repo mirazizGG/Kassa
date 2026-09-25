@@ -32,7 +32,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { cn, formatThousands, parseThousands } from "@/lib/utils.js";
+import {
+  cn,
+  formatThousands,
+  parseThousands,
+  productBarcodes,
+} from "@/lib/utils.js";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -497,7 +502,9 @@ const POS = () => {
     if (event.key !== "Enter") return;
 
     const barcode = searchTerm.trim();
-    const exactMatch = products.find((product) => product.barcode === barcode);
+    const exactMatch = products.find((product) =>
+      productBarcodes(product).includes(barcode),
+    );
     if (!exactMatch) return;
 
     event.preventDefault();
@@ -609,7 +616,7 @@ const POS = () => {
       const matchesSearch =
         !needle ||
         p.name.toLowerCase().startsWith(needle) ||
-        p.barcode?.startsWith(needle);
+        productBarcodes(p).some((code) => code.startsWith(needle));
       const matchesCategory = selectedCategory
         ? p.category_id === selectedCategory
         : true;

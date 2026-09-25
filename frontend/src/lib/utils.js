@@ -33,3 +33,9 @@ export function escapeHtml(value) {
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 }
+
+// Mahsulotning BARCHA shtrix-kodlari: asosiy + qo'shimchalar (masalan
+// Agushaning har xil ta'mlari bitta mahsulotga biriktirilgan).
+export function productBarcodes(product) {
+  return [product?.barcode, ...(product?.extra_barcodes ?? [])].filter(Boolean);
+}
