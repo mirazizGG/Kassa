@@ -4,29 +4,32 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Kassa (a.k.a. SmartKassa) is a self-hosted Point of Sale system for a retail shop in Uzbekistan, with a Telegram bot attached. It covers sales, inventory, customer debt (CRM), supplier debt, employee shifts and attendance, finances, and audit logging.
+Kassa (a.k.a. SmartKassa) is a self-hosted Point of Sale system for a retail shop in Uzbekistan. It covers sales, inventory, customer debt (CRM), supplier debt, employee shifts and attendance, finances, and audit logging.
 
 **UI language is Uzbek.** All user-facing strings, error `detail` messages, and most code comments are Uzbek. Match that when adding anything a user or API client sees.
 
-**Tech Stack:** FastAPI (async) + SQLAlchemy 2.0 async + SQLite/aiosqlite + Aiogram 3.x on the backend; React 19 + Vite + React Router 7 + TanStack Query + Tailwind + Radix/shadcn on the frontend. Auth is JWT (python-jose) with passlib `pbkdf2_sha256`.
+**Tech Stack:** PHP 8.1+ with no framework and PDO (MySQL on the cPanel host; PostgreSQL and SQLite also supported) on the backend; React 19 + Vite + React Router 7 + TanStack Query + Tailwind + Radix/shadcn on the frontend. Auth is JWT with passlib-compatible `pbkdf2_sha256` hashes.
+
+**The backend used to be Python (FastAPI).** It was ported to PHP because Passenger on shared hosting held ~218 MB per process, and the Python code was removed from this repo on 2026-09-25 (an archive of it sits outside the repo). The port kept API paths, response shapes and all money logic identical, which is why the React app did not change. It dropped the Telegram bot and in-app self-update — those need a long-lived process. [php/README.md](php/README.md) explains the port and its measurements.
 
 ## Common Commands
 
 ```bash
-# Backend
-pip install -r backend/requirements.txt
-cd backend && python main.py          # or: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-python reset_admin.py "new-password"  # from backend/ — reset the primary admin (lockout recovery)
+# Backend (from php/)
+cp .env.example .env                 # local: APP_ENV=development, DATABASE_URL=sqlite:./market.db
+php bin/setup.php                    # create/upgrade schema + first admin — idempotent, re-run after ANY schema change
+php -S 127.0.0.1:8000 -t public public/index.php
+php bin/reset_admin.php "new-password" [username]   # lockout recovery
+php bin/backup.php                   # backup (cron on the server)
 
-# Frontend
-cd frontend && npm install
+# Frontend (from frontend/)
+npm install
 npm run dev      # Vite on 0.0.0.0:5173, proxies /api -> 127.0.0.1:8000
-npm run build    # emits frontend/dist, which the backend then serves itself
+npm run build    # emits frontend/dist; copy dist/* into php/public/ to serve it from PHP
 npm run lint     # ESLint — CI runs this
-npm run preview  # 0.0.0.0:4173
 ```
 
-`./run_project.ps1` starts both, but it first force-kills **every** `python`/`node`/`uvicorn` process on the machine. Only use it when that is acceptable.
+PHP is not installed on the dev machine. A portable build from windows.php.net unzipped anywhere works; enable `pdo_sqlite`, `sqlite3`, `mbstring`, `curl`, `openssl` in its `php.ini`.
 
 ### Verification gate
 
@@ -34,96 +37,74 @@ CI ([.github/workflows/verify.yml](.github/workflows/verify.yml)) runs, and so s
 
 ```bash
 cd frontend && npm ci && npm run lint && npm run build
-cd backend  && pip install -r requirements.txt -r requirements-dev.txt
-              python -m compileall -q .
-              python -m pytest
+cd php && find app bin public -name "*.php" -exec php -l {} \;
+          php bin/setup.php            # against a scratch SQLite .env
 ```
 
-`backend/tests/` covers the money paths — sale, refund, shift cash, debt, bonus,
-payment splits, delete guards, the shift-time UTC migration, and backup
-behaviour. They run against a temporary SQLite file (never `market.db`) through
-FastAPI's `TestClient`; `tests/conftest.py` sets the environment before
-`database`/`core` are imported, which matters because those read `os.getenv` at
-module level. **Add a test for any money-path change** — these are regression
-tests for real defects, and each one has a comment naming the defect it guards.
-
-The root-level `test_*.py` scripts predate this and are stale: `test_features.py`
-needs a running API plus `requests` (not in requirements), and `check_db_lock.py`
-has a hardcoded path from another machine. Ignore them.
+There is no automated test suite for the PHP backend (the Python one was removed with the Python code). Verify money-path changes by exercising the API with `curl` against a local server and a throwaway SQLite database, then reset it.
 
 ## Architecture
 
 ### Request path and deployment shape
 
-The backend serves the frontend. [main.py](backend/main.py) mounts `frontend/dist` at `/` through an `SPAStaticFiles` subclass that falls back to `index.html` so React Router deep links work. In production there is one origin and one port — no Node, no separate web server. Consequences:
+[php/public/index.php](php/public/index.php) is the single entry point. It serves the built React app (`php/public/index.html` + `assets/`, copied from `frontend/dist`, gitignored) and routes API calls. [Router.php](php/app/Router.php) loads only the route file matching the first path segment — `/sales/...` reads `app/routes/sales.php` and nothing else.
 
-- API routes are mounted at bare prefixes (`/auth`, `/sales`, `/pos`, …), **not** under `/api`. The `/api` prefix exists only in the Vite dev proxy, which strips it.
+- API routes are at bare prefixes (`/auth`, `/sales`, `/pos`, …), **not** under `/api`. The `/api` prefix exists only in the Vite dev proxy, which strips it.
 - `frontend/.env` is committed with `VITE_API_URL=/api` (dev, through the proxy); `frontend/.env.production` sets it empty (same-origin relative requests).
-- If `frontend/dist/index.html` is missing, `/` returns a JSON banner instead and the UI is unavailable.
+- Each request is a fresh PHP process. There is no in-memory state between requests; caches ([Cache.php](php/app/Cache.php)) and rate-limit counters live on disk under `php/logs/`.
 
 ### Backend layout
 
-- [main.py](backend/main.py) — lifespan: `init_db()`, APScheduler (debt check at 09:00, backups), bot polling task, bootstrap admin creation. Also the global exception handler (returns a generic Uzbek 500 message, logs the real error) and CORS.
-- [core.py](backend/core.py) — JWT, password hashing, `get_current_user`, the slowapi `limiter`, `PRIMARY_ADMIN_USERNAME`, env validation.
-- [database.py](backend/database.py) — engine, models, `init_db`, `get_db`.
-- [schemas.py](backend/schemas.py) — Pydantic DTOs (some routers, e.g. [suppliers.py](backend/routers/suppliers.py), define their own inline instead).
-- [bot.py](backend/bot.py) — Aiogram handlers plus `check_debts`.
-- [utils/backup.py](backend/utils/backup.py), [utils/telegram.py](backend/utils/telegram.py).
+- [bootstrap.php](php/app/bootstrap.php) — `.env` loading, constants (`PRIMARY_ADMIN_USERNAME`, `IS_PROD`), `fail()`, error handling.
+- [Auth.php](php/app/Auth.php) — JWT, password hashing, `Auth::user()` / `Auth::require([...roles])`, approver verification.
+- [Db.php](php/app/Db.php) — PDO wrapper: `one`/`all`/`val`/`run`/`insert`/`update`/`tx`, `ilike()`, driver differences.
+- [Http.php](php/app/Http.php) — request body/query parsing **with validation** (`reqNum`, `reqStr`, `int`, `bool`, …) and `Http::json()`.
+- [Shape.php](php/app/Shape.php) — response shapes. This is the API contract with the React app; field names and types must not drift.
+- [Schema.php](php/app/Schema.php) — tables, unique/plain indexes, one-shot migrations.
+- [Tz.php](php/app/Tz.php), [Audit.php](php/app/Audit.php), [Backup.php](php/app/Backup.php), [Xlsx.php](php/app/Xlsx.php).
 
-**Routers** ([backend/routers/](backend/routers/)) — prefix equals filename:
+**Routes** ([php/app/routes/](php/app/routes/)) — prefix equals filename:
 
-| Router | Owns |
+| Route file | Owns |
 |---|---|
 | `auth` | login/logout, employee CRUD, `GET /auth/attendance` |
 | `pos` | **shifts only** — open/close/active/history |
 | `sales` | **sale creation, listing, refunds**, top products, cashier daily summary |
-| `inventory` | products, categories, supplies, stock moves, barcode lookup, purchase list |
+| `inventory` | products (incl. extra barcodes), categories, supplies, stock moves, barcode lookup, purchase list |
 | `crm` | clients, debts, debt payments, per-client history |
 | `finance` | stats, charts, expenses, Excel/CSV exports |
 | `suppliers` | firms, receipts (with invoice image upload), supplier payments |
-| `audit` | audit log listing + Excel export; `log_action()` helper used everywhere |
+| `audit` | audit log listing + Excel export |
 | `settings` | store settings, manual backup trigger |
-| `system` | version, self-update check/start/status |
+| `system` | version; update endpoints answer that the feature is off |
 | `tasks` | employee tasks (admin-only; surfaced inside the Employees page) |
 
-Note `pos` vs `sales`: shift lifecycle is in `pos.py`, everything about a sale is in `sales.py`. New endpoints go in the matching domain router, never in `main.py`.
+Note `pos` vs `sales`: shift lifecycle is in `pos.php`, everything about a sale is in `sales.php`. New endpoints go in the matching route file.
 
-### Schema migrations
+**Products can have several barcodes.** `products.barcode` is the primary; `product_barcodes` holds extras (e.g. every flavour of one product sharing one name, price and stock). A code must be unique across *both* tables — `barcode_owner()` in `inventory.php` checks that. The product list attaches `extra_barcodes`; `Shape::product()` emits the key only when it was loaded, because the POS merges sale responses into its cached catalog and an empty list would wipe the codes. On the frontend use `productBarcodes()` from [lib/utils.js](frontend/src/lib/utils.js), never `product.barcode` alone.
 
-There is no Alembic. `init_db()` runs `Base.metadata.create_all`, then the
-`ensure_*` functions via `run_sync`. Two distinct kinds, and the difference matters:
+**Restocking** goes through `POST /inventory/supplies` (adds to stock atomically, updates `buy_price`, writes supply history), surfaced by [SupplyDialog.jsx](frontend/src/components/SupplyDialog.jsx) with barcode scanning. Editing the product's stock field is an *adjustment*, not a supply. The warehouse role may create, edit, restock and delete products; deletes are still refused (409) once a product has sales or supply history.
 
-- **Idempotent structure changes** — `ensure_employee_session_columns`, `ensure_sale_item_columns`, `ensure_product_columns`, `ensure_indexes`. Safe to re-run every startup. To add a column, add the model attribute **and** an `ensure_…` function that inspects the table and issues `ALTER TABLE … ADD COLUMN` (backfilling if needed), then register it in `init_db`. See `ensure_sale_item_columns` for the backfill pattern.
-- **One-shot data migrations** — these rewrite existing rows and would corrupt data if they ran twice. They must be guarded by the `schema_migrations` ledger: check `_migration_applied(conn, NAME)`, do the work, call `_mark_migration(conn, NAME)`. `migrate_shift_times_to_utc` is the worked example, and it branches on `conn.dialect.name` so the SQL is valid on both SQLite and PostgreSQL.
+### Schema changes
 
-`ensure_indexes` creates 21 indexes with `CREATE INDEX IF NOT EXISTS` (portable
-across both engines) on the columns actually filtered — sale/shift/payment dates
-and every foreign key. Note that adding `index=True` to a model column does
-**not** create the index on an existing table; `create_all` only creates missing
-tables. Add it to `_INDEXES` instead.
+There is no migration framework. `php bin/setup.php` → `Schema::createAll()` runs `CREATE TABLE IF NOT EXISTS`, then `ensureColumns()` (adds any column present in `Schema::tables()` but missing from the table) and `ensureIndexes()`. So:
+
+- **To add a table or column:** add it to `Schema::tables()`. **To add an index:** add it to `uniques()` / `indexes()`. Then run `setup.php` — locally and **on the server after deploying**, or the new code will query a table that does not exist.
+- **One-shot data migrations** rewrite rows and must be guarded by the `schema_migrations` ledger (`Schema::migrationApplied()` / `markMigration()`).
+- Types go through `sqlType()` so the DDL is valid on MySQL, PostgreSQL and SQLite; don't write raw engine-specific DDL.
 
 ### Timestamps
 
-**Everything in the database is naive UTC.** There is exactly one rule and one
-place that implements it: [utils/timezone.py](backend/utils/timezone.py).
+**Everything in the database is naive UTC**, implemented in [Tz.php](php/app/Tz.php):
 
-- Write "now" with `utc_now()`.
-- Turn a user-supplied shop calendar day into a query range with `day_start_utc()` / `day_end_utc()` / `today_start_utc()`.
-- The shop timezone is `SHOP_TIMEZONE` (default `Asia/Tashkent`), not hardcoded. The server's own clock is irrelevant — a UTC host is fine and expected.
-- On the frontend, the mirror of this is [lib/datetime.js](frontend/src/lib/datetime.js): `formatDateTime()` / `parseServerDate()`. The API returns naive UTC with no zone suffix, which JS would otherwise read as local time. **Never call `new Date(apiValue)` directly.**
+- Write "now" with `Tz::now()`.
+- Turn a shop calendar day into a query range with `Tz::dayStartUtc()` / `dayEndUtc()` / `todayStartUtc()`.
+- The shop timezone is `SHOP_TIMEZONE` (default `Asia/Tashkent`). The server's own clock is irrelevant.
+- On the frontend, the mirror is [lib/datetime.js](frontend/src/lib/datetime.js): `formatDateTime()` / `parseServerDate()`. The API returns naive UTC with no zone suffix (`Tz::iso()`), which JS would otherwise read as local time. **Never call `new Date(apiValue)` directly.**
 
-This used to be the worst trap in the codebase: `Shift.opened_at`/`closed_at`
-were written with bare `datetime.now()` (server local) while everything else was
-UTC, and `pos.py` bridged the two through a hardcoded Asia/Tashkent conversion
-that only worked while the server sat in Uzbekistan. Shift times are now UTC like
-everything else and the bridge is gone. Existing rows are converted once by
-`migrate_shift_times_to_utc` (see below). `tzdata` is a dependency because
-Windows lacks the IANA database.
+### Business rules (ported verbatim from the Python version)
 
-[audit.py](backend/routers/audit.py) and [finance.py](backend/routers/finance.py)
-still carry their own older day-boundary helpers (`local_day_boundary`,
-`local_today_start`). They are correct but duplicated — fold them into
-`utils/timezone.py` when you next touch those files.
+The sections below were written against the Python code and still describe the PHP behaviour — the port kept every rule. Read file references as: `backend/routers/X.py` → [php/app/routes/X.php](php/app/routes/), `core.py` → `Auth.php`/`bootstrap.php`, `database.py` / `ensure_*` → `Schema.php`, `utils/timezone.py` → `Tz.php`, `log_action()` → `Audit::log()`. Test names mentioned below refer to the removed Python suite.
 
 ### Roles
 
@@ -264,55 +245,11 @@ nothing was omitted.
 
 ### Backups
 
-[utils/backup.py](backend/utils/backup.py) `run_full_backup()` fans out to four
-independent destinations — local `backend/backups/`, `BACKUP_MIRROR_DIR`, a
-**separate private GitHub repo** (via the Contents API, overwriting one file so
-history holds the versions), and Telegram. Each is independent; one failing never
-blocks the others, and the scheduler job never raises.
+[Backup.php](php/app/Backup.php) writes a portable SQL dump through PDO (no `mysqldump`/`pg_dump`, which shared hosting rarely allows) into `php/backups/` (`BACKUP_DIR` overrides), plus an archive of `public/uploads/` so invoice photos survive a restore. Triggered by cron (`php bin/backup.php`, see its header) and manually via `POST /settings/backup` — **never after every sale**, because each run also prunes to `BACKUP_RETENTION`.
 
-The engine decides the format: SQLite uses `sqlite3.Connection.backup()` (WAL data
-included) producing `backup_*.db`; PostgreSQL shells out to `pg_dump --format=custom`
-producing `backup_*.dump`, restored with `pg_restore`. The source path comes from
-`DATABASE_URL`, not a hardcoded filename. `PG_DUMP_PATH` overrides the binary
-location. Anything globbing the backup directory must use `BACKUP_GLOB`, which
-matches both extensions.
+### Deployment
 
-Invoice photos are **not** in the database dump. `create_uploads_archive()`
-tars `backend/uploads/` into `uploads_*.tar.gz` beside the dump, with its own
-retention and its own glob (`UPLOAD_ARCHIVE_GLOB`) so the two retentions do not
-delete each other's files. Without this a restore brought back every
-`SupplyReceipt` row pointing at files that no longer existed — the supplier
-balance survived, the evidence for it did not. `UPLOAD_DIR` is anchored to the
-module location, not the working directory; it used to be the bare string
-`"uploads"`, so starting the app from the repo root silently stranded every
-previously uploaded invoice behind a 404.
-
-Triggers: scheduled at `BACKUP_HOURS`, on startup (skipped if a backup is under an
-hour old), and manually via `POST /settings/backup`. **Not after every sale** —
-that used to be the case, and because `create_backup()` calls `clean_old_backups()`,
-it collapsed `BACKUP_RETENTION` from "30 snapshots" to "the last 30 sales",
-deleting the morning's backup by lunchtime. `test_sale_does_not_trigger_a_backup`
-guards against it coming back.
-
-### Deployment (VPS + PostgreSQL)
-
-[deploy/](deploy/) holds everything for a server install and
-[deploy/DEPLOY.md](deploy/DEPLOY.md) is the step-by-step runbook. The pieces that
-matter architecturally:
-
-- **Two systemd units, not one.** `kassa-web` runs uvicorn with several workers and `RUN_BACKGROUND_JOBS=false`; `kassa-worker` runs a single process with it `true`. The scheduler, Telegram polling and the startup backup live in the lifespan, so with N workers you get N pollers (Telegram answers `409 Conflict` in a loop), N schedulers (every debtor gets N reminders) and N backup jobs writing the same directory. `/health` reports which role the process is playing.
-- **[migrate_to_postgres.py](backend/migrate_to_postgres.py)** moves the shop's live SQLite data across. Pointing `DATABASE_URL` at PostgreSQL is *not* enough — the app would bootstrap a fresh `miraziz` and open an empty shop. The script refuses unless `schema_migrations` on the source shows `migrate_shift_times_to_utc` applied (otherwise shift times would land 5 hours off), refuses a non-empty target, copies in `Base.metadata.sorted_tables` order so foreign keys hold, and — critically — runs `setval` on every `id` sequence afterwards. Without that last step PostgreSQL's sequences stay at 1 and the first new sale dies on a duplicate key. `--dry-run` reports row counts without writing.
-- **`ALLOW_SELF_UPDATE=false` on the server.** `POST /system/update` is now admin-only, and `Login.jsx` no longer fires it automatically — it used to, so any cashier logging in mid-trading silently triggered a `git pull`, frontend rebuild and restart. Updates run through [deploy/scripts/update.sh](deploy/scripts/update.sh) after closing.
-- `pg_dump` gets the password via `PGPASSWORD`, never argv, so it does not show up in `ps`.
-- Searches use `.icontains()`, which compiles to `ILIKE` on PostgreSQL and `lower() LIKE lower()` on SQLite. Plain `.contains()` is `LIKE`, which is case-insensitive only on SQLite — product and audit search would have gone quiet on the server.
-
-### Self-update
-
-[system.py](backend/routers/system.py) spawns `deploy/scripts/update.ps1` detached to `git pull`, rebuild, and restart, tracking progress in `deploy/run/update-status.json` polled by [UpdateOverlay.jsx](frontend/src/components/UpdateOverlay.jsx). Gated on `ALLOW_SELF_UPDATE`. **`deploy/` is not present in this checkout** (and `deploy/run/` is gitignored), so these endpoints will 500 here — that is expected outside the production server.
-
-### Telegram bot
-
-Runs in-process via `asyncio.create_task(dp.start_polling(bot))`, sharing the database and the `SessionLocal` factory. If `TELEGRAM_BOT_TOKEN` is unset, `bot` is `None` and the app starts anyway — guard any new bot usage with a truthiness check. The menu branches on whether the `telegram_id` belongs to a `Client` (balance, bonuses) or an `Employee` (clock in/out; admins additionally get broadcast, "who's working", and a data dump). Employee attendance is bot-only — there is no web clock-in. `check_debts` runs daily at 09:00 and reminds at 3/2/1 days before the due date, on the day, and after.
+The shop runs on cPanel shared hosting with MySQL. [php/DEPLOY.md](php/DEPLOY.md) is the runbook; `php/deploy/01-check.sh` and `02-switch.sh` performed the one-time switch from the old Python app on the server (they archive it, they don't delete it). [php/bin/migrate.php](php/bin/migrate.php) copies an old SQLite database into the configured one. After every deploy that touches `Schema.php`, run `php bin/setup.php` on the server.
 
 ### Frontend patterns
 
@@ -324,30 +261,25 @@ Runs in-process via `asyncio.create_task(dp.start_polling(bot))`, sharing the da
 
 ## Configuration
 
-Backend config is `backend/.env` (see [backend/.env.example](backend/.env.example), which is the authoritative annotated list):
+Backend config is `php/.env` (see [php/.env.example](php/.env.example), the authoritative annotated list):
 
-- `APP_ENV` — `development` (default) or `production`. In production, [core.py](backend/core.py) refuses to start without a non-sample `SECRET_KEY`.
-- `SECRET_KEY` — JWT signing key; falls back to a shared insecure dev key in development.
-- `PRIMARY_ADMIN_PASSWORD` — bootstrap password, used **only when no admin row exists at all**. Unset in development falls back to `DEV_ADMIN_PASSWORD` (`8038434`); unset in production raises rather than creating a weak account. The username `miraziz` is hardcoded and not configurable.
-- `DATABASE_URL` — defaults to `backend/market.db`. `postgres://`/`postgresql://` are rewritten to `+asyncpg`. SQLite connections get `journal_mode=WAL`, `synchronous=FULL` (durability over speed — this is a till) and `foreign_keys=ON`. **PostgreSQL is the right choice on a server**: SQLite allows one writer at a time, so two registers trading concurrently hit `database is locked`.
-- `SHOP_TIMEZONE` — default `Asia/Tashkent`. Drives every "day" boundary and all displayed times. The host clock is irrelevant.
-- `TRUST_PROXY_HEADERS` — default `false`. Enable only behind a reverse proxy that rewrites `X-Forwarded-For`.
-- `PG_DUMP_PATH` — override the `pg_dump` binary location for backups.
-- `ALLOWED_ORIGINS` — comma-separated CORS allowlist; defaults to `*` (warned about in production). If you set it, every origin you test from must be listed or requests fail with only a browser console error.
-- `BACKUP_ENABLED`, `BACKUP_HOURS` (comma-separated hours, default `12,22` — note the plural), `BACKUP_RETENTION`, `BACKUP_MIRROR_DIR`, `BACKUP_GITHUB_TOKEN`/`_REPO`/`_PATH`/`_BRANCH`.
-- `ALLOW_SELF_UPDATE` — enables the in-app update button.
-- `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ADMIN_CHAT_ID`.
+- `APP_ENV` — `development` or `production`. In production the app refuses to start without a strong `SECRET_KEY`, and errors are not shown.
+- `SECRET_KEY` — JWT signing key, at least 32 random characters.
+- `DATABASE_URL` — `mysql://…`, `postgresql://…` or `sqlite:/path/market.db`. URL-encode special characters in the password. `DB_PERSISTENT` toggles persistent PDO connections.
+- `PRIMARY_ADMIN_PASSWORD` — bootstrap password used by `setup.php` **only when no admin exists**. Unset in development falls back to `DEV_ADMIN_PASSWORD` (`8038434`); unset in production aborts. The username `miraziz` is hardcoded.
+- `SHOP_TIMEZONE` — default `Asia/Tashkent`.
+- `ALLOWED_ORIGINS` — CORS allowlist. `TRUST_PROXY_HEADERS` — only behind a proxy that rewrites `X-Forwarded-For`.
+- `BACKUP_ENABLED`, `BACKUP_RETENTION`, `BACKUP_DIR`.
+- `ALLOW_SELF_UPDATE` — keep `false`; the PHP port has no self-update.
 
 Frontend: `VITE_API_URL` in [api/axios.jsx](frontend/src/api/axios.jsx), with `??` (not `||`) so an explicit empty string means same-origin. `@` aliases `src/` ([vite.config.js](frontend/vite.config.js)).
 
-Pinned for an old Windows server: `numpy<2.1`, `pandas<2.3` (Python 3.9 compatibility). Don't bump these casually.
-
 ## Coding Conventions
 
-- **Python:** four-space indent, `snake_case`, `PascalCase` models/schemas, type annotations, async DB access throughout (`await db.execute(select(...))`, `.scalars().first()` / `.all()`, `.unique()` when `joinedload` touches a collection). Log meaningful mutations with `await log_action(db, user_id, "UPPER_SNAKE_UZBEK", details)` before the commit that persists them — `log_action` only flushes. Mutate money and stock with an atomic `UPDATE`, never `+=` on an ORM attribute. Write timestamps with `utc_now()` from [utils/timezone.py](backend/utils/timezone.py).
-- **React:** `PascalCase.jsx` for components and pages, camelCase for variables, Tailwind utilities, `cn()` from [lib/utils.js](frontend/src/lib/utils.js) for conditional classes. Render server timestamps with `formatDateTime()` from [lib/datetime.js](frontend/src/lib/datetime.js) — never bare `new Date(apiValue)`.
-- Never commit `*.db`/`*.db-shm`/`*.db-wal`, `.env` (except the `.example` files and the deliberately tracked `frontend/.env*`), `backend/uploads/`, or build output.
+- **PHP:** `declare(strict_types=1)`, four-space indent, static methods on `final` classes, route handlers as closures passed to `Router::get/post/put/delete`. Read input only through `Http::` helpers (they validate and 422 with an Uzbek message). Guard each handler with `Auth::require([...roles], ...)`. Wrap multi-statement writes in `Db::tx()` and call `Audit::log()` inside it. Mutate money and stock with an atomic `UPDATE … SET x = x + ?` (conditional `WHERE stock >= ?` when decrementing), never read-modify-write. Compare booleans with bound `true`/`false`, not `1`/`0` — PostgreSQL columns are real `BOOLEAN`. Use `Db::ilike()` for case-insensitive search. Return shapes through `Shape::`.
+- **React:** `PascalCase.jsx` for components and pages, camelCase for variables, Tailwind utilities, `cn()` from [lib/utils.js](frontend/src/lib/utils.js) for conditional classes. Render server timestamps with `formatDateTime()` from [lib/datetime.js](frontend/src/lib/datetime.js) — never bare `new Date(apiValue)`. The `react-hooks` lint rules are on, including `set-state-in-effect`; to reset a dialog on open, remount it with a `key` instead of setting state in an effect.
+- Never commit `*.db`, `.env` (except `.example` files and the deliberately tracked `frontend/.env*`), `php/public/assets/`, `php/public/index.html`, uploads, backups, or build output — `.gitignore` covers these.
 
 ## Documentation caveat
 
-[docs/README.md](docs/README.md) and [docs/README_USER_GUIDE.md](docs/README_USER_GUIDE.md) predate the React rewrite: they describe a Bootstrap/Jinja UI, `/api/*` endpoint paths, and hardcoded tokens in `main.py`, none of which exist any more. Treat them as historical. [docs/AGENTS.md](docs/AGENTS.md) is broadly accurate but references a `test_render_400.py` that is no longer in the tree.
+Everything under [docs/](docs/) and [OPTIMIZATION_TASKS.md](OPTIMIZATION_TASKS.md) was written for the Python backend. The business findings still apply; the file paths, commands and test names do not.

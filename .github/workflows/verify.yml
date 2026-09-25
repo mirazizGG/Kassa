@@ -22,19 +22,20 @@ jobs:
       - run: npm run lint
       - run: npm run build
 
-  backend:
+  php:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: backend
+        working-directory: php
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: shivammathur/setup-php@v2
         with:
-          python-version: '3.12'
-      - run: python -m pip install --upgrade pip
-      - run: pip install -r requirements.txt -r requirements-dev.txt
-      - run: python -m compileall -q .
-      # Pul harakati bo'yicha regressiya testlari. compileall faqat sintaksisni
-      # tekshiradi — bu yerda haqiqiy sotuv/vozvrat/smena yo'llari ishlatiladi.
-      - run: python -m pytest
+          php-version: '8.1'
+          extensions: pdo_sqlite, mbstring, curl
+      # Sintaksis tekshiruvi: har bir PHP fayl.
+      - run: find app bin public -name "*.php" -print0 | xargs -0 -n1 php -l
+      # Sxema bo'sh SQLite bazada xatosiz yaratiladimi.
+      - run: |
+          printf "APP_ENV=development\nSECRET_KEY=%s\nDATABASE_URL=sqlite:./ci.db\n" "$(php -r 'echo bin2hex(random_bytes(32));')" > .env
+          php bin/setup.php
