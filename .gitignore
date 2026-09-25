@@ -7,6 +7,9 @@ __pycache__/
 /build/
 develop-eggs/
 /dist/
+# React build — `npm run build` har safar yangi nomli fayllar yaratadi.
+# Serverga git orqali emas, php/public ichidagi arxiv orqali boradi.
+frontend/dist/
 downloads/
 eggs/
 .eggs/
