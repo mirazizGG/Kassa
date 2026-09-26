@@ -249,4 +249,59 @@ final class Backup
 
         return $removed;
     }
+
+    /**
+     * Nusxa faylini Telegramga yuboradi (TELEGRAM_BOT_TOKEN +
+     * TELEGRAM_ADMIN_CHAT_ID). Nusxa bazaning yonida yotsa, kompyuter yoki
+     * server bilan birga yo'qoladi — Telegramdagi nusxa undan tashqarida.
+     *
+     * @return string|null  xato matni, muvaffaqiyatda null
+     */
+    public static function sendTelegram(string $file, string $caption): ?string
+    {
+        $token = trim((string)env('TELEGRAM_BOT_TOKEN'));
+        $chatId = trim((string)env('TELEGRAM_ADMIN_CHAT_ID'));
+        if ($token === '' || $chatId === '') {
+            return 'TELEGRAM_BOT_TOKEN yoki TELEGRAM_ADMIN_CHAT_ID sozlanmagan';
+        }
+
+        $path = self::dir() . '/' . $file;
+        if (!is_file($path)) {
+            return "fayl topilmadi: $file";
+        }
+        // Bot API fayl chegarasi — 50 MB.
+        if (filesize($path) > 49 * 1024 * 1024) {
+            return "fayl 50 MB dan katta, Telegram qabul qilmaydi: $file";
+        }
+
+        $ch = curl_init("https://api.telegram.org/bot$token/sendDocument");
+        curl_setopt_array($ch, [
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => [
+                'chat_id'  => $chatId,
+                'caption'  => mb_substr($caption, 0, 1000),
+                'document' => new CURLFile($path, 'application/octet-stream', $file),
+            ],
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 180,
+        ]);
+        // Windows'da antivirus HTTPS ni o'z sertifikati bilan tekshiradi —
+        // u faqat Windows sertifikat omborida bor. Tekshiruv O'CHIRILMAYDI,
+        // faqat o'sha ombordan foydalaniladi.
+        if (PHP_OS_FAMILY === 'Windows' && defined('CURLSSLOPT_NATIVE_CA')) {
+            curl_setopt($ch, CURLOPT_SSL_OPTIONS, CURLSSLOPT_NATIVE_CA);
+        }
+        $body = curl_exec($ch);
+        $err = curl_error($ch);
+        curl_close($ch);
+
+        if ($body === false) {
+            return "tarmoq xatosi: $err";
+        }
+        $data = json_decode((string)$body, true);
+        if (!is_array($data) || empty($data['ok'])) {
+            return 'Telegram rad etdi: ' . ($data['description'] ?? substr((string)$body, 0, 200));
+        }
+        return null;
+    }
 }

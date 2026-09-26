@@ -63,7 +63,25 @@ if ($swept > 0) {
     $parts[] = "tozalandi=$swept";
 }
 
-echo "[$stamp] OK: " . implode(', ', $parts) . "\n";
-echo "  Eslatma: nusxani BOSHQA joyga ham ko'chiring — bazasi bilan bitta\n";
-echo "  serverda yotgan yagona nusxa nusxa emas.\n";
-exit(0);
+// Telegramga yuborish — nusxaning bazadan TASHQARIDAGI yagona joyi.
+// Sozlanmagan bo'lsa jim o'tkaziladi; xato bo'lsa nusxa baribir diskda qoladi.
+$exit = 0;
+if (trim((string)env('TELEGRAM_BOT_TOKEN')) !== '') {
+    $caption = "💾 Kassa zahira nusxasi\n"
+        . "📅 $stamp\n"
+        . "📊 {$result['tables']} jadval, {$result['rows']} qator, "
+        . round($result['bytes'] / 1024) . ' KB';
+    $err = Backup::sendTelegram($result['file'], $caption);
+    if ($err === null && $uploads !== null) {
+        $err = Backup::sendTelegram($uploads, "🧾 Nakladnoy rasmlari — $stamp");
+    }
+    if ($err === null) {
+        $parts[] = 'telegram=yuborildi';
+    } else {
+        $parts[] = "telegram=XATO ($err)";
+        $exit = 1;
+    }
+}
+
+echo "[$stamp] " . ($exit === 0 ? 'OK' : 'QISMAN') . ': ' . implode(', ', $parts) . "\n";
+exit($exit);
