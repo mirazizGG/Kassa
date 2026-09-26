@@ -763,9 +763,77 @@ function send_debt_reminders(): void
 // Zahira nusxa
 // =======================================================================
 
+/**
+ * Serverdan API orqali nusxani yuklab oladi (KASSA_API_URL + BACKUP_API_KEY).
+ * Qaytaradi: [vaqtinchalik fayl yo'li, fayl nomi] yoki null (uploads bo'sh).
+ */
+function download_backup(bool $uploads): ?array
+{
+    $url = rtrim((string)env('KASSA_API_URL'), '/') . '/settings/backup/download' . ($uploads ? '?uploads=1' : '');
+    $tmp = tempnam(sys_get_temp_dir(), 'kbk');
+    $fh = fopen($tmp, 'wb');
+    $name = null;
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_HTTPHEADER     => ['X-Backup-Key: ' . env('BACKUP_API_KEY', '')],
+        CURLOPT_FILE           => $fh,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_CONNECTTIMEOUT => 20,
+        CURLOPT_TIMEOUT        => 600,
+        CURLOPT_HEADERFUNCTION => function ($ch, $line) use (&$name) {
+            if (preg_match('/filename="([^"]+)"/i', $line, $m)) {
+                $name = basename($m[1]);
+            }
+            return strlen($line);
+        },
+    ]);
+    if (PHP_OS_FAMILY === 'Windows' && defined('CURLSSLOPT_NATIVE_CA')) {
+        curl_setopt($ch, CURLOPT_SSL_OPTIONS, CURLSSLOPT_NATIVE_CA);
+    }
+    $ok = curl_exec($ch);
+    $code = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    $err = curl_error($ch);
+    curl_close($ch);
+    fclose($fh);
+
+    if ($ok === false || $code !== 200) {
+        $body = $code >= 400 ? substr((string)@file_get_contents($tmp), 0, 300) : '';
+        @unlink($tmp);
+        if ($code === 204) {
+            return null;
+        }
+        throw new RuntimeException("server javobi $code $err $body");
+    }
+    return [$tmp, $name ?? ($uploads ? 'uploads.zip' : 'backup.sql.gz')];
+}
+
 function run_backup(): void
 {
     $chat = trim((string)env('TELEGRAM_ADMIN_CHAT_ID'));
+
+    // API rejimi: nusxani server o'zi tayyorlaydi, biz faqat yuklab olamiz.
+    if (trim((string)env('KASSA_API_URL')) !== '') {
+        try {
+            [$tmp, $name] = download_backup(false);
+            $size = round(filesize($tmp) / 1024);
+            $ok = $chat !== '' && Telegram::sendDocument($chat, $tmp, $name,
+                "💾 <b>Kassa zahira nusxasi</b>\n📅 " . shop_now('Y-m-d H:i') . "\n📦 $size KB (serverdan API orqali)");
+            @unlink($tmp);
+            $up = download_backup(true);
+            if ($up !== null) {
+                if ($ok) {
+                    Telegram::sendDocument($chat, $up[0], $up[1], '🧾 Nakladnoy rasmlari');
+                }
+                @unlink($up[0]);
+            }
+            bot_log("zahira (API): $name, $size KB" . ($ok ? ' — telegramga yuborildi' : ' — telegramga YUBORILMADI'));
+        } catch (Throwable $e) {
+            bot_log('zahira (API) XATO: ' . $e->getMessage());
+            notify_admins('❌ <b>Zahira nusxa olinmadi!</b>' . "\n" . h($e->getMessage()));
+        }
+        return;
+    }
+
     try {
         $result = Backup::run();
         $uploads = Backup::archiveUploads();

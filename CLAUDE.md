@@ -259,6 +259,8 @@ nothing was omitted.
 
 [Backup.php](php/app/Backup.php) writes a portable SQL dump through PDO (no `mysqldump`/`pg_dump`, which shared hosting rarely allows) into `php/backups/` (`BACKUP_DIR` overrides), plus an archive of `public/uploads/` so invoice photos survive a restore. Triggered by cron (`php bin/backup.php`, see its header), by the bot at `BACKUP_TIME`, and manually via `POST /settings/backup` — **never after every sale**, because each run also prunes to `BACKUP_RETENTION`. `bin/backup.php` and the bot both send the dump to `TELEGRAM_ADMIN_CHAT_ID`; that is the only copy that lives off the machine holding the database.
 
+`GET /settings/backup/download` streams a fresh dump (`?uploads=1` → the invoice archive, 204 if none). It accepts an admin JWT or an `X-Backup-Key` header equal to `BACKUP_API_KEY` (≥ 32 chars, `hash_equals`; only failed keys count toward a 10/hour per-IP limit, so the right key is never locked out). When the bot's `.env` has `KASSA_API_URL`, `run_backup()` downloads through this endpoint instead of dumping the database itself.
+
 ### Telegram bot
 
 [bin/bot.php](php/bin/bot.php) is a long-polling daemon meant to run on the **shop PC**, connecting to the server's MySQL remotely (cPanel Remote MySQL must allow the PC's IP). [php/bot-windows/](php/bot-windows/) installs it: `ORNATISH.bat` → `install.ps1` downloads portable PHP into `runtime/`, runs `bin/bot-check.php`, and registers the "Kassa bot" scheduled task (at startup as SYSTEM when elevated) that runs `start-bot.ps1`, which restarts the bot if it exits. The shipped zip (`kassa-bot-*.zip`, gitignored because it contains `.env`) is `app/` + `bin/` + those scripts at the root.

@@ -58,6 +58,32 @@ if (trim((string)env('TELEGRAM_ADMIN_CHAT_ID')) === '') {
     echo "  OGOHLANTIRISH: TELEGRAM_ADMIN_CHAT_ID bo'sh — zahira nusxa yuborilmaydi\n";
 }
 
+$api = rtrim(trim((string)env('KASSA_API_URL')), '/');
+if ($api !== '') {
+    echo "Zahira: server API orqali ($api)\n";
+    if (strlen((string)env('BACKUP_API_KEY', '')) < 32) {
+        echo "  XATO: BACKUP_API_KEY yo'q yoki 32 belgidan qisqa\n";
+        $ok = false;
+    }
+    $ch = curl_init("$api/health");
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 20]);
+    if (PHP_OS_FAMILY === 'Windows' && defined('CURLSSLOPT_NATIVE_CA')) {
+        curl_setopt($ch, CURLOPT_SSL_OPTIONS, CURLSSLOPT_NATIVE_CA);
+    }
+    curl_exec($ch);
+    $code = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    $err = curl_error($ch);
+    curl_close($ch);
+    if ($code === 200) {
+        echo "  OK (server javob berdi)\n";
+    } else {
+        echo "  XATO: server javob bermadi ($code $err)\n";
+        $ok = false;
+    }
+} else {
+    echo "Zahira: bazadan to'g'ridan-to'g'ri (KASSA_API_URL bo'sh)\n";
+}
+
 echo "Jadval: hisobot " . env('BOT_REPORT_TIME', '22:00') . ', zahira ' . env('BACKUP_TIME', '22:00')
     . ', qarz eslatmasi ' . env('DEBT_REMINDER_TIME', '09:00') . ' (' . SHOP_TIMEZONE . ")\n";
 

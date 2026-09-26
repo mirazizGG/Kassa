@@ -127,3 +127,69 @@ Router::post('/backup', function (): never {
         ],
     ]);
 });
+
+// =======================================================================
+// GET /settings/backup/download  — zahira nusxani FAYL qilib beradi
+// =======================================================================
+// Do'kon kompyuteridagi bot shu orqali nusxani oladi va Telegramga
+// yuboradi: bazani internetga ochish (Remote MySQL) shart emas.
+//
+// Kirish: `X-Backup-Key: <BACKUP_API_KEY>` sarlavhasi (bot uchun) yoki
+// admin tokeni. Kalit .env da bo'lmasa yoki 32 belgidan qisqa bo'lsa —
+// kalit bilan kirish o'chiq. Noto'g'ri kalit IP bo'yicha soatiga 10 marta.
+//
+// ?uploads=1 — baza o'rniga nakladnoy rasmlari arxivi (bo'lmasa 204).
+Router::get('/backup/download', function (): never {
+    $given = (string)($_SERVER['HTTP_X_BACKUP_KEY'] ?? '');
+    $key = (string)env('BACKUP_API_KEY', '');
+
+    if ($given !== '') {
+        // Faqat NOTO'G'RI urinishlar sanaladi — to'g'ri kalit hech qachon bloklanmaydi.
+        if (strlen($key) < 32 || !hash_equals($key, $given)) {
+            if (!RateLimit::hit('backupkey:' . Http::clientIp(), 10, 3600)) {
+                fail(429, "Juda ko'p urinish. Keyinroq qayta urinib ko'ring.");
+            }
+            fail(401, "Zahira kaliti noto'g'ri");
+        }
+        $userId = null;
+        $who = 'API kaliti';
+    } else {
+        $user = Auth::require(['admin'], 'Faqat admin zahira nusxani yuklab ola oladi');
+        $userId = (int)$user['id'];
+        $who = $user['username'];
+    }
+
+    if (!env_bool('BACKUP_ENABLED', true)) {
+        fail(409, "Zahira nusxa sozlamalarda o'chirilgan (BACKUP_ENABLED=false).");
+    }
+
+    require_once APP_DIR . '/Schema.php';
+    require_once APP_DIR . '/Backup.php';
+
+    try {
+        if (Http::bool($_GET, 'uploads')) {
+            $file = Backup::archiveUploads();
+            if ($file === null) {
+                Http::noContent();
+            }
+        } else {
+            $result = Backup::run();
+            $file = $result['file'];
+        }
+    } catch (Throwable $e) {
+        error_log('[kassa] zahira xatosi: ' . $e->getMessage());
+        fail(500, 'Zahira olishda xatolik: ' . $e->getMessage());
+    }
+
+    Db::tx(function () use ($userId, $who, $file): void {
+        Audit::log($userId, 'ZAHIRA_YUKLANDI', "Zahira yuklab olindi ($who): $file");
+    });
+
+    $path = Backup::dir() . '/' . $file;
+    header('Content-Type: application/octet-stream');
+    header('Content-Disposition: attachment; filename="' . $file . '"');
+    header('Content-Length: ' . filesize($path));
+    header('Cache-Control: no-store');
+    readfile($path);
+    exit;
+});

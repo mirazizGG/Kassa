@@ -44,6 +44,14 @@ TELEGRAM_ADMIN_CHAT_ID ga teng chatda chiqadi. Hisobot va ogohlantirishlar
 ikkalasiga ham boradi.
 
 
+ZAHIRA NUSXA QAYERDAN OLINADI
+-----------------------------
+.env da KASSA_API_URL berilgan bo'lsa — nusxani server o'zi tayyorlaydi,
+bot uni sayt orqali (HTTPS) yuklab olib Telegramga yuboradi. Buning uchun
+serverdagi .env dagi BACKUP_API_KEY shu yerdagisi bilan BIR XIL bo'lishi kerak.
+KASSA_API_URL bo'sh bo'lsa — bot nusxani bazadan o'zi oladi.
+
+
 VAQTLARNI O'ZGARTIRISH (.env)
 -----------------------------
   BOT_REPORT_TIME=22:00        kunlik hisobot
