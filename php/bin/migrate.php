@@ -89,8 +89,12 @@ try {
 // Bajarilmagan bo'lsa smena vaqtlari server lokal vaqtida yozilgan bo'ladi
 // va ko'chirilgandan keyin 5 soatga surilib ketadi.
 try {
-    $marker = $src->prepare("SELECT COUNT(*) FROM schema_migrations WHERE name = ?");
-    $marker->execute(['migrate_shift_times_to_utc']);
+    // Python versiyasi yozuvni SHIFT_UTC_MIGRATION = "2026_09_shift_times_to_utc"
+    // nomi bilan qo'ygan; funksiya nomi (migrate_shift_times_to_utc) ham
+    // qabul qilinadi. Ilgari faqat funksiya nomi qidirilardi va migratsiyasi
+    // bajarilgan haqiqiy baza ham rad etilardi.
+    $marker = $src->prepare("SELECT COUNT(*) FROM schema_migrations WHERE name IN (?, ?)");
+    $marker->execute(['2026_09_shift_times_to_utc', 'migrate_shift_times_to_utc']);
     $applied = (int)$marker->fetchColumn() > 0;
 } catch (Throwable) {
     $applied = false;
@@ -179,6 +183,22 @@ foreach ($tables as $table) {
     // Manzil jadvalning ustunlari — manbada bo'lmagan ustun NULL qoladi.
     $targetCols = array_keys(Schema::tables()[$table]);
 
+    // Yetim bog'lanishlar: eski SQLite tashqi kalitlarni tekshirmagan,
+    // shuning uchun o'chirilgan xodim/mahsulotga ishora qiluvchi satrlar
+    // bor (masalan audit_logs.user_id). Yangi baza ularni qabul qilmaydi.
+    // Satrning o'zi saqlanadi, faqat mavjud bo'lmagan bog'lanish NULL qilinadi.
+    // Ota jadvallar tashqi kalit tartibida OLDIN ko'chirilgan.
+    $fkParents = [];
+    foreach (Schema::tables()[$table] as $c => $spec) {
+        if (str_starts_with($spec, 'fk:')) {
+            $parent = substr($spec, 3);
+            $fkParents[$c] = array_flip(array_map('intval', array_column(
+                Db::all('SELECT id FROM ' . Db::quoteId($parent)), 'id'
+            )));
+        }
+    }
+    $detached = 0;
+
     $stmt = $src->query('SELECT * FROM ' . $table);
     $written = 0;
     $batch = [];
@@ -198,6 +218,10 @@ foreach ($tables as $table) {
                 if ($v !== null && str_ends_with($c, '_at') || $v !== null && in_array($c, ['date', 'due_date', 'debt_due_date'], true)) {
                     $v = str_replace('T', ' ', (string)$v);
                 }
+                if ($v !== null && isset($fkParents[$c]) && !isset($fkParents[$c][(int)$v])) {
+                    $v = null;
+                    $detached++;
+                }
                 $data[$c] = $v;
             }
             if ($data === []) {
@@ -216,7 +240,8 @@ foreach ($tables as $table) {
         exit(1);
     }
 
-    echo str_pad($table, 22) . str_pad((string)$srcCount, 10) . "$written ta yozildi\n";
+    echo str_pad($table, 22) . str_pad((string)$srcCount, 10) . "$written ta yozildi"
+        . ($detached > 0 ? " ($detached ta yetim bog'lanish NULL qilindi)" : '') . "\n";
 }
 
 echo str_repeat('-', 60) . "\n";
