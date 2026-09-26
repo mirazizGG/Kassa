@@ -10,7 +10,7 @@ Kassa (a.k.a. SmartKassa) is a self-hosted Point of Sale system for a retail sho
 
 **Tech Stack:** PHP 8.1+ with no framework and PDO (MySQL on the cPanel host; PostgreSQL and SQLite also supported) on the backend; React 19 + Vite + React Router 7 + TanStack Query + Tailwind + Radix/shadcn on the frontend. Auth is JWT with passlib-compatible `pbkdf2_sha256` hashes.
 
-**The backend used to be Python (FastAPI).** It was ported to PHP because Passenger on shared hosting held ~218 MB per process, and the Python code was removed from this repo on 2026-09-25 (an archive of it sits outside the repo). The port kept API paths, response shapes and all money logic identical, which is why the React app did not change. It dropped the Telegram bot and in-app self-update — those need a long-lived process. [php/README.md](php/README.md) explains the port and its measurements.
+**The backend used to be Python (FastAPI).** It was ported to PHP because Passenger on shared hosting held ~218 MB per process, and the Python code was removed from this repo on 2026-09-25 (an archive of it sits outside the repo). The port kept API paths, response shapes and all money logic identical, which is why the React app did not change. It dropped in-app self-update. The Telegram bot, which needs a long-lived process, came back as a separate CLI daemon (`php/bin/bot.php`, see "Telegram bot" below). [php/README.md](php/README.md) explains the port and its measurements.
 
 ## Common Commands
 
@@ -257,7 +257,17 @@ nothing was omitted.
 
 ### Backups
 
-[Backup.php](php/app/Backup.php) writes a portable SQL dump through PDO (no `mysqldump`/`pg_dump`, which shared hosting rarely allows) into `php/backups/` (`BACKUP_DIR` overrides), plus an archive of `public/uploads/` so invoice photos survive a restore. Triggered by cron (`php bin/backup.php`, see its header) and manually via `POST /settings/backup` — **never after every sale**, because each run also prunes to `BACKUP_RETENTION`.
+[Backup.php](php/app/Backup.php) writes a portable SQL dump through PDO (no `mysqldump`/`pg_dump`, which shared hosting rarely allows) into `php/backups/` (`BACKUP_DIR` overrides), plus an archive of `public/uploads/` so invoice photos survive a restore. Triggered by cron (`php bin/backup.php`, see its header), by the bot at `BACKUP_TIME`, and manually via `POST /settings/backup` — **never after every sale**, because each run also prunes to `BACKUP_RETENTION`. `bin/backup.php` and the bot both send the dump to `TELEGRAM_ADMIN_CHAT_ID`; that is the only copy that lives off the machine holding the database.
+
+### Telegram bot
+
+[bin/bot.php](php/bin/bot.php) is a long-polling daemon meant to run on the **shop PC**, connecting to the server's MySQL remotely (cPanel Remote MySQL must allow the PC's IP). [php/bot-windows/](php/bot-windows/) installs it: `ORNATISH.bat` → `install.ps1` downloads portable PHP into `runtime/`, runs `bin/bot-check.php`, and registers the "Kassa bot" scheduled task (at startup as SYSTEM when elevated) that runs `start-bot.ps1`, which restarts the bot if it exits. The shipped zip (`kassa-bot-*.zip`, gitignored because it contains `.env`) is `app/` + `bin/` + those scripts at the root.
+
+- Menus follow the old Python bot: client (balance, bonus), staff (clock in/out → `attendance`), admin (daily report, who's working, Excel data, broadcast via `copyMessage`). Registration matches the phone's last 9 digits against `employees.phone` first, then `clients.phone`; a contact is only accepted if `contact.user_id` equals the sender.
+- Daily jobs (`BOT_REPORT_TIME`, `BACKUP_TIME`, `DEBT_REMINDER_TIME`) run once per shop day, catching up the same day if the PC was off. Alerts (below-price sale, refund, shift closed with a discrepancy, low stock) are found by polling cursors, not audit text.
+- All state (update offset, last-run dates, alert cursors) is in `logs/bot-state.json`; on first run cursors start at "now" so history is not replayed. `logs/bot.lock` keeps one instance — two pollers on one token get Telegram 409.
+- `BOT_DRY_RUN=true` logs messages instead of sending them; `define('BOT_NO_LOOP', true)` before requiring `bot.php` loads its functions without the loop, for testing.
+- On the CLI, `Db::pdo()` throws on a failed connection instead of `Http::fail`, which printed JSON and exited 0; `Db::reset()` drops a stale connection.
 
 ### Deployment
 

@@ -129,3 +129,6 @@ php/public/favicon*
 php/public/uploads/invoices/*
 !php/public/uploads/invoices/.gitkeep
 kassa-php-*.tar.gz
+
+# Bot paketi (do'kon kompyuteri uchun) — ichida .env bor
+kassa-bot-*.zip

@@ -30,6 +30,16 @@ final class Db
     private static ?PDO $pdo = null;
     private static string $driver = '';
 
+    /**
+     * Ulanishni tashlab yuboradi — keyingi so'rov yangisini ochadi.
+     * Faqat uzoq ishlaydigan jarayon (bin/bot.php) uchun: masofadagi MySQL
+     * bo'sh turgan ulanishni uzib qo'yadi ("server has gone away").
+     */
+    public static function reset(): void
+    {
+        self::$pdo = null;
+    }
+
     public static function pdo(): PDO
     {
         if (self::$pdo !== null) {
@@ -60,6 +70,12 @@ final class Db
             // Xabarda DSN bo'ladi, DSN ichida parol bo'lishi mumkin —
             // foydalanuvchiga chiqarmaymiz, faqat jurnalga.
             error_log('[kassa] Bazaga ulanib bo\'lmadi: ' . $e->getMessage());
+            // Buyruq satrida (bot, zahira) — istisno: chaqiruvchi ushlab,
+            // qayta urinadi yoki "XATO" deb yozadi. Http::fail bu yerda
+            // JSON chiqarib jarayonni jimgina o'ldirardi.
+            if (PHP_SAPI === 'cli') {
+                throw new RuntimeException("Bazaga ulanib bo'lmadi");
+            }
             Http::fail(503, "Baza bilan aloqa yo'q. Biroz kutib qayta urinib ko'ring.");
         }
 
