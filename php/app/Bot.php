@@ -100,6 +100,21 @@ function find_client(int $tgId): ?array
     return Db::one('SELECT * FROM clients WHERE telegram_id = ?', [$tgId]);
 }
 
+/** Telefon raqami (oxirgi 9 raqam) bo'yicha xodim. Yozilish shakli muhim emas. */
+function employee_by_phone(string $phone): ?array
+{
+    $tail = substr(digits($phone), -9);
+    if (strlen($tail) < 9) {
+        return null;
+    }
+    foreach (Db::all('SELECT * FROM employees WHERE phone IS NOT NULL') as $e) {
+        if (substr(digits($e['phone']), -9) === $tail) {
+            return $e;
+        }
+    }
+    return null;
+}
+
 function attendance_status(int $employeeId): string
 {
     $last = Db::one(
@@ -241,6 +256,29 @@ function cmd_start(int $chatId, int $tgId, array &$conv): void
     }
     $client = find_client($tgId);
     if ($client !== null) {
+        // Xodim botga telefoni saytga yozilmasidan OLDIN kirgan bo'lsa, mijoz
+        // bo'lib qolgan. Admin keyin telefonini qo'shgan bo'lsa — endi
+        // xodimga o'tkazamiz. Faqat hali hech kimga bog'lanmagan xodim:
+        // boshqa odamning bog'langan hisobini tortib olib bo'lmasin.
+        $e = employee_by_phone((string)$client['phone']);
+        if ($e !== null && empty($e['telegram_id'])) {
+            Db::tx(function () use ($e, $client, $tgId): void {
+                Db::run('UPDATE clients SET telegram_id = NULL WHERE id = ?', [(int)$client['id']]);
+                Db::run('UPDATE employees SET telegram_id = ?, full_name = COALESCE(full_name, ?) WHERE id = ?',
+                    [$tgId, $client['name'], (int)$e['id']]);
+            });
+            bot_log("mijoz xodimga o'tkazildi: {$e['username']} <- $tgId");
+            $e = find_employee($tgId);
+            if (!Db::b($e['is_active'])) {
+                Telegram::send($chatId, "Hisobingiz bloklangan. Admin bilan bog'laning.");
+                return;
+            }
+            Telegram::send($chatId,
+                'Siz tizimda xodim sifatida tanildingiz: <b>' . h(emp_name($e)) . "</b> ✅\n"
+                . 'Endi bot orqali ish vaqtingizni belgilashingiz mumkin.',
+                menu_for($e['role'], attendance_status((int)$e['id'])));
+            return;
+        }
         Telegram::send($chatId, 'Salom, <b>' . h($client['name']) . "</b>! 👋\nDo'konimizga xush kelibsiz.",
             menu_for('client'));
         return;
@@ -293,17 +331,16 @@ function on_name(int $chatId, int $tgId, string $name, array &$conv): void
     unset($conv[$chatId]);
 
     // 1. Xodimmi? — telefonning oxirgi 9 raqami bo'yicha.
-    foreach (Db::all('SELECT * FROM employees WHERE phone IS NOT NULL') as $e) {
-        if ($tail !== '' && substr(digits($e['phone']), -9) === $tail) {
-            Db::run('UPDATE employees SET telegram_id = NULL WHERE telegram_id = ?', [$tgId]);
-            Db::run('UPDATE employees SET telegram_id = ?, full_name = ? WHERE id = ?', [$tgId, $name, (int)$e['id']]);
-            bot_log("xodim bog'landi: {$e['username']} <- $tgId");
-            Telegram::send($chatId,
-                'Siz tizimda xodim sifatida tanildingiz: <b>' . h($name) . "</b> ✅\n"
-                . 'Endi bot orqali ish vaqtingizni belgilashingiz mumkin.',
-                menu_for($e['role'], attendance_status((int)$e['id'])));
-            return;
-        }
+    $e = employee_by_phone($phone);
+    if ($e !== null) {
+        Db::run('UPDATE employees SET telegram_id = NULL WHERE telegram_id = ?', [$tgId]);
+        Db::run('UPDATE employees SET telegram_id = ?, full_name = ? WHERE id = ?', [$tgId, $name, (int)$e['id']]);
+        bot_log("xodim bog'landi: {$e['username']} <- $tgId");
+        Telegram::send($chatId,
+            'Siz tizimda xodim sifatida tanildingiz: <b>' . h($name) . "</b> ✅\n"
+            . 'Endi bot orqali ish vaqtingizni belgilashingiz mumkin.',
+            menu_for($e['role'], attendance_status((int)$e['id'])));
+        return;
     }
 
     // 2. Mijoz: mavjud bo'lsa bog'laymiz, bo'lmasa yaratamiz.
