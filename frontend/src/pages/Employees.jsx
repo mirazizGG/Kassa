@@ -122,6 +122,8 @@ const Employees = () => {
     // Online/offline holati jonli yangilanib tursin.
     refetchInterval: 30 * 1000,
   });
+  // Faollik ustuni — faqat admin javobida is_online keladi.
+  const showOnline = employees.some((e) => "is_online" in e);
 
   const { data: tasks = [], isLoading: isTasksLoading } = useQuery({
     queryKey: ["tasks"],
@@ -513,13 +515,14 @@ const Employees = () => {
                     <TableHead>Lavozim</TableHead>
                     <TableHead>Telefon</TableHead>
                     <TableHead>Holat</TableHead>
+                    {showOnline && <TableHead>Faollik</TableHead>}
                     <TableHead className="text-right pr-6">Amallar</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {isEmployeesLoading ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center h-24">
+                      <TableCell colSpan={showOnline ? 7 : 6} className="text-center h-24">
                         Yuklanmoqda...
                       </TableCell>
                     </TableRow>
@@ -559,9 +562,10 @@ const Employees = () => {
                             />
                             {emp.is_active ? "Aktiv" : "Bloklangan"}
                           </span>
-                          {/* Online/offline — faqat admin javobida keladi */}
-                          {"is_online" in emp && (
-                            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                        </TableCell>
+                        {showOnline && (
+                          <TableCell>
+                            <div className="flex flex-wrap items-center gap-1.5">
                               {emp.is_online ? (
                                 <Badge className="bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/15 border-0 text-[10px] gap-1">
                                   <span className="relative flex h-1.5 w-1.5">
@@ -588,8 +592,8 @@ const Employees = () => {
                                 </span>
                               )}
                             </div>
-                          )}
-                        </TableCell>
+                          </TableCell>
+                        )}
                         <TableCell className="text-right pr-6">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
