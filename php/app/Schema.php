@@ -38,6 +38,8 @@ final class Schema
                 'telegram_id'        => 'bigint',
                 'session_token'      => 'str',
                 'session_expires_at' => 'dt',
+                // Oxirgi faollik (online/offline uchun). Auth::user() yangilaydi.
+                'last_seen_at'       => 'dt',
             ],
             'categories' => [
                 'id'   => 'pk',

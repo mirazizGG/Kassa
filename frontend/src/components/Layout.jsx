@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -25,6 +25,15 @@ const Layout = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+
+  // Sayt ochiq ekanini serverga bildirib turamiz — admin xodimlar
+  // ro'yxatida online/offline holatini ko'radi.
+  useEffect(() => {
+    const ping = () => api.post("/auth/ping").catch(() => {});
+    ping();
+    const timer = setInterval(ping, 60 * 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const handleLogout = async () => {
     try {

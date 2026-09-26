@@ -231,6 +231,14 @@ final class Auth
         }
 
         $user['id'] = (int)$user['id'];
+
+        // Oxirgi faollik — admin xodimlar ro'yxatida online/offline ko'radi.
+        // Har so'rovda yozmaslik uchun daqiqasiga ko'pi bilan bir marta.
+        $seen = Tz::parse($user['last_seen_at'] ?? null);
+        if ($seen === null || $seen < new DateTimeImmutable('-60 seconds', new DateTimeZone('UTC'))) {
+            Db::run('UPDATE employees SET last_seen_at = ? WHERE id = ?', [Tz::now(), $user['id']]);
+        }
+
         return self::$user = $user;
     }
 

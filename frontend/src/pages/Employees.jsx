@@ -119,6 +119,8 @@ const Employees = () => {
       const res = await api.get("/auth/employees");
       return res.data;
     },
+    // Online/offline holati jonli yangilanib tursin.
+    refetchInterval: 30 * 1000,
   });
 
   const { data: tasks = [], isLoading: isTasksLoading } = useQuery({
@@ -557,6 +559,36 @@ const Employees = () => {
                             />
                             {emp.is_active ? "Aktiv" : "Bloklangan"}
                           </span>
+                          {/* Online/offline — faqat admin javobida keladi */}
+                          {"is_online" in emp && (
+                            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                              {emp.is_online ? (
+                                <Badge className="bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/15 border-0 text-[10px] gap-1">
+                                  <span className="relative flex h-1.5 w-1.5">
+                                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-75" />
+                                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                                  </span>
+                                  Online
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                                  Offline
+                                </Badge>
+                              )}
+                              {emp.on_shift && (
+                                <Badge className="bg-amber-500/15 text-amber-600 hover:bg-amber-500/15 border-0 text-[10px]">
+                                  Smenada
+                                </Badge>
+                              )}
+                              {!emp.is_online && (
+                                <span className="text-[11px] text-muted-foreground">
+                                  {emp.last_seen_at
+                                    ? `oxirgi: ${formatDateTime(emp.last_seen_at)}`
+                                    : "hali kirmagan"}
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </TableCell>
                         <TableCell className="text-right pr-6">
                           <DropdownMenu>

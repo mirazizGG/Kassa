@@ -162,6 +162,12 @@ the stock the edit form loaded; the server 409s if it no longer matches. The for
 previously wrote its stale value back, silently undoing every sale made while the
 dialog was open and logging a fake "adjustment" against the manager.
 
+**Online/offline.** `Auth::user()` stamps `employees.last_seen_at` (at most once a
+minute), and `Layout.jsx` calls `POST /auth/ping` every 60 s while the site is open.
+`GET /auth/employees` adds `is_online` (live session and seen within 5 min),
+`last_seen_at` and `on_shift` for **admins only**; the Employees page refetches
+every 30 s.
+
 **Admin can delete anything; history is detached, never deleted.** The owner
 wants the admin to have full power, so deleting a client, product or employee
 with history is allowed for `admin`. Before the row goes, every referencing

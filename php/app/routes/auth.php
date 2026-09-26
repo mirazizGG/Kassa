@@ -181,7 +181,34 @@ Router::get('/employees', function (): never {
         $rows = Db::all('SELECT * FROM employees ORDER BY id');
     }
 
-    Http::json(array_map(fn($r) => Shape::employee($r), $rows));
+    $out = array_map(fn($r) => Shape::employee($r), $rows);
+
+    // Online/offline va smena holati — faqat admin uchun.
+    // Online = sessiyasi ochiq VA oxirgi 5 daqiqada faol bo'lgan.
+    if ($current['role'] === 'admin') {
+        $onShift = array_flip(array_map('intval', array_column(
+            Db::all("SELECT DISTINCT cashier_id FROM shifts WHERE status = 'open' AND cashier_id IS NOT NULL"),
+            'cashier_id'
+        )));
+        $cutoff = new DateTimeImmutable('-5 minutes', new DateTimeZone('UTC'));
+        foreach ($rows as $i => $r) {
+            $seen = Tz::parse($r['last_seen_at'] ?? null);
+            $out[$i]['last_seen_at'] = Tz::iso($r['last_seen_at'] ?? null);
+            $out[$i]['is_online'] = !empty($r['session_token']) && $seen !== null && $seen >= $cutoff;
+            $out[$i]['on_shift'] = isset($onShift[(int)$r['id']]);
+        }
+    }
+
+    Http::json($out);
+});
+
+// =======================================================================
+// POST /auth/ping — sayt ochiq ekanini bildiradi (online holati uchun).
+// Auth::user() last_seen_at ni o'zi yangilaydi.
+// =======================================================================
+Router::post('/ping', function (): never {
+    Auth::user();
+    Http::noContent();
 });
 
 // =======================================================================
