@@ -755,76 +755,24 @@ function run_backup(): void
 // Ogohlantirishlar
 // =======================================================================
 
-/** Birinchi ishga tushishda kursorlarni "hozir" ga qo'yamiz — eski tarix yog'ilmasin. */
-function alerts_init(array &$state): void
-{
-    if (isset($state['alerts'])) {
-        return;
-    }
-    $threshold = (int)(store_settings()['low_stock_threshold'] ?? 5);
-    $state['alerts'] = [
-        'last_sale_id'  => (int)Db::val('SELECT COALESCE(MAX(id), 0) FROM sales', [], 0),
-        // Bo'sh satr emas: MySQL DATETIME ni '' bilan solishtirishni yoqtirmaydi.
-        'refund_cursor' => (string)(Db::val('SELECT MAX(refunded_at) FROM sales') ?? '1970-01-01 00:00:00'),
-        'shift_cursor'  => (string)(Db::val('SELECT MAX(closed_at) FROM shifts') ?? '1970-01-01 00:00:00'),
-        'low_stock'     => array_map('intval', array_column(Db::all(
-            'SELECT id FROM products WHERE stock <= ? AND (is_infinite IS NULL OR is_infinite = ?)',
-            [$threshold, false]
-        ), 'id')),
-    ];
-}
-
+/**
+ * Adminga darhol boradigan ogohlantirish — faqat kamomad/ortiqcha bilan
+ * yopilgan smena. Vozvrat, narxdan arzon sotuv va tugayotgan mahsulot
+ * atayin yo'q: admin ularni saytdan ko'radi (2026-09-26 da so'ralgan).
+ *
+ * Birinchi ishga tushishda kursor "hozir" ga qo'yiladi — eski tarix yog'ilmasin.
+ */
 function check_alerts(array &$state): void
 {
-    alerts_init($state);
+    if (!isset($state['alerts']['shift_cursor'])) {
+        // Bo'sh satr emas: MySQL DATETIME ni '' bilan solishtirishni yoqtirmaydi.
+        $state['alerts'] = [
+            'shift_cursor' => (string)(Db::val('SELECT MAX(closed_at) FROM shifts') ?? '1970-01-01 00:00:00'),
+        ];
+        return;
+    }
     $a = &$state['alerts'];
 
-    // 1. Narxdan past sotuv (menejer tasdig'i bilan o'tgan chegirma).
-    $newSales = Db::all(
-        "SELECT s.id, s.total_amount, s.created_at, e.full_name, e.username
-         FROM sales s LEFT JOIN employees e ON e.id = s.cashier_id
-         WHERE s.id > ? ORDER BY s.id",
-        [(int)$a['last_sale_id']]
-    );
-    foreach ($newSales as $sale) {
-        $a['last_sale_id'] = max((int)$a['last_sale_id'], (int)$sale['id']);
-        $below = Db::all(
-            'SELECT p.name, si.quantity, si.price, p.sell_price FROM sale_items si
-             JOIN products p ON p.id = si.product_id
-             WHERE si.sale_id = ? AND si.price < p.sell_price - 0.01',
-            [(int)$sale['id']]
-        );
-        if ($below === []) {
-            continue;
-        }
-        $lines = [];
-        $lost = 0.0;
-        foreach ($below as $b) {
-            $d = (Db::f($b['sell_price']) - Db::f($b['price'])) * Db::f($b['quantity']);
-            $lost += $d;
-            $lines[] = '• ' . h($b['name']) . ': ' . money(Db::f($b['price'])) . ' (narxi ' . money(Db::f($b['sell_price']))
-                . ') × ' . qty(Db::f($b['quantity']));
-        }
-        notify_admins("💸 <b>Chegirma bilan sotuv</b> — chek #{$sale['id']}\n"
-            . 'Kassir: ' . h($sale['full_name'] ?: $sale['username']) . ', ' . shop_time($sale['created_at']) . "\n"
-            . implode("\n", $lines) . "\nJami chegirma: <b>" . money($lost) . '</b>');
-    }
-
-    // 2. Vozvratlar.
-    foreach (Db::all(
-        'SELECT s.id, s.total_amount, s.refunded_at, s.created_at, e.full_name, e.username
-         FROM sales s LEFT JOIN employees e ON e.id = s.cashier_id
-         WHERE s.refunded_at IS NOT NULL AND s.refunded_at > ? ORDER BY s.refunded_at',
-        [$a['refund_cursor']]
-    ) as $r) {
-        $a['refund_cursor'] = (string)$r['refunded_at'];
-        notify_admins("↩️ <b>Vozvrat</b> — chek #{$r['id']}\n"
-            . 'Summa: <b>' . money(Db::f($r['total_amount'])) . "</b>\n"
-            . 'Sotilgan: ' . shop_time($r['created_at'], 'd.m H:i') . ', kassir ' . h($r['full_name'] ?: ($r['username'] ?? '-')) . "\n"
-            . 'Qaytarilgan: ' . shop_time($r['refunded_at'], 'd.m H:i'));
-    }
-
-    // 3. Kamomad/ortiqcha bilan yopilgan smena.
     foreach (Db::all(
         'SELECT s.*, e.full_name, e.username FROM shifts s LEFT JOIN employees e ON e.id = s.cashier_id
          WHERE s.closed_at IS NOT NULL AND s.closed_at > ? ORDER BY s.closed_at',
@@ -835,27 +783,18 @@ function check_alerts(array &$state): void
         if (abs($diff) <= 0.01) {
             continue;
         }
-        notify_admins(($diff < 0 ? '🔴 <b>Kamomad bilan yopilgan smena</b>' : '🟡 <b>Ortiqcha pul bilan yopilgan smena</b>') . "\n"
-            . 'Kassir: ' . h($sh['full_name'] ?: ($sh['username'] ?? '-')) . "\n"
-            . 'Kutilgan: ' . money(Db::f($sh['expected_cash'] ?? 0)) . "\n"
-            . 'Sanalgan: ' . money(Db::f($sh['closing_balance'] ?? 0)) . "\n"
+        notify_admins(($diff < 0 ? '🔴 <b>Kamomad bilan yopilgan smena</b>' : '🟡 <b>Ortiqcha pul bilan yopilgan smena</b>') . "
+"
+            . 'Kassir: ' . h($sh['full_name'] ?: ($sh['username'] ?? '-')) . "
+"
+            . 'Kutilgan: ' . money(Db::f($sh['expected_cash'] ?? 0)) . "
+"
+            . 'Sanalgan: ' . money(Db::f($sh['closing_balance'] ?? 0)) . "
+"
             . 'Farq: <b>' . money($diff) . '</b>'
-            . (!empty($sh['note']) ? "\nIzoh: «" . h($sh['note']) . '»' : ''));
+            . (!empty($sh['note']) ? "
+Izoh: «" . h($sh['note']) . '»' : ''));
     }
-
-    // 4. Tugayotgan mahsulotlar — har biri uchun bir marta, to'ldirilguncha.
-    $threshold = (int)(store_settings()['low_stock_threshold'] ?? 5);
-    $lowNow = Db::all(
-        'SELECT id, name, stock, unit FROM products WHERE stock <= ? AND (is_infinite IS NULL OR is_infinite = ?)',
-        [$threshold, false]
-    );
-    $known = array_flip($a['low_stock']);
-    $fresh = array_filter($lowNow, fn($p) => !isset($known[(int)$p['id']]));
-    if ($fresh !== []) {
-        notify_admins("📉 <b>Tugayotgan mahsulotlar:</b>\n"
-            . implode("\n", array_map(fn($p) => '• ' . h($p['name']) . ' — qoldi ' . qty(Db::f($p['stock'])) . ' ' . h($p['unit'] ?? ''), $fresh)));
-    }
-    $a['low_stock'] = array_map(fn($p) => (int)$p['id'], $lowNow);
 }
 
 // =======================================================================

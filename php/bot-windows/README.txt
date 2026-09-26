@@ -10,7 +10,7 @@ Bot nima qiladi:
   • Har kuni 22:00 — adminga kunlik hisobot (savdo, foyda, kassirlar, top mahsulotlar)
   • Har kuni 22:00 — bazaning zahira nusxasi Telegramga
   • Har kuni 09:00 — qarzdor mijozlarga eslatma, adminga muddati o'tganlar ro'yxati
-  • Darhol — vozvrat, kamomadli smena, narxdan arzon sotuv, tugayotgan mahsulot
+  • Darhol — smena kamomad yoki ortiqcha pul bilan yopilsa
   • Xodimlar botda "Ishga kelish / Ishdan ketish" bosadi, admin "Kim ishda?" ni ko'radi
   • Mijozlar botda o'z balansi va bonusini ko'radi
   • Admin menyusi: Bugungi hisobot, Kim ishda?, Ma'lumotlar (Excel), Reklama yuborish
