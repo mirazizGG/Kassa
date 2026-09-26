@@ -92,6 +92,16 @@ final class Shape
 
     public static function saleItem(array $r, ?array $product = null): array
     {
+        // O'chirilgan mahsulot: chekda saqlangan nomini ko'rsatamiz.
+        if ($product === null && !empty($r['product_name'])) {
+            return [
+                'product_id' => null,
+                'quantity'   => Db::f($r['quantity'] ?? 0),
+                'price'      => Db::f($r['price'] ?? 0),
+                'id'         => Db::i($r['id']),
+                'product'    => ['id' => null, 'name' => $r['product_name'] . " (o'chirilgan)"],
+            ];
+        }
         return [
             'product_id' => isset($r['product_id']) ? Db::i($r['product_id']) : null,
             'quantity'   => Db::f($r['quantity'] ?? 0),

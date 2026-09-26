@@ -148,6 +148,9 @@ final class Schema
                 // Sotuv paytidagi tannarx. Keyin kirim narxi o'zgarsa,
                 // o'tmishdagi foyda surilib ketmasligi uchun.
                 'buy_price'  => 'money',
+                // Mahsulot o'chirilganda uning nomi shu yerga ko'chiriladi,
+                // eski cheklarda tovar nomi yo'qolmasligi uchun.
+                'product_name' => 'str',
             ],
             'expenses' => [
                 'id'             => 'pk',

@@ -679,31 +679,35 @@ Router::delete('/products/{product_id}', function (array $p): never {
         fail(404, 'Mahsulot topilmadi');
     }
 
-    // Tarixga bog'langan mahsulotni O'CHIRIB BO'LMAYDI.
+    // Tarixga bog'langan mahsulotni faqat ADMIN o'chira oladi.
     //
-    // Ilgari tekshiruv yo'q edi. Sotuv satrlari "yetim" bo'lib qolardi,
-    // keyin baza o'sha id ni yangi mahsulotga qayta berib yuborardi va eski
-    // cheklar boshqa tovarga ishora qila boshlardi. Bundan tashqari
-    // hisobotdagi tannarx JOIN orqali olingani uchun o'chirilgan
-    // mahsulotning tannarxi yo'qolib, sof foyda sun'iy ravishda oshardi.
+    // Cheklar buzilmasligi uchun o'chirishdan oldin har bir sotuv satriga
+    // mahsulot nomi va (bo'sh bo'lsa) tannarxi ko'chiriladi, keyin
+    // product_id uziladi. Aks holda eski cheklarda tovar nomi yo'qolar,
+    // hisobotdagi tannarx JOIN orqali olingani uchun esa sof foyda sun'iy
+    // ravishda oshardi.
     $sold = (int)Db::val('SELECT COUNT(*) FROM sale_items WHERE product_id = ?', [$productId], 0);
-    if ($sold > 0) {
-        fail(409, "Bu mahsulot $sold ta chekda ishlatilgan — o'chirib bo'lmaydi. "
-            . 'Sotuvdan olib qo\'yish uchun qoldiqni 0 qiling.');
-    }
     $supplied = (int)Db::val('SELECT COUNT(*) FROM supplies WHERE product_id = ?', [$productId], 0);
-    if ($supplied > 0) {
-        fail(409, "Bu mahsulotda $supplied ta kirim tarixi bor — o'chirib bo'lmaydi.");
+    if (($sold > 0 || $supplied > 0) && $user['role'] !== 'admin') {
+        fail(409, "Bu mahsulotda tarix bor ($sold ta chek, $supplied ta kirim) — "
+            . "uni faqat admin o'chira oladi.");
     }
 
-    Db::tx(function () use ($productId, $user, $product): void {
+    Db::tx(function () use ($productId, $user, $product, $sold, $supplied): void {
+        Db::run(
+            'UPDATE sale_items SET product_name = ?, buy_price = COALESCE(buy_price, ?), product_id = NULL
+             WHERE product_id = ?',
+            [$product['name'], Db::f($product['buy_price'] ?? 0), $productId]
+        );
+        Db::run('UPDATE supplies SET product_id = NULL WHERE product_id = ?', [$productId]);
         // Qoldiq harakatlari tarix emas, mahsulotning o'ziga tegishli —
         // ular ketishi mumkin.
         Db::run('DELETE FROM stock_moves WHERE product_id = ?', [$productId]);
         Db::run('DELETE FROM product_barcodes WHERE product_id = ?', [$productId]);
         Db::delete('products', $productId);
         Audit::log((int)$user['id'], 'DELETE_PRODUCT',
-            "Mahsulot o'chirildi: {$product['name']} (ID: $productId)");
+            "Mahsulot o'chirildi: {$product['name']} (ID: $productId). "
+            . "Uzilgan cheklar: $sold, kirimlar: $supplied");
     });
 
     Http::json(['status' => 'success', 'message' => 'Product deleted']);

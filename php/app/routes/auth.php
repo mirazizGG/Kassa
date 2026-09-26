@@ -312,33 +312,46 @@ Router::delete('/employees/{employee_id}', function (array $p): never {
         fail(403, "Boshqa admin hisobini faqat bosh admin o'chira oladi");
     }
 
-    // Ishlagan xodimni O'CHIRIB BO'LMAYDI — uni BLOKLASH kerak.
+    // Ishlagan xodimni ham admin o'chira oladi. Sotuv, smena, to'lov,
+    // xarajat va audit satrlari O'CHIRILMAYDI — faqat xodimdan uziladi
+    // (NULL), shuning uchun kassa va moliya hisobotlari o'zgarmaydi.
     //
-    // Xodim id si sotuv, smena, to'lov, xarajat va audit satrlarida turadi.
-    // O'chirish bu satrlarni yetim qoldirardi: cheklarda kassir yo'qolib,
-    // audit jurnali "kim qildi" degan savolga javob bera olmay qolardi.
-    $guards = [
-        ['sales',      'cashier_id', 'savdo'],
-        ['shifts',     'cashier_id', 'smena'],
-        ['payments',   'created_by', "to'lov"],
-        ['expenses',   'created_by', 'xarajat'],
-        ['audit_logs', 'user_id',    'audit yozuvi'],
-    ];
-    foreach ($guards as [$table, $col, $nomi]) {
-        $count = (int)Db::val(
-            'SELECT COUNT(*) FROM ' . Db::quoteId($table) . ' WHERE ' . Db::quoteId($col) . ' = ?',
-            [$employeeId], 0
-        );
-        if ($count > 0) {
-            fail(409, "Bu xodimda $count ta $nomi tarixi bor — o'chirib bo'lmaydi. "
-                . "Uning o'rniga hisobni bloklang (faol emas qilib qo'ying).");
-        }
+    // Yagona istisno — ochiq smena: kassir yo'q ochiq smenani hech kim
+    // yopa olmay qolardi. Avval uni "majburiy yopish" bilan yopish kerak.
+    $openShift = (int)Db::val(
+        "SELECT COUNT(*) FROM shifts WHERE cashier_id = ? AND status = 'open'",
+        [$employeeId], 0
+    );
+    if ($openShift > 0) {
+        fail(409, "Bu xodimning ochiq smenasi bor. Avval smenani yoping "
+            . "(Smenalar tarixi → majburiy yopish), keyin o'chiring.");
     }
 
-    Db::tx(function () use ($employeeId, $current, $target): void {
+    $refs = [
+        ['sales',      'cashier_id'],
+        ['shifts',     'cashier_id'],
+        ['shifts',     'closed_by'],
+        ['payments',   'created_by'],
+        ['expenses',   'created_by'],
+        ['audit_logs', 'user_id'],
+        ['stock_moves', 'created_by'],
+        ['attendance', 'employee_id'],
+        ['tasks',      'assigned_to'],
+        ['tasks',      'created_by'],
+    ];
+
+    Db::tx(function () use ($employeeId, $current, $target, $refs): void {
+        foreach ($refs as [$table, $col]) {
+            Db::run(
+                'UPDATE ' . Db::quoteId($table) . ' SET ' . Db::quoteId($col) . ' = NULL WHERE '
+                    . Db::quoteId($col) . ' = ?',
+                [$employeeId]
+            );
+        }
         Db::delete('employees', $employeeId);
         Audit::log((int)$current['id'], 'XODIM_OCHIRILDI',
-            "Xodim o'chirildi: {$target['username']} (ID: $employeeId)");
+            "Xodim o'chirildi: {$target['username']} ({$target['full_name']}, ID: $employeeId). "
+            . "Uning tarixi saqlandi, xodimdan uzildi.");
     });
 
     Http::noContent();

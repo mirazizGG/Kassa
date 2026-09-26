@@ -83,7 +83,7 @@ Note `pos` vs `sales`: shift lifecycle is in `pos.php`, everything about a sale 
 
 **Products can have several barcodes.** `products.barcode` is the primary; `product_barcodes` holds extras (e.g. every flavour of one product sharing one name, price and stock). A code must be unique across *both* tables — `barcode_owner()` in `inventory.php` checks that. The product list attaches `extra_barcodes`; `Shape::product()` emits the key only when it was loaded, because the POS merges sale responses into its cached catalog and an empty list would wipe the codes. On the frontend use `productBarcodes()` from [lib/utils.js](frontend/src/lib/utils.js), never `product.barcode` alone.
 
-**Restocking** goes through `POST /inventory/supplies` (adds to stock atomically, updates `buy_price`, writes supply history), surfaced by [SupplyDialog.jsx](frontend/src/components/SupplyDialog.jsx) with barcode scanning. Editing the product's stock field is an *adjustment*, not a supply. The warehouse role may create, edit, restock and delete products; deletes are still refused (409) once a product has sales or supply history.
+**Restocking** goes through `POST /inventory/supplies` (adds to stock atomically, updates `buy_price`, writes supply history), surfaced by [SupplyDialog.jsx](frontend/src/components/SupplyDialog.jsx) with barcode scanning. Editing the product's stock field is an *adjustment*, not a supply. The warehouse role may create, edit, restock and delete products; once a product has sales or supply history only an admin may delete it (see "Admin can delete anything" below).
 
 ### Schema changes
 
@@ -162,11 +162,17 @@ the stock the edit form loaded; the server 409s if it no longer matches. The for
 previously wrote its stale value back, silently undoing every sale made while the
 dialog was open and logging a fake "adjustment" against the manager.
 
-**Deletes are guarded.** `delete_product`, `delete_client` and `delete_employee`
-refuse with 409 when history references the row, listing the count. SQLite now
-runs with `PRAGMA foreign_keys=ON` so development matches PostgreSQL, where an
-unguarded delete would surface as an `IntegrityError` 500. For employees the
-answer is to block the account (`is_active = False`), not delete it.
+**Admin can delete anything; history is detached, never deleted.** The owner
+wants the admin to have full power, so deleting a client, product or employee
+with history is allowed for `admin`. Before the row goes, every referencing
+column is set to `NULL` explicitly (old SQLite databases have `NO ACTION`
+foreign keys with `foreign_keys=ON`, so relying on `ON DELETE SET NULL` is not
+enough). Sales, payments, shifts and audit rows stay, so money totals don't move.
+A deleted product's name and cost are first copied into
+`sale_items.product_name`/`buy_price`, and `Shape::saleItem()` shows the name with
+"(o'chirilgan)" so old receipts and margin survive. Non-admins still get 409 on a
+product with history. The one remaining guard: an employee with an **open shift**
+cannot be deleted until it is force-closed, since nobody could close it afterwards.
 
 ### Shifts
 

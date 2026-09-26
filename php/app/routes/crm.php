@@ -245,25 +245,20 @@ Router::delete('/clients/{client_id}', function (array $p): never {
     if ($client === null) {
         fail(404, 'Client not found');
     }
-    if (abs(Db::f($client['balance'])) > 0.0000001) {
-        fail(400, "Qarzi yoki balansi bor mijozni o'chirib bo'lmaydi");
-    }
-
-    // Tarixga bog'langan mijozni ham o'chirib bo'lmaydi: sotuv va to'lov
-    // satrlari yetim qolardi.
+    // Admin istalgan mijozni o'chira oladi. Sotuv va to'lov satrlari
+    // o'chirilmaydi — faqat mijozdan uziladi (client_id = NULL), shuning
+    // uchun kassa, smena va moliya hisobotlari o'zgarmaydi.
+    $balance = Db::f($client['balance']);
     $sales = (int)Db::val('SELECT COUNT(*) FROM sales WHERE client_id = ?', [$clientId], 0);
-    if ($sales > 0) {
-        fail(409, "Bu mijozda $sales ta savdo tarixi bor — o'chirib bo'lmaydi.");
-    }
     $pays = (int)Db::val('SELECT COUNT(*) FROM payments WHERE client_id = ?', [$clientId], 0);
-    if ($pays > 0) {
-        fail(409, "Bu mijozda $pays ta to'lov tarixi bor — o'chirib bo'lmaydi.");
-    }
 
-    Db::tx(function () use ($clientId, $user, $client): void {
+    Db::tx(function () use ($clientId, $user, $client, $balance, $sales, $pays): void {
+        Db::run('UPDATE sales SET client_id = NULL WHERE client_id = ?', [$clientId]);
+        Db::run('UPDATE payments SET client_id = NULL WHERE client_id = ?', [$clientId]);
         Db::delete('clients', $clientId);
         Audit::log((int)$user['id'], 'MIJOZ_OCHIRILDI',
-            "Mijoz o'chirildi: {$client['name']} (ID: $clientId)");
+            "Mijoz o'chirildi: {$client['name']} (ID: $clientId). "
+            . "Balans: $balance, uzilgan savdolar: $sales, to'lovlar: $pays");
     });
 
     Http::json(['message' => 'Client deleted']);
