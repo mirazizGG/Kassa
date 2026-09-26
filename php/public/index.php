@@ -132,7 +132,7 @@ if ($path === '/health') {
 // --- API marshrutlari ---------------------------------------------------
 const API_MODULES = [
     'auth', 'pos', 'sales', 'inventory', 'crm',
-    'finance', 'suppliers', 'audit', 'settings', 'system', 'tasks',
+    'finance', 'suppliers', 'audit', 'settings', 'system', 'tasks', 'bot',
 ];
 
 // React Router sahifalari. Ular API prefikslari bilan USTMA-UST tushadi:

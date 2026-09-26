@@ -5,7 +5,7 @@
 #
 # Nima qiladi:
 #   1. PHP bo'lmasa - yuklab oladi (runtime\php) va sozlaydi
-#   2. .env ni tekshiradi: baza va Telegram bilan aloqa (bin\bot-check.php)
+#   2. .env ni tekshiradi: server API va Telegram bilan aloqa (bin\bot-check.php)
 #   3. "Kassa bot" vazifasini yaratadi - kompyuter yoqilganda o'zi ishga tushadi
 #   4. Botni hozir ishga tushiradi
 #
@@ -85,8 +85,9 @@ Step "2/4 Sozlamalar (.env) va aloqa"
 # ---------------------------------------------------------------------------
 $envFile = Join-Path $Root ".env"
 if (-not (Test-Path $envFile)) { Fail ".env fayli yo'q ($envFile)" }
-if ((Get-Content $envFile -Raw) -match "DATABASE_URL=mysql://FOYDALANUVCHI") {
-    Fail ".env dagi DATABASE_URL hali to'ldirilmagan (FOYDALANUVCHI:PAROL...)."
+$envText = Get-Content $envFile -Raw
+if (($envText -notmatch "(?m)^KASSA_API_URL=\S") -and ($envText -match "DATABASE_URL=mysql://FOYDALANUVCHI")) {
+    Fail ".env da KASSA_API_URL (sayt manzili) yoki DATABASE_URL to'ldirilmagan."
 }
 New-Item -ItemType Directory -Force (Join-Path $Root "logs") | Out-Null
 Push-Location $Root

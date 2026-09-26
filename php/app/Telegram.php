@@ -10,6 +10,55 @@ declare(strict_types=1);
 
 final class Telegram
 {
+    /**
+     * Server rejimi (app/routes/bot.php): null bo'lmasa xabarlar YUBORILMAYDI,
+     * shu ro'yxatga "amal" bo'lib yig'iladi va do'kon kompyuteridagi
+     * ko'prikka javob sifatida qaytadi (bot tokeni serverda shart emas).
+     */
+    private static ?array $outbox = null;
+
+    public static function collect(): void
+    {
+        self::$outbox = [];
+    }
+
+    public static function collecting(): bool
+    {
+        return self::$outbox !== null;
+    }
+
+    public static function action(array $action): void
+    {
+        self::$outbox[] = $action;
+    }
+
+    /** Yig'ilgan amallarni qaytaradi va ro'yxatni tozalaydi. */
+    public static function take(): array
+    {
+        $out = self::$outbox ?? [];
+        self::$outbox = [];
+        return $out;
+    }
+
+    /** Xabarni boshqa chatga nusxalash (reklama: matn, rasm, video). */
+    public static function copy(int|string $chatId, int|string $fromChatId, int $messageId): bool
+    {
+        if (self::collecting()) {
+            self::action(['type' => 'copy', 'chat' => $chatId, 'from' => $fromChatId, 'message_id' => $messageId]);
+            return true;
+        }
+        if (env_bool('BOT_DRY_RUN', false)) {
+            bot_log("[DRY] nusxa -> $chatId: xabar #$messageId ($fromChatId dan)");
+            return true;
+        }
+        try {
+            self::call('copyMessage', ['chat_id' => $chatId, 'from_chat_id' => $fromChatId, 'message_id' => $messageId]);
+            return true;
+        } catch (Throwable) {
+            return false; // mijoz botni bloklagan bo'lishi mumkin
+        }
+    }
+
     public static function token(): string
     {
         return trim((string)env('TELEGRAM_BOT_TOKEN'));
@@ -69,6 +118,10 @@ final class Telegram
     /** HTML formatdagi xabar. Xato bo'lsa false (masalan foydalanuvchi botni bloklagan). */
     public static function send(int|string $chatId, string $html, ?array $keyboard = null): bool
     {
+        if (self::collecting()) {
+            self::action(['type' => 'send', 'chat' => $chatId, 'text' => $html, 'keyboard' => $keyboard]);
+            return true;
+        }
         if (env_bool('BOT_DRY_RUN', false)) {
             bot_log("[DRY] -> $chatId:\n$html");
             return true;
@@ -94,6 +147,16 @@ final class Telegram
     /** Fayl yuborish: diskdagi yo'l yoki xotiradagi baytlar. */
     public static function sendDocument(int|string $chatId, string $pathOrBytes, string $filename, string $caption = '', bool $isBytes = false): bool
     {
+        if (self::collecting()) {
+            self::action([
+                'type'     => 'document',
+                'chat'     => $chatId,
+                'filename' => $filename,
+                'caption'  => $caption,
+                'data'     => base64_encode($isBytes ? $pathOrBytes : (string)file_get_contents($pathOrBytes)),
+            ]);
+            return true;
+        }
         if (env_bool('BOT_DRY_RUN', false)) {
             bot_log("[DRY] fayl -> $chatId: $filename (" . strlen($isBytes ? $pathOrBytes : (string)@file_get_contents($pathOrBytes)) . " bayt) $caption");
             return true;
@@ -146,7 +209,10 @@ final class Telegram
 function bot_log(string $message): void
 {
     $line = '[' . (new DateTimeImmutable('now', Tz::shopTz()))->format('Y-m-d H:i:s') . "] $message\n";
-    echo $line;
+    // Veb-so'rovda (server rejimi) ekranga chiqarmaymiz — JSON javobni buzardi.
+    if (PHP_SAPI === 'cli') {
+        echo $line;
+    }
     $dir = ROOT_DIR . '/logs';
     if (is_dir($dir)) {
         @file_put_contents($dir . '/bot.log', $line, FILE_APPEND);

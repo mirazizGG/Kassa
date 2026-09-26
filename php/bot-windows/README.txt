@@ -1,8 +1,10 @@
 KASSA BOT — DO'KON KOMPYUTERIGA O'RNATISH
 ==========================================
 
-Bu papka do'kondagi kompyuterda Telegram botni ishlatadi. Kassa dasturining
-o'zi serverda ishlaydi; bot shu kompyuterdan server bazasiga ulanadi.
+Kassa sayti serverda ishlaydi. Bu papka do'kondagi kompyuterda Telegram botni
+ishlatadi: bot Telegramdan xabarni oladi, serverga (sayt API'si orqali,
+HTTPS) uzatadi va javobni Telegramga yetkazadi. Barcha hisob-kitob serverda.
+Baza paroli bu kompyuterda YO'Q — faqat sayt manzili va maxfiy kalit.
 
 Bot nima qiladi:
   • Har kuni 22:00 — adminga kunlik hisobot (savdo, foyda, kassirlar, top mahsulotlar)
@@ -17,20 +19,23 @@ Kompyuter o'chiq bo'lsa, 22:00 dagi hisobot va zahira kompyuter keyingi safar
 yoqilganda (shu kunning o'zida) yuboriladi.
 
 
-O'RNATISH
----------
-1. Hostingda (cPanel → Remote MySQL) shu kompyuterning IP manzilini ruxsat
-   etilganlar ro'yxatiga qo'shing. Busiz bot bazaga ulana olmaydi.
+O'RNATISHDAN OLDIN — SERVERDA (bir marta)
+------------------------------------------
+1. Serverdagi kassa kodi yangi bo'lishi kerak (unda /bot API bo'lsin).
+2. Serverdagi .env ga BOT_API_KEY qatorini qo'shing — QIYMATI shu papkadagi
+   .env dagi BOT_API_KEY bilan BIR XIL bo'lishi shart. Shuningdek
+   TELEGRAM_ADMIN_CHAT_ID ham serverda bo'lsin (hisobot kimga borishi uchun).
 
-2. .env faylini Bloknot bilan oching va DATABASE_URL qatorini to'ldiring:
-       DATABASE_URL=mysql://FOYDALANUVCHI:PAROL@SERVER_MANZILI:3306/BAZA_NOMI
-   Parolda @ : / ? # bo'lsa foizli kodlang (@ -> %40).
 
-3. ORNATISH.bat ni ikki marta bosing va "Ha" (Administrator) ni tanlang.
-   Skript o'zi: PHP ni yuklaydi, aloqani tekshiradi, botni ishga tushiradi va
-   kompyuter har safar yoqilganda avtomatik ishga tushadigan qilib qo'yadi.
-
-4. Telegramda botga /start yozing.
+O'RNATISH — DO'KON KOMPYUTERIDA
+-------------------------------
+1. .env faylida KASSA_API_URL to'g'ri ekanini tekshiring (sayt manzili,
+   masalan https://smart-kassa.uz).
+2. ORNATISH.bat ni ikki marta bosing va "Ha" (Administrator) ni tanlang.
+   Skript o'zi: PHP ni yuklaydi, server va Telegram bilan aloqani tekshiradi,
+   botni ishga tushiradi va kompyuter har safar yoqilganda avtomatik ishga
+   tushadigan qilib qo'yadi.
+3. Telegramda botga /start yozing.
 
 
 XODIMLARNI BOTGA ULASH
@@ -39,26 +44,23 @@ Saytdagi Xodimlar sahifasida xodimning TELEFON raqami to'ldirilgan bo'lishi
 kerak. Xodim botga /start yozib, o'sha raqamni yuborsa — xodim sifatida tanib
 olinadi. Raqami mos kelmasa, mijoz sifatida ro'yxatdan o'tadi.
 
-Admin menyusi: saytda admin bo'lgan xodim botga ulansa, yoki .env dagi
+Admin menyusi: saytda admin bo'lgan xodim botga ulansa, yoki serverdagi
 TELEGRAM_ADMIN_CHAT_ID ga teng chatda chiqadi. Hisobot va ogohlantirishlar
 ikkalasiga ham boradi.
 
 
-ZAHIRA NUSXA QAYERDAN OLINADI
------------------------------
-.env da KASSA_API_URL berilgan bo'lsa — nusxani server o'zi tayyorlaydi,
-bot uni sayt orqali (HTTPS) yuklab olib Telegramga yuboradi. Buning uchun
-serverdagi .env dagi BACKUP_API_KEY shu yerdagisi bilan BIR XIL bo'lishi kerak.
-KASSA_API_URL bo'sh bo'lsa — bot nusxani bazadan o'zi oladi.
-
-
-VAQTLARNI O'ZGARTIRISH (.env)
------------------------------
+VAQTLARNI O'ZGARTIRISH — SERVERDAGI .env da
+-------------------------------------------
   BOT_REPORT_TIME=22:00        kunlik hisobot
   BACKUP_TIME=22:00            zahira nusxa
   DEBT_REMINDER_TIME=09:00     qarz eslatmalari
   BOT_NOTIFY_ATTENDANCE=true   xodim kelib-ketganda adminga xabar (false — o'chirish)
-O'zgartirgandan keyin kompyuterni qayta yoqing yoki ORNATISH.bat ni qayta bosing.
+
+
+BOSHQA REJIM (kassa shu kompyuterning o'zida bo'lsa)
+----------------------------------------------------
+KASSA_API_URL ni o'chirib, DATABASE_URL ni yozsangiz — bot bazaga o'zi ulanadi
+va hammasini o'zi hisoblaydi. Bunda vaqtlar shu .env dan olinadi.
 
 
 MUAMMO BO'LSA

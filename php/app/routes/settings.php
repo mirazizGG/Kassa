@@ -134,22 +134,22 @@ Router::post('/backup', function (): never {
 // Do'kon kompyuteridagi bot shu orqali nusxani oladi va Telegramga
 // yuboradi: bazani internetga ochish (Remote MySQL) shart emas.
 //
-// Kirish: `X-Backup-Key: <BACKUP_API_KEY>` sarlavhasi (bot uchun) yoki
+// Kirish: `X-Bot-Key: <BOT_API_KEY>` sarlavhasi (bot ko'prigi) yoki
 // admin tokeni. Kalit .env da bo'lmasa yoki 32 belgidan qisqa bo'lsa —
 // kalit bilan kirish o'chiq. Noto'g'ri kalit IP bo'yicha soatiga 10 marta.
 //
 // ?uploads=1 — baza o'rniga nakladnoy rasmlari arxivi (bo'lmasa 204).
 Router::get('/backup/download', function (): never {
-    $given = (string)($_SERVER['HTTP_X_BACKUP_KEY'] ?? '');
-    $key = (string)env('BACKUP_API_KEY', '');
+    $given = (string)($_SERVER['HTTP_X_BOT_KEY'] ?? '');
+    $key = (string)env('BOT_API_KEY', '');
 
     if ($given !== '') {
         // Faqat NOTO'G'RI urinishlar sanaladi — to'g'ri kalit hech qachon bloklanmaydi.
         if (strlen($key) < 32 || !hash_equals($key, $given)) {
-            if (!RateLimit::hit('backupkey:' . Http::clientIp(), 10, 3600)) {
+            if (!RateLimit::hit('botkey:' . Http::clientIp(), 10, 3600)) {
                 fail(429, "Juda ko'p urinish. Keyinroq qayta urinib ko'ring.");
             }
-            fail(401, "Zahira kaliti noto'g'ri");
+            fail(401, "Bot kaliti noto'g'ri");
         }
         $userId = null;
         $who = 'API kaliti';
